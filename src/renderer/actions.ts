@@ -6,6 +6,7 @@ import { defaultPins, reorderPins, togglePin } from './lib/roster'
 import { stepZoom } from './lib/zoom'
 import { useAgents } from './stores/agents'
 import { IDLE_STATUS, useConn } from './stores/conn'
+import { useBrain } from './stores/brain'
 import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
 import { useMetrics } from './stores/metrics'
@@ -46,6 +47,7 @@ export async function forgetConnection(): Promise<void> {
   useMetrics.getState().reset()
   useCron.getState().reset()
   useFeed.getState().reset()
+  useBrain.getState().reset()
   useConn.setState({
     saved: null, status: IDLE_STATUS, startup: null, preflight: null, capabilities: null, hostKey: null, connectError: null, lastRequest: null
   })
@@ -138,4 +140,16 @@ export async function loadFullText(it: FeedItem): Promise<void> {
 export function openFeedFor(profile: string): void {
   useFeed.getState().soloAgent(profile, useAgents.getState().agents.map((a) => a.profile))
   useUi.getState().navigate('feed')
+}
+
+/** Reads the saved vault path of this connection from the main process. */
+export async function refreshVault(): Promise<void> {
+  const { vault } = await window.mc.brain.get()
+  useBrain.getState().setVault(vault)
+}
+
+/** Saves a new vault path (or clears it); the main process restarts the vault stream. */
+export async function saveVault(path: string | null): Promise<void> {
+  await window.mc.brain.setVault(path)
+  useBrain.getState().setVault(path)
 }
