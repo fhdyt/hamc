@@ -1,10 +1,11 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
-import { BrowseResult, FeedHistory, FeedMessageText, NoteText, SessionDetail, VaultCheck } from '@shared/events'
+import { BrowseResult, ChatSessions, FeedHistory, FeedMessageText, NoteText, SessionDetail, VaultCheck } from '@shared/events'
 import type {
   ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, QueryResult, SavedConnection
 } from '@shared/ipc'
 import { BrainService } from './brain/service'
+import { ChatService } from './chat/service'
 import { FeedCursors } from './feed/cursors'
 import { QueryRunner } from './query'
 import { CollectorChannel } from './collector/channel'
@@ -33,6 +34,8 @@ export interface SessionDeps {
   /** Called once per newly failed cron run (after the baseline). */
   notify?: (alert: CronAlert) => void
   backoff?: (attempt: number) => number
+  /** How long a stopped chat turn may take to end on its own before its channel is closed (tests make it short). */
+  chatStopGraceMs?: number
   latencyIntervalMs?: number
 }
 
@@ -78,6 +81,7 @@ export class MissionSession {
   private readonly feedCursors = new FeedCursors()
   private readonly queries: QueryRunner
   private readonly brain: BrainService
+  private readonly chat: ChatService
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -86,6 +90,21 @@ export class MissionSession {
       script: d.collectorScript,
       onEvent: (ev) => d.send(IPC.evEvent, ev),
       log: (m) => d.log?.(m)
+    })
+    this.chat = new ChatService({
+      conn: d.manager,
+      hermesPath: () => this.hermes?.hermesPath ?? null,
+      getSession: (profile) => {
+        const id = this.d.store.getConnection()?.id
+        return id === undefined ? null : this.d.store.getChatSession(id, profile)
+      },
+      setSession: (profile, sessionId) => {
+        const id = this.d.store.getConnection()?.id
+        if (id !== undefined) this.d.store.setChatSession(id, profile, sessionId)
+      },
+      emit: (e) => d.send(IPC.evChat, e),
+      log: (m) => d.log?.(m),
+      ...(d.chatStopGraceMs !== undefined ? { stopGraceMs: d.chatStopGraceMs } : {})
     })
     this.queries = new QueryRunner(d.manager, d.collectorScript, () => (this.hermes && d.manager.isConnected() ? { python: this.hermes.python, home: this.hermes.home } : null), (m) => d.log?.(m))
   }
@@ -334,6 +353,7 @@ export class MissionSession {
     this.stopLatency()
     this.stopCollector()
     this.brain.detach()
+    this.chat.dispose()
     this.scheduleRetry(0)
   }
 
@@ -371,6 +391,7 @@ export class MissionSession {
     this.stopLatency()
     this.stopCollector()
     this.brain.detach()
+    this.chat.dispose()
     this.models = null
     this.hermes = null
     await this.d.manager.disconnect()
@@ -404,6 +425,31 @@ export class MissionSession {
 
   feedSession(args: { profile: string; sessionId: string }): Promise<QueryResult<SessionDetail>> {
     return this.queries.run('session', args, SessionDetail)
+  }
+
+  chatSend(req: { profile: string; text: string; attachmentIds: string[] }): ReturnType<ChatService['send']> {
+    return this.chat.send(req)
+  }
+
+  chatStop(turn: string): void {
+    this.chat.stop(turn)
+  }
+
+  chatGetSession(profile: string): string | null {
+    const id = this.d.store.getConnection()?.id
+    return id === undefined ? null : this.d.store.getChatSession(id, profile)
+  }
+
+  chatSetSession(profile: string, sessionId: string | null): void {
+    this.chat.setSession(profile, sessionId)
+  }
+
+  chatSessions(profile: string): Promise<QueryResult<ChatSessions>> {
+    return this.queries.run('chat_sessions', { profile }, ChatSessions)
+  }
+
+  chatBackend(profile: string): Promise<string | null> {
+    return this.chat.backend(profile)
   }
 
   brainGet(): { vault: string | null } {

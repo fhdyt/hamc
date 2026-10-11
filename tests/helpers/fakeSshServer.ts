@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Server, utils, type Connection, type ServerChannel } from 'ssh2'
 import { pythonExe, type FixtureDirs } from './fixture'
 import { shSplit } from './shellSplit'
@@ -43,6 +43,10 @@ export interface FakeSshOptions {
   models?: Record<string, { provider: string; default: string }>
   hasHermes?: boolean
   hasHome?: boolean
+  /** What `hermes chat --help` prints (the default lists every option the chat needs). */
+  chatHelp?: string
+  /** What `hermes config get terminal.backend` prints. */
+  backend?: string
 }
 
 export interface FakeSsh {
@@ -54,8 +58,8 @@ export interface FakeSsh {
   close(): Promise<void>
 }
 
-type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models'>> &
-  Pick<FakeSshOptions, 'capabilities' | 'models'>
+type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend'>> &
+  Pick<FakeSshOptions, 'capabilities' | 'models' | 'chatHelp' | 'backend'>
 
 const MARKERS = ['config.yaml', '.env', 'SOUL.md', 'profile.yaml', 'state.db']
 
@@ -94,6 +98,48 @@ function runCollector(argv: string[], stream: ServerChannel, o: Resolved): void 
   stream.on('close', () => child.kill())
 }
 
+export const FULL_CHAT_HELP = `usage: hermes chat [options]
+  -q, --query TEXT      single query
+  -Q, --quiet           only print the answer
+  --oneshot             run one turn and exit
+  --query-file FILE     read the message from FILE ('-' is stdin)
+  --format FORMAT       output format: text, json, stream-json
+  --resume SESSION_ID   continue a session
+  --source TAG          tag the session source
+`
+
+const chats = new WeakMap<ServerChannel, ChildProcess>()
+
+function runChat(argv: string[], stream: ServerChannel, o: Resolved): void {
+  const child = spawn(pythonExe, [resolve('tests/fixtures/fake_hermes.py'), ...argv.slice(1)], {
+    env: { ...process.env, MC_FAKE_HOME: o.fixture.home },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  chats.set(stream, child)
+  child.stdin.on('error', () => {})
+  stream.pipe(child.stdin)
+  child.stdout.pipe(stream, { end: false })
+  child.stderr.on('data', (d: Buffer) => stream.stderr.write(d))
+  child.on('close', (code) => {
+    if (!stream.writable) return
+    stream.exit(code ?? 0)
+    stream.end()
+  })
+  stream.on('close', () => child.kill())
+}
+
+/** A signal request (Stop) ends the fake chat the way Hermes does: a result with exit code 130. */
+function interruptChat(stream: ServerChannel): void {
+  const child = chats.get(stream)
+  if (!child) return
+  chats.delete(stream)
+  child.removeAllListeners('close')
+  child.kill()
+  stream.write(JSON.stringify({ type: 'result', exit_code: 130, duration_ms: 10 }) + '\n')
+  stream.exit(130)
+  stream.end()
+}
+
 function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
   const [cmd = '', ...rest] = argv
   if (cmd === 'true') return reply(stream, '')
@@ -115,6 +161,8 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
   }
   if (cmd === 'head') return reply(stream, `#!${o.pythonPath}\n`)
   if (cmd === o.hermesPath) {
+    if (rest.includes('chat')) return rest.includes('--help') ? reply(stream, o.chatHelp ?? FULL_CHAT_HELP) : runChat(argv, stream, o)
+    if (rest.includes('terminal.backend')) return reply(stream, `${o.backend ?? 'local'}\n`)
     if (rest[0] === '--version') return reply(stream, `Hermes Agent v${o.version}\n`)
     if (rest[rest.length - 1] === '--help') {
       const key = rest.slice(0, -1).join(' ')
@@ -161,11 +209,16 @@ export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {
     })
     client.on('ready', () => {
       client.on('session', (accept) => {
-        accept().on('exec', (acceptExec, _reject, info) => {
+        const sess = accept()
+        sess.on('exec', (acceptExec, _reject, info) => {
           const stream = acceptExec()
           const argv = shSplit(info.command)
           execLog.push(argv)
           handle(argv, stream, o)
+          sess.once('signal', (acceptSignal, _rej, sig) => {
+            acceptSignal?.()
+            if (sig.name === 'INT') interruptChat(stream)
+          })
         })
       })
     })
