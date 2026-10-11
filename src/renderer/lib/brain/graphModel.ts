@@ -213,3 +213,20 @@ export function neighbours(g: Graph): number[][] {
 export function nodeRadius(degree: number, scale: number): number {
   return Math.min(22, (3 + Math.sqrt(degree) * 1.6) * scale)
 }
+
+/** Resolves a link target as written in a note to a note id, the way the collector does (name, path suffix, alias). */
+export function resolveNoteId(notes: Iterable<BrainNote>, target: string): string | null {
+  let t = target.trim().toLowerCase().replaceAll('\\', '/').replace(/^\/+/, '')
+  if (t.endsWith('.md')) t = t.slice(0, -3)
+  if (!t) return null
+  const list = [...notes]
+  const shortest = (ids: string[]): string | null => (ids.length === 0 ? null : ids.sort((a, b) => a.length - b.length || (a < b ? -1 : 1))[0]!)
+  const low = (n: BrainNote): string => n.id.slice(0, -3).toLowerCase()
+  if (t.includes('/')) {
+    return shortest(list.filter((n) => low(n) === t || low(n).endsWith('/' + t)).map((n) => n.id))
+  }
+  return (
+    shortest(list.filter((n) => low(n).split('/').pop() === t).map((n) => n.id)) ??
+    shortest(list.filter((n) => n.aliases.some((a) => a.toLowerCase() === t)).map((n) => n.id))
+  )
+}
