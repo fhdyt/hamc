@@ -94,6 +94,25 @@ test('the graph appears with every note and a live indicator', async () => {
   await page.screenshot({ path: 'tests/e2e/shots/brain.png' })
 })
 
+test('the canvas follows its container when the panels open and close', async () => {
+  const fits = async () => {
+    const host = (await page.locator('.brain-canvas').boundingBox())!
+    const canvas = (await page.locator('.brain-canvas canvas').boundingBox())!
+    return { dw: Math.abs(host.width - canvas.width), dh: Math.abs(host.height - canvas.height), w: host.width }
+  }
+  const before = await fits()
+  expect(before.dw).toBeLessThan(2)
+  await page.getByRole('button', { name: 'Toggle note preview' }).click()
+  await expect.poll(async () => (await fits()).w).toBeGreaterThan(before.w + 200)
+  await expect.poll(async () => (await fits()).dw).toBeLessThan(2)
+  await page.getByRole('button', { name: 'Toggle graph controls' }).click()
+  await expect.poll(async () => (await fits()).dw).toBeLessThan(2)
+  await page.getByRole('button', { name: 'Toggle graph controls' }).click()
+  await page.getByRole('button', { name: 'Toggle note preview' }).click()
+  await expect.poll(async () => (await fits()).dw).toBeLessThan(2)
+  expect((await fits()).dh).toBeLessThan(2)
+})
+
 test('hovering a neuron shows a card with its name and no other label', async () => {
   const labels = async () => (await page.evaluate(() => window.__mcBrainLabels?.() ?? [])).sort()
   const tip = page.locator('.bc-tip')
