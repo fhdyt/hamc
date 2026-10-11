@@ -57,6 +57,12 @@ export interface SettingsMap {
   'ui.sidebarCollapsed': boolean
   'agents.panelCollapsed': boolean
   'dashboard.cronOpen': boolean
+  'dashboard.activityOpen': boolean
+  'dashboard.serverOpen': boolean
+  'dashboard.chatW': number
+  'dashboard.cronH': number
+  'dashboard.rosterH': number
+  'dashboard.activityTab': 'activity' | 'alerts'
   'brain.graph': BrainGraphSettings
   'window.bounds': WindowBounds | null
 }
@@ -68,6 +74,12 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'ui.sidebarCollapsed': false,
   'agents.panelCollapsed': false,
   'dashboard.cronOpen': true,
+  'dashboard.activityOpen': true,
+  'dashboard.serverOpen': true,
+  'dashboard.chatW': 320,
+  'dashboard.cronH': 200,
+  'dashboard.rosterH': 150,
+  'dashboard.activityTab': 'activity',
   'brain.graph': BRAIN_GRAPH_DEFAULTS,
   'window.bounds': null
 }
@@ -79,6 +91,12 @@ export const SETTINGS_SCHEMA = {
   'ui.sidebarCollapsed': z.boolean(),
   'agents.panelCollapsed': z.boolean(),
   'dashboard.cronOpen': z.boolean(),
+  'dashboard.activityOpen': z.boolean(),
+  'dashboard.serverOpen': z.boolean(),
+  'dashboard.chatW': z.number().min(260).max(640),
+  'dashboard.cronH': z.number().min(90).max(560),
+  'dashboard.rosterH': z.number().min(60).max(480),
+  'dashboard.activityTab': z.enum(['activity', 'alerts']),
   'brain.graph': z.object({
     showTags: z.boolean(),
     showAttachments: z.boolean(),

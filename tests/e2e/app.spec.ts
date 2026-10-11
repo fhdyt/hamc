@@ -46,7 +46,7 @@ test('first run: verify host key, pass preflight, land on a live dashboard', asy
 
   await expect(page.getByText(/checks passed/)).toBeVisible({ timeout: 20_000 })
   await expect(mainNav()).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByText(/active agents? of 3/)).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText(/\d+\/3 agents online/)).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('button', { name: /^Scout, (working|idle)/ })).toBeVisible()
   await page.screenshot({ path: 'tests/e2e/shots/dashboard.png' })
 })
@@ -117,7 +117,7 @@ test('the renderer is sandboxed', async () => {
 test('forgetting the connection returns to first-time setup', async () => {
   ;({ app, page } = await launchApp(userData))
   await expect(mainNav()).toBeVisible({ timeout: 25_000 })
-  await page.getByRole('button', { name: 'Edit connection' }).click()
+  await page.getByRole('contentinfo').getByRole('status').filter({ hasText: 'tester@' }).click() // the connection chip opens Settings
   await page.getByRole('button', { name: /Forget this connection…/ }).click()
   await page.getByRole('button', { name: 'Forget this connection', exact: true }).click()
   await expect(page.getByText('first-time setup')).toBeVisible()

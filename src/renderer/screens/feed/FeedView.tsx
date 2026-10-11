@@ -3,15 +3,15 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { FeedItem } from '@shared/events'
 import { loadOlderFeed } from '../../actions'
 import { Icon } from '../../components/Icon'
-import { EmptyState, Skeleton } from '../../components/States'
+import { EmptyState } from '../../components/States'
 import { agentColor } from '../../lib/agentColor'
 import { FEED_CAP, filterFeed, sourcesOf } from '../../lib/feed'
 import { useAgents } from '../../stores/agents'
-import { useConn } from '../../stores/conn'
 import { useFeed } from '../../stores/feed'
 import { useUi } from '../../stores/ui'
 import { FeedFilters } from './FeedFilters'
 import { FeedRow } from './FeedRow'
+import { FeedWaiting } from './FeedWaiting'
 
 /** Scroll offset below which the reader counts as being at the newest items. */
 const TOP_SLACK = 24
@@ -29,7 +29,6 @@ export function FeedView() {
   const resetFilter = useFeed((s) => s.resetFilter)
   const openSession = useFeed((s) => s.openSession)
   const agents = useAgents((s) => s.agents)
-  const connState = useConn((s) => s.status.state)
   const reduceMotion = useUi((s) => s.settings['ui.reduceMotion'])
 
   const names = useMemo(() => Object.fromEntries(agents.map((a) => [a.profile, a.displayName])), [agents])
@@ -88,7 +87,7 @@ export function FeedView() {
   const filtered = visible.length !== items.length
   let body
   if (receivedAt === null) {
-    body = connState === 'connected' || connState === 'connecting' ? <Skeleton rows={6} /> : <EmptyState title="No feed yet" why="Items appear once Mission Control is connected." />
+    body = <FeedWaiting rows={6} />
   } else if (items.length === 0) {
     body = <EmptyState title="No activity yet" why="When an agent talks, thinks or runs a tool, it shows up here." />
   } else if (visible.length === 0) {

@@ -7,6 +7,8 @@ export type FullState = { status: 'loading' } | { status: 'ok'; text: string } |
 interface FeedState {
   items: FeedItem[]
   receivedAt: number | null
+  /** Why the feed cannot be read (a state.db that is missing or unreadable), shown instead of a spinner. */
+  error: string | null
   filter: FeedFilter
   /** Items that arrived while the reader was away from the top. */
   unseen: number
@@ -22,6 +24,7 @@ interface FeedState {
   /** The session shown in the session modal, as profile + id. */
   session: { profile: string; sessionId: string } | null
   applyFeed(data: FeedData, now?: number): void
+  setError(message: string): void
   mergeOlder(items: FeedItem[], exhausted: Record<string, boolean>): void
   setFilter(patch: Partial<FeedFilter>): void
   toggleAgent(profile: string): void
@@ -43,6 +46,7 @@ interface FeedState {
 const EMPTY = {
   items: [] as FeedItem[],
   receivedAt: null as number | null,
+  error: null as string | null,
   filter: DEFAULT_FILTER,
   unseen: 0,
   atTop: true,
@@ -63,9 +67,11 @@ export const useFeed = create<FeedState>()((set) => ({
       return {
         items,
         receivedAt: now,
+        error: null,
         unseen: !data.history && !s.atTop ? s.unseen + added : s.unseen
       }
     }),
+  setError: (error) => set((s) => (s.receivedAt === null ? { error } : s)),
   mergeOlder: (older, exhausted) =>
     set((s) => ({ items: mergeFeed(s.items, older, Infinity).items, exhausted: { ...s.exhausted, ...exhausted }, loadingOlder: false, olderError: null })),
   setFilter: (patch) => set((s) => ({ filter: { ...s.filter, ...patch } })),

@@ -162,7 +162,7 @@ test('filters and display settings change the graph and survive a restart', asyn
 
 test('the Dashboard shows a compact graph and a click reads the note in a dialog', async () => {
   await mainNav().getByRole('button', { name: /^Dashboard/ }).click()
-  const panel = page.locator('section.card[aria-label="Second brain"]')
+  const panel = page.locator('section.d-graph[aria-label="Second brain"]')
   await expect(panel.locator('canvas')).toBeVisible({ timeout: 30_000 })
   await expect.poll(async () => (await stats())?.nodes, { timeout: 20_000 }).toBeGreaterThan(5)
   await settled()

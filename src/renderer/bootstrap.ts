@@ -18,6 +18,7 @@ export async function bootstrap(): Promise<void> {
     else if (ev.type === 'feed') useFeed.getState().applyFeed(ev.data)
     else if (ev.type === 'brain') useBrain.getState().applyBrain(ev.data)
     else if (ev.type === 'error' && ev.data.code.startsWith('vault_')) useBrain.getState().setError(ev.data.message)
+    else if (ev.type === 'error' && ['unsupported_schema', 'db_unreadable', 'feed_failed'].includes(ev.data.code)) useFeed.getState().setError(`${ev.data.message}${ev.data.profile ? ` (${ev.data.profile})` : ''}`)
   })
   mc.onStatus((status) => {
     const was = useConn.getState().status.state

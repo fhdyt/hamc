@@ -65,13 +65,6 @@ body {
 .step .detail { margin-left: auto; color: #8b95bd; font-size: 11px; white-space: nowrap; }
 
 /* dashboard */
-.dash { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(230px, 290px) minmax(0, 1fr) 340px; gap: 14px; padding: 20px 24px 16px; overflow: hidden; }
-.dash.agents-rail { grid-template-columns: minmax(230px, 290px) minmax(0, 1fr) 64px; }
-.dash > .col { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-@media (max-width: 1100px) { .dash, .dash.agents-rail { grid-template-columns: minmax(0, 1fr); overflow-y: auto; } .dash > .col { min-height: auto; } }
-.status-block { display: flex; flex-direction: column; gap: 10px; }
-.status-block .count { font-size: 40px; line-height: 1; color: #50fa7b; }
-.status-block .of { color: #a9b2d3; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid #44475a; color: #a9b2d3; font-size: 11px; }
 
 /* agents */
@@ -262,3 +255,64 @@ body {
 .bd-foot { display: flex; align-items: center; gap: 8px; }
 .bd-foot .fcount { flex: 1; }
 @media (max-width: 1100px) { .bn-preview { width: 280px; } .bc { width: 210px; } }
+
+
+/* dashboard (mockup Main) */
+.dash2 { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 12px; overflow: hidden; background: #191a21; }
+.d-left { flex: 0 1 240px; min-width: 200px; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.d-mid { flex: 1 1 560px; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.d-count { flex: none; display: flex; align-items: center; gap: 6px; padding: 2px 4px; color: #a9b2d3; font-size: 11px; }
+.d-panel { min-height: 0; padding: 4px 6px 6px 12px; gap: 4px; }
+.d-panel .ph { padding-right: 0; }
+.ph-meta { color: #8b95bd; font-size: 10px; white-space: nowrap; }
+.d-scroll { flex: 1; min-height: 0; overflow-y: auto; padding-right: 6px; }
+.dash-row { display: flex; flex-direction: column; width: 100%; padding: 5px 6px; border: 0; border-top: 1px dashed #343746; border-radius: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.dash-row:first-child { border-top: 0; }
+.dash-row:hover { background: #282a36; }
+.dr-top { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.dr-top .dot { align-self: center; }
+.dr-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f8f8f2; }
+.dr-eta { margin-left: auto; white-space: nowrap; }
+.dr-sub { padding-left: 12px; color: #8b95bd; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-time { color: #8b95bd; font-size: 10px; }
+.dr-kind { font-size: 9px; letter-spacing: 1px; }
+.dr-text { color: #d6d9e8; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.d-tabs { display: flex; gap: 2px; }
+.d-tab { min-height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: #a9b2d3; font: inherit; font-size: 10px; cursor: pointer; }
+.d-tab[aria-selected='true'] { background: #343746; color: #f8f8f2; font-weight: 600; }
+.d-server { flex: none; padding: 4px 6px 4px 12px; }
+.d-sum { display: flex; gap: 14px; color: #a9b2d3; font-size: 11px; white-space: nowrap; overflow: hidden; }
+.d-metrics { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: flex-end; padding: 2px 6px 8px 0; }
+.d-cpu { flex: 2 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.d-net { flex: 1 1 120px; display: flex; flex-direction: column; gap: 3px; font-size: 11px; min-width: 0; }
+.d-meter { flex: 1 1 100px; display: flex; flex-direction: column; gap: 3px; font-size: 11px; min-width: 0; }
+.d-meter-top { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; }
+.d-meter-top > span:first-child { color: #a9b2d3; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-meter-top > span:last-child { flex: none; }
+.d-meter, .d-cpu, .d-net { overflow: hidden; }
+.d-meter-bar { height: 6px; border-radius: 3px; background: #44475a; }
+.d-meter-bar > i { display: block; height: 6px; border-radius: 3px; }
+.d-meter-sub { color: #8b95bd; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-bars { display: flex; align-items: flex-end; gap: 2px; }
+.d-bars > i { flex: 1; display: block; min-width: 1px; }
+.d-graph { position: relative; flex: 1; min-height: 220px; border: 1px solid #44475a; border-radius: 14px; background: #191a21; overflow: hidden; display: flex; }
+.d-graph .brain-canvas { position: absolute; inset: 0; }
+.d-graph-state { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 40px 16px 16px; }
+.d-graph-bar { position: absolute; z-index: 2; top: 8px; left: 10px; right: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; pointer-events: none; }
+.d-graph-bar > * { pointer-events: auto; }
+.d-gtabs { display: flex; gap: 2px; padding: 2px; border: 1px solid #44475a; border-radius: 8px; background: #282a36; }
+.d-gtab { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: #a9b2d3; font: inherit; font-size: 11px; cursor: pointer; }
+.d-gtab[aria-selected='true'] { background: #44475a; color: #f8f8f2; font-weight: 600; }
+.d-gtab[disabled] { opacity: 0.5; cursor: not-allowed; }
+.d-graph-meta { color: #8b95bd; font-size: 10px; }
+.d-graph-actions { margin-left: auto; display: flex; gap: 2px; }
+.d-agents { padding: 6px 8px 8px; border-radius: 14px; gap: 6px; overflow-y: auto; }
+/* draggable dividers */
+.rz { touch-action: none; }
+.rz > span { border-radius: 1px; background: #44475a; transition: background-color 0.15s; }
+.rz:hover > span, .rz:focus-visible > span { background: #50fa7b; }
+.rz-v { flex: 0 0 8px; margin: 0 -8px; align-self: stretch; display: flex; justify-content: center; cursor: col-resize; z-index: 3; }
+.rz-v > span { width: 2px; }
+.rz-h { flex: none; height: 8px; margin: -3px 0; display: flex; align-items: center; justify-content: center; cursor: row-resize; z-index: 3; }
+.rz-h > span { width: 40px; height: 2px; }
+@media (max-width: 900px) { .dash2 { flex-direction: column; overflow-y: auto; } .d-left, .d-mid { flex: none; } .rz-v { display: none; } .d-agents { flex: none !important; min-height: 420px; } }
