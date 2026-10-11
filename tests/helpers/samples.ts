@@ -1,4 +1,4 @@
-import type { AgentsData, CronData, CronJob, MetricsData } from '@shared/events'
+import type { AgentsData, CronData, CronJob, FeedData, FeedItem, MetricsData } from '@shared/events'
 
 export function sampleMetrics(over: Partial<MetricsData> = {}): MetricsData {
   return {
@@ -61,5 +61,37 @@ export function sampleCron(): CronData {
       { profile: 'scout', ok: true, error: null },
       { profile: 'atlas', ok: true, error: null }
     ]
+  }
+}
+
+export function sampleItem(over: Partial<FeedItem> = {}): FeedItem {
+  return {
+    id: 'default:2:0',
+    profile: 'default',
+    messageId: 2,
+    sessionId: 's-default-1',
+    source: 'telegram',
+    parentSessionId: null,
+    ts: 1_759_996_100,
+    kind: 'user',
+    text: 'hello agent',
+    truncated: false,
+    fullLen: 11,
+    toolName: null,
+    ...over
+  }
+}
+
+export function sampleFeed(): FeedData {
+  return {
+    items: [
+      sampleItem(),
+      sampleItem({ id: 'default:3:0', messageId: 3, kind: 'thinking', text: 'User greets; search first.', fullLen: 26 }),
+      sampleItem({ id: 'default:3:2', messageId: 3, kind: 'tool', text: 'web_search {"q": "hermes"}', toolName: 'web_search', fullLen: 25 }),
+      sampleItem({ id: 'default:4:0', messageId: 4, kind: 'result', text: '3 results', toolName: 'web_search', fullLen: 9 }),
+      sampleItem({ id: 'scout:5:1', profile: 'scout', messageId: 5, sessionId: 's-scout-1', source: 'cron', kind: 'reply', text: 'digest done', fullLen: 11 })
+    ],
+    cursors: { default: 4, scout: 5 },
+    history: true
   }
 }

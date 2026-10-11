@@ -1,16 +1,22 @@
+import type { FeedItem } from '@shared/events'
 import type { ConnectRequest, ConnectResult } from '@shared/ipc'
 import type { SettingsMap } from '@shared/settings'
+import { fullRequest, oldestPerProfile } from './lib/feed'
 import { defaultPins, reorderPins, togglePin } from './lib/roster'
 import { stepZoom } from './lib/zoom'
 import { useAgents } from './stores/agents'
 import { IDLE_STATUS, useConn } from './stores/conn'
 import { useCron } from './stores/cron'
+import { useFeed } from './stores/feed'
 import { useMetrics } from './stores/metrics'
 import { useUi } from './stores/ui'
 
 export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
   const { password: _password, ...withoutPassword } = req
   useConn.setState({ connecting: true, connectError: null, hostKey: null, lastRequest: withoutPassword })
+  // Feed ids only mean something on one server; drop what a different server left behind before new events arrive.
+  const prev = useConn.getState().saved
+  if (prev && (prev.host !== req.host || prev.port !== req.port || prev.username !== req.username)) useFeed.getState().reset()
   const res = await window.mc.connection.connect(req)
   if (res.ok) {
     useConn.setState({ connecting: false, saved: await window.mc.connection.saved(), connectError: null, hostKey: null })
@@ -39,6 +45,7 @@ export async function forgetConnection(): Promise<void> {
   useAgents.getState().reset()
   useMetrics.getState().reset()
   useCron.getState().reset()
+  useFeed.getState().reset()
   useConn.setState({
     saved: null, status: IDLE_STATUS, startup: null, preflight: null, capabilities: null, hostKey: null, connectError: null, lastRequest: null
   })
@@ -89,4 +96,46 @@ export async function reorderAgentPin(from: string, to: string): Promise<void> {
   const next = reorderPins(useAgents.getState().pins, from, to)
   useAgents.getState().setPins(next)
   await window.mc.agents.setPins(next)
+}
+
+/**
+ * Loads older items for the profiles that may still have some. Does nothing while a load is running
+ * or when every profile is exhausted.
+ */
+export async function loadOlderFeed(profiles: readonly string[]): Promise<void> {
+  const s = useFeed.getState()
+  if (s.loadingOlder) return
+  const oldest = oldestPerProfile(s.items)
+  const before: Record<string, number> = {}
+  for (const p of profiles) if (!s.exhausted[p] && oldest[p] !== undefined) before[p] = oldest[p]!
+  if (Object.keys(before).length === 0) return
+  s.setLoadingOlder(true)
+  const res = await window.mc.feed.history(before, 50)
+  if (!res.ok) {
+    useFeed.getState().setLoadingOlder(false, res.error)
+    return
+  }
+  useFeed.getState().mergeOlder(res.data.items, res.data.exhausted)
+}
+
+const FULL_ERRORS: Record<string, string> = {
+  not_found: 'This message is no longer in the database.',
+  timeout: 'The server took too long to answer.',
+  'not-connected': 'Not connected to the server.'
+}
+
+/** Fetches the complete text of a truncated item once; later calls reuse the result. */
+export async function loadFullText(it: FeedItem): Promise<void> {
+  const cur = useFeed.getState().full[it.id]
+  if (cur && cur.status !== 'error') return
+  useFeed.getState().setFull(it.id, { status: 'loading' })
+  const { field, index } = fullRequest(it)
+  const res = await window.mc.feed.message(it.profile, it.messageId, field, index)
+  useFeed.getState().setFull(it.id, res.ok ? { status: 'ok', text: res.data.text } : { status: 'error', message: FULL_ERRORS[res.error] ?? 'Could not load the full text.' })
+}
+
+/** Opens the Live feed filtered to one agent. */
+export function openFeedFor(profile: string): void {
+  useFeed.getState().soloAgent(profile, useAgents.getState().agents.map((a) => a.profile))
+  useUi.getState().navigate('feed')
 }

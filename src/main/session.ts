@@ -1,8 +1,11 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
+import { FeedHistory, FeedMessageText, SessionDetail } from '@shared/events'
 import type {
-  ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, SavedConnection
+  ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, QueryResult, SavedConnection
 } from '@shared/ipc'
+import { FeedCursors } from './feed/cursors'
+import { QueryRunner } from './query'
 import { CollectorChannel } from './collector/channel'
 import { ModelResolver } from './collector/models'
 import { readCronOutput } from './cron/output'
@@ -71,9 +74,12 @@ export class MissionSession {
   private readonly cronStore = new CronStore()
   private readonly cronWatcher = new CronWatcher()
   private lastTarget: string | null = null
+  private readonly feedCursors = new FeedCursors()
+  private readonly queries: QueryRunner
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
+    this.queries = new QueryRunner(d.manager, d.collectorScript, () => (this.hermes && d.manager.isConnected() ? { python: this.hermes.python, home: this.hermes.home } : null))
   }
 
   private log = (m: string): void => this.d.log?.(m)
@@ -141,6 +147,7 @@ export class MissionSession {
     if (this.lastTarget !== null && this.lastTarget !== target) {
       this.cronWatcher.reset()
       this.cronStore.clear()
+      this.feedCursors.clear()
     }
     this.lastTarget = target
     this.params = params
@@ -249,10 +256,18 @@ export class MissionSession {
   private async startCollector(): Promise<void> {
     const h = this.hermes
     if (!h) return
-    const ch = new CollectorChannel(this.d.manager, { python: h.python, home: h.home, script: this.d.collectorScript, log: this.log })
+    const cursors = this.feedCursors.toArg()
+    const ch = new CollectorChannel(this.d.manager, {
+      python: h.python,
+      home: h.home,
+      script: this.d.collectorScript,
+      extraArgs: cursors ? ['--cursors', cursors] : [],
+      log: this.log
+    })
     ch.on('event', (ev: CollectorEvent) => {
       this.d.send(IPC.evEvent, ev)
       if (ev.type === 'agents') void this.models?.update(ev.data.agents)
+      if (ev.type === 'feed') this.feedCursors.apply(ev.data.cursors)
       if (ev.type === 'cron') {
         this.cronStore.apply(ev.data.jobs)
         for (const alert of this.cronWatcher.ingest(ev.data.jobs)) this.d.notify?.(alert)
@@ -357,8 +372,21 @@ export class MissionSession {
     await this.disconnect()
     this.cronWatcher.reset()
     this.cronStore.clear()
+    this.feedCursors.clear()
     this.lastTarget = null
     this.d.store.forgetConnection()
+  }
+
+  feedMessage(args: { profile: string; messageId: number; field: 'content' | 'reasoning' | 'tool_calls'; index?: number }): Promise<QueryResult<FeedMessageText>> {
+    return this.queries.run('message', args, FeedMessageText)
+  }
+
+  feedHistory(args: { before: Record<string, number>; limit: number }): Promise<QueryResult<FeedHistory>> {
+    return this.queries.run('history', args, FeedHistory)
+  }
+
+  feedSession(args: { profile: string; sessionId: string }): Promise<QueryResult<SessionDetail>> {
+    return this.queries.run('session', args, SessionDetail)
   }
 
   async cronOutput(profile: string, jobId: string): Promise<CronOutputResult> {

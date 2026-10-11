@@ -3,6 +3,9 @@ import { ComingSoon } from './screens/ComingSoon'
 import { CronModal } from './screens/cron/CronModal'
 import { Connect } from './screens/Connect'
 import { Dashboard } from './screens/Dashboard'
+import { Feed } from './screens/Feed'
+import { FeedModal } from './screens/feed/FeedModal'
+import { SessionModal } from './screens/feed/SessionModal'
 import { Launch } from './screens/Launch'
 import { Server } from './screens/Server'
 import { SettingsModal } from './settings/SettingsModal'
@@ -28,8 +31,10 @@ export function App() {
 
   return (
     <>
-      <Shell>{route === 'dashboard' ? <Dashboard /> : route === 'server' ? <Server /> : <ComingSoon route={route} />}</Shell>
+      <Shell>{route === 'dashboard' ? <Dashboard /> : route === 'server' ? <Server /> : route === 'feed' ? <Feed /> : <ComingSoon route={route} />}</Shell>
       <CronModal />
+      <FeedModal />
+      <SessionModal />
       <SettingsModal />
     </>
   )

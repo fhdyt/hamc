@@ -32,8 +32,16 @@ export function Modal({ title, onClose, width = 560, children }: { title: string
       }
     }
     el.addEventListener('keydown', onKey)
+    // Content that re-renders can drop the focused element; Escape must still close the topmost dialog.
+    const onDocKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      const all = document.querySelectorAll('.mc-modal')
+      if (all[all.length - 1] === el) closeRef.current()
+    }
+    document.addEventListener('keydown', onDocKey)
     return () => {
       el.removeEventListener('keydown', onKey)
+      document.removeEventListener('keydown', onDocKey)
       prev?.focus()
     }
   }, [])

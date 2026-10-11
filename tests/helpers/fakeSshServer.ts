@@ -12,8 +12,13 @@ export interface HostKeyPair {
 }
 
 export function makeHostKey(): HostKeyPair {
-  const kp = utils.generateKeyPairSync('ed25519')
-  return { private: kp.private, public: kp.public }
+  // ssh2 now and then emits an OpenSSH key that it cannot parse back, so keep only keys that round-trip.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const kp = utils.generateKeyPairSync('ed25519')
+    const back = utils.parseKey(kp.private)
+    if (!(back instanceof Error) && !(Array.isArray(back) && back[0] instanceof Error)) return { private: kp.private, public: kp.public }
+  }
+  throw new Error('cannot generate a usable host key')
 }
 
 export function fingerprintOfPublic(pub: string): string {

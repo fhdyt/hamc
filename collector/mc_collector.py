@@ -500,6 +500,7 @@ def collect_agents(home, now):
             "hasSoul": os.path.isfile(os.path.join(pdir, "SOUL.md")),
             "hasMemory": os.path.isfile(os.path.join(pdir, "memories", "MEMORY.md")),
             "hasUser": os.path.isfile(os.path.join(pdir, "memories", "USER.md")),
+            "stats": collect_stats(os.path.join(pdir, "state.db"), now),
         })
     data = {
         "agents": agents,
@@ -688,6 +689,378 @@ def cron_digest(data):
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()
 
 
+FEED_MAX_ROWS = 500
+FEED_HISTORY_ROWS = 60
+FEED_CHUNK = 50
+FEED_LIMITS = {"user": 4000, "reply": 4000, "thinking": 4000, "tool": 1500, "result": 1200}
+QUERY_MAX_BYTES = 65536
+MESSAGE_COLS = ["content", "tool_calls", "tool_name", "reasoning", "reasoning_content", "active"]
+ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+PROFILE_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+STAT_COLS = ["message_count", "tool_call_count", "input_tokens", "output_tokens", "reasoning_tokens", "actual_cost_usd", "estimated_cost_usd"]
+
+
+def open_ro(path):
+    uri = Path(path).resolve().as_uri() + "?mode=ro"
+    con = sqlite3.connect(uri, uri=True, timeout=1.0)
+    con.execute("PRAGMA query_only=1")
+    return con
+
+
+def table_columns(con, table):
+    return {r[1] for r in con.execute("PRAGMA table_info(%s)" % table)}
+
+
+def feed_select(con):
+    """Returns (select_sql, base_where) for the columns this database has, or None when it is not a Hermes state.db."""
+    mcols = table_columns(con, "messages")
+    if not {"id", "session_id", "role", "timestamp"} <= mcols:
+        return None
+    scols = table_columns(con, "sessions")
+    sel = ["m.id AS id", "m.session_id AS session_id", "m.role AS role", "m.timestamp AS timestamp"]
+    for col in MESSAGE_COLS:
+        sel.append(("m.%s AS %s" % (col, col)) if col in mcols else ("NULL AS %s" % col))
+    can_join = "id" in scols
+    sel.append("s.source AS source" if can_join and "source" in scols else "NULL AS source")
+    sel.append("s.parent_session_id AS parent_session_id" if can_join and "parent_session_id" in scols else "NULL AS parent_session_id")
+    sql = "SELECT " + ", ".join(sel) + " FROM messages m"
+    if can_join:
+        sql += " LEFT JOIN sessions s ON s.id = m.session_id"
+    where = ["m.role IN ('user','assistant','tool')"]
+    if "active" in mcols:
+        where.append("m.active = 1")
+    return sql, where
+
+
+def fetch_rows(con, base, where, extra, params, order, limit):
+    sql = base + " WHERE " + " AND ".join(list(where) + list(extra)) + " ORDER BY " + order + " LIMIT " + str(int(limit))
+    cur = con.execute(sql, params)
+    names = [d[0] for d in cur.description]
+    return [dict(zip(names, r)) for r in cur.fetchall()]
+
+
+def as_text(v):
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, bytes):
+        return v.decode("utf-8", "replace")
+    try:
+        return json.dumps(v, ensure_ascii=True, default=str)
+    except (TypeError, ValueError):
+        return str(v)
+
+
+def parse_tool_calls(raw):
+    v = raw
+    if isinstance(v, str):
+        try:
+            v = json.loads(v)
+        except ValueError:
+            return []
+    if isinstance(v, dict):
+        v = [v]
+    if not isinstance(v, list):
+        return []
+    out = []
+    for call in v:
+        if not isinstance(call, dict):
+            continue
+        fn = call.get("function") if isinstance(call.get("function"), dict) else call
+        name = fn.get("name") or call.get("name") or "tool"
+        args = fn.get("arguments", fn.get("input", call.get("arguments", call.get("input"))))
+        if isinstance(args, str):
+            text = args
+        elif args is None:
+            text = ""
+        else:
+            text = json.dumps(args, separators=(",", ":"), ensure_ascii=True, default=str)
+        out.append((str(name), re.sub(r"\s+", " ", text).strip()))
+    return out
+
+
+def make_item(profile, row, n, kind, text, tool_name=None):
+    limit = FEED_LIMITS[kind]
+    ts = to_epoch(row.get("timestamp"))
+    mid = row["id"] if isinstance(row["id"], int) else _int(row["id"], 0)
+    return {
+        "id": "%s:%s:%d" % (profile, mid, n),
+        "profile": profile,
+        "messageId": mid,
+        "sessionId": _text(row.get("session_id")) or "",
+        "source": _text(row.get("source")),
+        "parentSessionId": _text(row.get("parent_session_id")),
+        "ts": ts if ts is not None else 0.0,
+        "kind": kind,
+        "text": text[:limit],
+        "truncated": len(text) > limit,
+        "fullLen": len(text),
+        "toolName": tool_name,
+    }
+
+
+def row_items(profile, row):
+    role = row.get("role")
+    items = []
+    if role == "user":
+        text = as_text(row.get("content"))
+        if text.strip():
+            items.append(make_item(profile, row, 0, "user", text))
+    elif role == "assistant":
+        think = as_text(row.get("reasoning_content")).strip() or as_text(row.get("reasoning")).strip()
+        if think:
+            items.append(make_item(profile, row, 0, "thinking", think))
+        text = as_text(row.get("content"))
+        if text.strip():
+            items.append(make_item(profile, row, 1, "reply", text))
+        for i, (name, args) in enumerate(parse_tool_calls(row.get("tool_calls"))):
+            items.append(make_item(profile, row, 2 + i, "tool", (name + " " + args).strip(), name))
+    elif role == "tool":
+        text = as_text(row.get("content"))
+        if text.strip():
+            items.append(make_item(profile, row, 0, "result", text, _text(row.get("tool_name"))))
+    return items
+
+
+class FeedState:
+    def __init__(self, cursors=None):
+        self.cursors = {}
+        for k, v in (cursors or {}).items():
+            if isinstance(k, str) and isinstance(v, int) and not isinstance(v, bool):
+                self.cursors[k] = v
+
+    def poll(self, home, history_rows=FEED_HISTORY_ROWS):
+        items, errors, history = [], [], False
+        for name, pdir in list_profiles(home):
+            db = os.path.join(pdir, "state.db")
+            if not os.path.isfile(db):
+                continue
+            con = None
+            try:
+                con = open_ro(db)
+                parts = feed_select(con)
+                if parts is None:
+                    errors.append({"code": "unsupported_schema", "message": "state.db schema not recognized", "profile": name})
+                    continue
+                base, where = parts
+                cur = self.cursors.get(name)
+                if cur is None:
+                    rows = fetch_rows(con, base, where, [], [], "m.id DESC", history_rows)
+                    rows.reverse()
+                    history = True
+                else:
+                    rows = fetch_rows(con, base, where, ["m.id > ?"], [cur], "m.id ASC", FEED_MAX_ROWS)
+                ids = [r["id"] for r in rows if isinstance(r["id"], int)]
+                self.cursors[name] = max(ids + [cur or 0])
+                for r in rows:
+                    items.extend(row_items(name, r))
+            except sqlite3.Error:
+                errors.append({"code": "db_unreadable", "message": "state.db could not be read", "profile": name})
+            finally:
+                if con is not None:
+                    con.close()
+        return items, history, errors
+
+
+def _num(v):
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
+
+
+def local_midnight(now):
+    t = time.localtime(now)
+    return time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1))
+
+
+def collect_stats(db_path, now):
+    if not os.path.isfile(db_path):
+        return None
+    con = None
+    try:
+        con = open_ro(db_path)
+        cols = table_columns(con, "sessions")
+        if "started_at" not in cols:
+            return None
+        sel = ["started_at"] + [c if c in cols else "NULL" for c in STAT_COLS]
+        rows = con.execute("SELECT %s FROM sessions ORDER BY started_at DESC LIMIT 2000" % ", ".join(sel)).fetchall()
+    except sqlite3.Error:
+        return None
+    finally:
+        if con is not None:
+            con.close()
+    start = local_midnight(now)
+    st = {"sessions": 0, "messages": 0, "toolCalls": 0, "inputTokens": 0, "outputTokens": 0, "reasoningTokens": 0, "costUsd": 0.0}
+    for r in rows:
+        ts = to_epoch(r[0])
+        if ts is None or ts < start:
+            continue
+        st["sessions"] += 1
+        st["messages"] += int(_num(r[1]))
+        st["toolCalls"] += int(_num(r[2]))
+        st["inputTokens"] += int(_num(r[3]))
+        st["outputTokens"] += int(_num(r[4]))
+        st["reasoningTokens"] += int(_num(r[5]))
+        st["costUsd"] += float(_num(r[6] if r[6] is not None else r[7]))
+    st["costUsd"] = round(st["costUsd"], 4)
+    return st
+
+
+class QueryError(Exception):
+    pass
+
+
+def valid_profile(p):
+    return isinstance(p, str) and PROFILE_RE.match(p) is not None and p not in (".", "..")
+
+
+def valid_int(v, low=0):
+    return isinstance(v, int) and not isinstance(v, bool) and v >= low
+
+
+def profile_dir(home, name):
+    if name == "default":
+        return home
+    d = os.path.join(home, "profiles", name)
+    return d if os.path.isdir(d) else None
+
+
+def open_profile(home, name):
+    pdir = profile_dir(home, name)
+    db = os.path.join(pdir, "state.db") if pdir else None
+    if not db or not os.path.isfile(db):
+        raise QueryError("not_found")
+    return open_ro(db)
+
+
+def cap_text(text):
+    raw = text.encode("utf-8", "replace")
+    if len(raw) <= QUERY_MAX_BYTES:
+        return {"text": text, "truncated": False, "fullLen": len(text)}
+    return {"text": raw[:QUERY_MAX_BYTES].decode("utf-8", "ignore"), "truncated": True, "fullLen": len(text)}
+
+
+def q_message(home, a):
+    name, mid, field, idx = a.get("profile"), a.get("messageId"), a.get("field"), a.get("index", 0)
+    if not valid_profile(name) or not valid_int(mid) or field not in ("content", "reasoning", "tool_calls") or not valid_int(idx):
+        raise QueryError("bad_args")
+    con = open_profile(home, name)
+    try:
+        parts = feed_select(con)
+        if parts is None:
+            raise QueryError("unsupported_schema")
+        base, where = parts
+        rows = fetch_rows(con, base, where[:1], ["m.id = ?"], [mid], "m.id", 1)
+    finally:
+        con.close()
+    if not rows:
+        raise QueryError("not_found")
+    row = rows[0]
+    if field == "content":
+        text = as_text(row.get("content"))
+    elif field == "reasoning":
+        text = as_text(row.get("reasoning_content")) or as_text(row.get("reasoning"))
+    else:
+        calls = parse_tool_calls(row.get("tool_calls"))
+        if idx >= len(calls):
+            raise QueryError("not_found")
+        text = (calls[idx][0] + " " + calls[idx][1]).strip()
+    return cap_text(text)
+
+
+def q_history(home, a):
+    before, limit = a.get("before"), a.get("limit")
+    if not isinstance(before, dict) or not before or len(before) > 50 or not valid_int(limit, 1) or limit > 100:
+        raise QueryError("bad_args")
+    for name, bid in before.items():
+        if not valid_profile(name) or not valid_int(bid):
+            raise QueryError("bad_args")
+    items, oldest, exhausted = [], {}, {}
+    for name, bid in before.items():
+        try:
+            con = open_profile(home, name)
+        except QueryError:
+            oldest[name], exhausted[name] = None, True
+            continue
+        try:
+            parts = feed_select(con)
+            if parts is None:
+                oldest[name], exhausted[name] = None, True
+                continue
+            base, where = parts
+            rows = fetch_rows(con, base, where, ["m.id < ?"], [bid], "m.id DESC", limit)
+        finally:
+            con.close()
+        exhausted[name] = len(rows) < limit
+        oldest[name] = min([r["id"] for r in rows if isinstance(r["id"], int)] or [None]) if rows else None
+        for r in rows:
+            items.extend(row_items(name, r))
+    return {"items": items, "oldest": oldest, "exhausted": exhausted}
+
+
+def q_session(home, a):
+    name, sid = a.get("profile"), a.get("sessionId")
+    if not valid_profile(name) or not isinstance(sid, str) or not ID_RE.match(sid):
+        raise QueryError("bad_args")
+    con = open_profile(home, name)
+    try:
+        parts = feed_select(con)
+        if parts is None:
+            raise QueryError("unsupported_schema")
+        base, where = parts
+        scols = table_columns(con, "sessions")
+        wanted = [c for c in ("source", "model", "parent_session_id", "started_at", "ended_at", "title") if c in scols]
+        srow = None
+        children = []
+        if "id" in scols:
+            srow = con.execute("SELECT %s FROM sessions WHERE id = ?" % ", ".join(["id"] + wanted), (sid,)).fetchone()
+            if "parent_session_id" in scols:
+                children = [{"id": r[0], "source": r[1]} for r in con.execute(
+                    "SELECT id, %s FROM sessions WHERE parent_session_id = ? LIMIT 50" % ("source" if "source" in scols else "NULL"), (sid,))]
+        rows = fetch_rows(con, base, where, ["m.session_id = ?"], [sid], "m.id ASC", 501)
+    finally:
+        con.close()
+    if srow is None and not rows:
+        raise QueryError("not_found")
+    info = dict(zip(["id"] + wanted, srow)) if srow else {"id": sid}
+    items = []
+    for r in rows:
+        items.extend(row_items(name, r))
+    more = len(rows) > 500 or len(items) > 500
+    items = items[:500]
+    return {
+        "session": {
+            "id": sid,
+            "source": _text(info.get("source")),
+            "model": _text(info.get("model")),
+            "parentSessionId": _text(info.get("parent_session_id")),
+            "startedAt": to_epoch(info.get("started_at")),
+            "endedAt": to_epoch(info.get("ended_at")),
+            "title": _text(info.get("title"), 200),
+        },
+        "children": children,
+        "items": items,
+        "more": more,
+    }
+
+
+def run_query(home, cmd, raw):
+    try:
+        args = json.loads(raw)
+    except ValueError:
+        return {"ok": False, "error": "bad_args"}
+    if not isinstance(args, dict):
+        return {"ok": False, "error": "bad_args"}
+    handler = {"message": q_message, "history": q_history, "session": q_session}.get(cmd)
+    if handler is None:
+        return {"ok": False, "error": "unknown_command"}
+    try:
+        return {"ok": True, "data": handler(home, args)}
+    except QueryError as e:
+        return {"ok": False, "error": str(e)}
+    except sqlite3.Error:
+        return {"ok": False, "error": "db_unreadable"}
+
+
 def emit(kind, data, profile=None):
     line = json.dumps(
         {"type": kind, "ts": round(time.time(), 3), "profile": profile, "data": data},
@@ -702,10 +1075,20 @@ def emit(kind, data, profile=None):
 
 
 def parse_args(argv):
-    args = {"home": None, "ticks": 0, "interval": 1.0, "agents_interval": 10.0}
+    args = {"home": None, "ticks": 0, "interval": 1.0, "agents_interval": 10.0, "cursors": {}, "history": FEED_HISTORY_ROWS, "query": None}
     it = iter(argv)
     for a in it:
-        if a == "--ticks":
+        if a == "--cursors":
+            try:
+                parsed = json.loads(next(it))
+                args["cursors"] = parsed if isinstance(parsed, dict) else {}
+            except ValueError:
+                args["cursors"] = {}
+        elif a == "--history":
+            args["history"] = int(next(it))
+        elif a == "--query":
+            args["query"] = (next(it), next(it))
+        elif a == "--ticks":
             args["ticks"] = int(next(it))
         elif a == "--interval":
             args["interval"] = float(next(it))
@@ -720,7 +1103,13 @@ def parse_args(argv):
 
 def main(argv):
     args = parse_args(argv)
+    if args["query"] is not None:
+        sys.stdout.write(json.dumps(run_query(args["home"], args["query"][0], args["query"][1]), separators=(",", ":"), allow_nan=False) + "\n")
+        sys.stdout.flush()
+        return 0
     sampler = Sampler()
+    feed = FeedState(args["cursors"])
+    feed_reported = set()
     try:
         sampler.sample()
     except Exception as ex:  # noqa: BLE001 - never crash the stream
@@ -760,6 +1149,19 @@ def main(argv):
                 emit("metrics", sampler.sample())
             except Exception as ex:  # noqa: BLE001
                 emit("error", {"code": "sample_failed", "message": type(ex).__name__})
+            try:
+                items, history, errs = feed.poll(args["home"], args["history"])
+                for i in range(0, len(items), FEED_CHUNK):
+                    emit("feed", {"items": items[i:i + FEED_CHUNK], "cursors": dict(feed.cursors), "history": history})
+                current = set()
+                for e in errs:
+                    key = (e["code"], e["profile"])
+                    current.add(key)
+                    if key not in feed_reported:
+                        emit("error", e, e["profile"])
+                feed_reported = current
+            except Exception as ex:  # noqa: BLE001
+                emit("error", {"code": "feed_failed", "message": type(ex).__name__})
             next_metrics = clock() + args["interval"]
             done += 1
             if args["ticks"] and done >= args["ticks"]:
