@@ -15,7 +15,8 @@ export interface EngineStats {
 
 declare global {
   interface Window {
-    __mcBrainStats?: EngineStats
+    __mcBrainStats?: () => EngineStats
+    __mcBrainNodes?: () => { id: string; x: number; y: number }[]
   }
 }
 
@@ -26,6 +27,8 @@ export class GraphEngine {
   private started = 0
   private settleMs: number | null = null
   private nodes = 0
+  private autoFit = false
+  private lastFit = 0
   private edges = 0
 
   private constructor(
@@ -36,14 +39,22 @@ export class GraphEngine {
       this.ticks++
       this.settled = false
       renderer.setPositions(pos)
-      this.publish()
+      // keep a fresh layout framed while it unfolds, until the reader takes over the camera
+      const now = performance.now()
+      if (this.autoFit && !renderer.userMoved && now - this.lastFit > 250) {
+        this.lastFit = now
+        renderer.fit()
+      }
     }
     layout.onSettled = () => {
       this.settled = true
+      if (this.autoFit && !renderer.userMoved) renderer.fit()
+      this.autoFit = false
       if (this.settleMs === null) this.settleMs = performance.now() - this.started
-      this.publish()
     }
     renderer.setSink(layout)
+    window.__mcBrainNodes = () => renderer.screenPositions()
+    window.__mcBrainStats = () => this.stats()
   }
 
   static async create(host: HTMLElement, forces: Forces, handlers: RendererHandlers, opts: RendererOptions = {}): Promise<GraphEngine> {
@@ -51,18 +62,14 @@ export class GraphEngine {
     return new GraphEngine(renderer, new LayoutClient(forces))
   }
 
-  private publish(): void {
-    window.__mcBrainStats = { frames: this.renderer.frames, ticks: this.ticks, settled: this.settled, nodes: this.nodes, edges: this.edges, settleMs: this.settleMs }
-  }
-
   setGraph(g: Graph): void {
     this.started = performance.now()
     this.settleMs = null
+    if (this.nodes === 0 && g.nodes.length > 0) this.autoFit = true // the first graph is framed as it unfolds
     this.nodes = g.nodes.length
     this.edges = g.edges.length
     const pos = this.layout.setGraph(g)
     this.renderer.setGraph(g, pos)
-    this.publish()
   }
 
   setStyle(s: GraphStyle): void {
@@ -97,5 +104,6 @@ export class GraphEngine {
     this.layout.destroy()
     this.renderer.destroy()
     delete window.__mcBrainStats
+    delete window.__mcBrainNodes
   }
 }

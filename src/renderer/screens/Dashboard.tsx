@@ -1,8 +1,7 @@
-import { Panel } from '../components/Panel'
-import { UnsupportedState } from '../components/States'
 import { useUi } from '../stores/ui'
 import { AgentsPanel } from './dashboard/AgentsPanel'
 import { ActivityPanel } from './dashboard/ActivityPanel'
+import { BrainPanel } from './dashboard/BrainPanel'
 import { ServerStrip } from './dashboard/ServerStrip'
 import { CronPanel } from './dashboard/CronPanel'
 import { StatusBlock } from './dashboard/StatusBlock'
@@ -18,9 +17,7 @@ export function Dashboard() {
       </div>
       <div className="col">
         <ServerStrip />
-        <Panel variant="card" title="second brain" className="grow">
-          <UnsupportedState why="The vault graph arrives in a later release." />
-        </Panel>
+        <BrainPanel />
       </div>
       <AgentsPanel />
     </div>

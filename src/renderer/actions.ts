@@ -1,6 +1,6 @@
 import type { FeedItem } from '@shared/events'
 import type { ConnectRequest, ConnectResult } from '@shared/ipc'
-import type { SettingsMap } from '@shared/settings'
+import type { BrainGraphSettings, SettingsMap } from '@shared/settings'
 import { fullRequest, oldestPerProfile } from './lib/feed'
 import { defaultPins, reorderPins, togglePin } from './lib/roster'
 import { stepZoom } from './lib/zoom'
@@ -152,4 +152,13 @@ export async function refreshVault(): Promise<void> {
 export async function saveVault(path: string | null): Promise<void> {
   await window.mc.brain.setVault(path)
   useBrain.getState().setVault(path)
+}
+
+let graphSaveTimer: number | undefined
+/** Applies graph settings at once and writes them to app.db shortly after the last change (sliders fire many). */
+export function saveGraphSettings(patch: Partial<BrainGraphSettings>): void {
+  const next = { ...useUi.getState().settings['brain.graph'], ...patch }
+  useUi.getState().patchSettings({ 'brain.graph': next })
+  window.clearTimeout(graphSaveTimer)
+  graphSaveTimer = window.setTimeout(() => void window.mc.settings.set('brain.graph', useUi.getState().settings['brain.graph']), 400)
 }

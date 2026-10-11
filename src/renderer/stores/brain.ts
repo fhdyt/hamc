@@ -77,7 +77,8 @@ export const useBrain = create<BrainState>()((set) => ({
         error: null,
         phase: done ? 'live' : 'loading',
         pulse: pulseIds.length > 0 ? { ids: pulseIds, seq: s.pulse.seq + 1 } : s.pulse,
-        selected: s.selected && notes.has(s.selected) ? s.selected : null,
+        // a missing note, tag or attachment node is not a note, so it stays selected while the notes change
+        selected: s.selected && (!s.selected.endsWith('.md') || notes.has(s.selected)) ? s.selected : null,
         local: s.local && notes.has(s.local.id) ? s.local : null,
         noteModal: s.noteModal && notes.has(s.noteModal) ? s.noteModal : null
       }

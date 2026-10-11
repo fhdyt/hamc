@@ -78,6 +78,8 @@ export class GraphRenderer {
   private sink: DragSink | null = null
   private cleanups: (() => void)[] = []
   frames = 0
+  /** True once the reader panned or zoomed; automatic framing then stops. */
+  userMoved = false
 
   private constructor(
     private readonly host: HTMLElement,
@@ -235,6 +237,11 @@ export class GraphRenderer {
     this.cam = { k, x: w / 2 - ((x0 + x1) / 2) * k, y: h / 2 - ((y0 + y1) / 2) * k }
     this.dirtyCam = true
     this.request()
+  }
+
+  /** Node centres in canvas pixels; used by the end-to-end tests to click on nodes. */
+  screenPositions(): { id: string; x: number; y: number }[] {
+    return this.graph.nodes.map((n, i) => ({ id: n.id, x: this.pos[i * 2]! * this.cam.k + this.cam.x, y: this.pos[i * 2 + 1]! * this.cam.k + this.cam.y }))
   }
 
   // ---- drawing ------------------------------------------------------------
@@ -506,7 +513,7 @@ export class GraphRenderer {
     const down = (e: PointerEvent): void => {
       const [sx, sy] = local(e)
       el.setPointerCapture(e.pointerId)
-      const i = this.opts.mini ? -1 : this.hit(sx, sy)
+      const i = this.hit(sx, sy)
       this.mode = i >= 0 ? { kind: 'node', i, x: sx, y: sy, moved: 0 } : { kind: 'pan', x: sx, y: sy, moved: 0 }
     }
     const move = (e: PointerEvent): void => {
@@ -514,7 +521,8 @@ export class GraphRenderer {
       const m = this.mode
       if (m.kind === 'pan') {
         m.moved += Math.abs(sx - m.x) + Math.abs(sy - m.y)
-        this.cam.x += sx - m.x
+        if (m.moved > 4) this.userMoved = true
+      this.cam.x += sx - m.x
         this.cam.y += sy - m.y
         m.x = sx
         m.y = sy
@@ -524,7 +532,7 @@ export class GraphRenderer {
         m.moved += Math.abs(sx - m.x) + Math.abs(sy - m.y)
         m.x = sx
         m.y = sy
-        if (m.moved > 4) {
+        if (m.moved > 4 && !this.opts.mini) {
           const [wx, wy] = this.toWorld(sx, sy)
           this.sink?.drag(m.i, wx, wy)
         }
@@ -553,6 +561,7 @@ export class GraphRenderer {
       const [sx, sy] = local(e)
       const k = Math.min(MAX_K, Math.max(MIN_K, this.cam.k * Math.exp(-e.deltaY * 0.0015)))
       const [wx, wy] = this.toWorld(sx, sy)
+      this.userMoved = true
       this.cam = { k, x: sx - wx * k, y: sy - wy * k }
       this.dirtyCam = true
       this.request()

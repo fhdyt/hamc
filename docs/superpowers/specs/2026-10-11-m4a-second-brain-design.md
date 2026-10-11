@@ -46,4 +46,11 @@ pytest: parser units (links, embeds, aliases, tags, frontmatter, code blocks, re
 
 ## Perf spike result
 
-(Filled in during Task 4.)
+Measured on Windows 11 with the Playwright-driven Electron app (`MC_PERF=1 npx playwright test tests/e2e/brainPerf.spec.ts`, `MC_PERF_NOTES` sets the size), against the fake SSH server running the real collector:
+
+| Notes | Links | Layout ticks per second | Layout settles after | Frames per second while zooming | First graph after saving the path |
+|---|---|---|---|---|---|
+| 1,000 | 3,981 | 15.7 | 1.9 s | 53.6 | 12 s |
+| 5,000 | 19,979 | 20.7 | 10.5 s | 32.8 | 57 s |
+
+F-BRAIN-9 (at least 30 fps for 5,000 notes and 20,000 links) is met on this machine, with a thin margin. The 57 s is the first parse of 5,000 freshly written files on Windows (Defender scans each new file); the same vault parses in about 2 s once the files are warm, and Linux is faster still. A later change that makes the margin thicker is to draw edges only when their endpoints are on screen. macOS and Linux have not been measured yet: run the command above on each and add a row.
