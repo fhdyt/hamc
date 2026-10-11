@@ -14,10 +14,13 @@ export type ToWorker =
       /** Edge endpoints as s,t pairs of node indices. */
       edges: Int32Array
       forces: Forces
+      /** Drawn radius of every node in world units; nodes are kept from overlapping. */
+      radii: Float32Array
       /** Starting energy of the simulation (1 for a fresh layout, lower when only a few nodes changed). */
       alpha: number
     }
   | { type: 'forces'; forces: Forces }
+  | { type: 'radii'; radii: Float32Array }
   | { type: 'drag'; i: number; x: number; y: number }
   | { type: 'release'; i: number }
   | { type: 'reheat'; alpha: number }

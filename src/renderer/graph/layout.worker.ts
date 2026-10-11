@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { forceLink, forceManyBody, forceSimulation, forceX, forceY, type Simulation, type SimulationLinkDatum, type SimulationNodeDatum } from 'd3-force'
+import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type Simulation, type SimulationLinkDatum, type SimulationNodeDatum } from 'd3-force'
 import { forceValues, type Forces, type FromWorker, type ToWorker } from './layoutTypes'
 
 interface N extends SimulationNodeDatum {
@@ -12,6 +12,7 @@ const BUDGET_MS = 24
 let nodes: N[] = []
 let links: SimulationLinkDatum<N>[] = []
 let degree: Int32Array = new Int32Array(0)
+let radii: Float32Array = new Float32Array(0)
 let sim: Simulation<N, SimulationLinkDatum<N>> | null = null
 let timer: ReturnType<typeof setInterval> | null = null
 let forces: Forces = { center: 0.3, repel: 0.5, link: 0.5, distance: 0.4 }
@@ -21,9 +22,12 @@ const post = (m: FromWorker, transfer?: Transferable[]): void => (self as unknow
 function applyForces(): void {
   if (!sim) return
   const v = forceValues(forces)
-  sim.force('x', forceX<N>(0).strength(v.gravity))
-  sim.force('y', forceY<N>(0).strength(v.gravity))
-  sim.force('charge', forceManyBody<N>().strength(v.charge).theta(0.9).distanceMax(600))
+  // notes without any link are pulled in harder, so they settle in a ring close around the connected core
+  const pull = (n: N): number => (degree[n.index] === 0 ? Math.min(0.5, v.gravity * 2.5) : v.gravity)
+  sim.force('x', forceX<N>(0).strength(pull))
+  sim.force('y', forceY<N>(0).strength(pull))
+  sim.force('collide', forceCollide<N>((n) => (radii[n.index] ?? 2) + 1.5).strength(0.9).iterations(1))
+  sim.force('charge', forceManyBody<N>().strength(v.charge).theta(0.9))
   sim.force(
     'link',
     forceLink<N, SimulationLinkDatum<N>>(links)
@@ -81,6 +85,7 @@ function setGraph(m: Extract<ToWorker, { type: 'set' }>): void {
     links.push({ source: nodes[s]!, target: nodes[t]! })
   }
   forces = m.forces
+  radii = m.radii
   sim = forceSimulation<N>(nodes).alpha(m.alpha).alphaDecay(0.03).velocityDecay(0.45).stop()
   applyForces()
   wake()
@@ -90,7 +95,12 @@ self.onmessage = (ev: MessageEvent<ToWorker>): void => {
   const m = ev.data
   if (m.type === 'set') setGraph(m)
   else if (!sim) return
-  else if (m.type === 'forces') {
+  else if (m.type === 'radii') {
+    radii = m.radii
+    sim.force('collide', forceCollide<N>((n) => (radii[n.index] ?? 2) + 1.5).strength(0.9).iterations(1))
+    sim.alpha(Math.max(sim.alpha(), 0.3))
+    wake()
+  } else if (m.type === 'forces') {
     forces = m.forces
     applyForces()
     sim.alpha(Math.max(sim.alpha(), 0.4))

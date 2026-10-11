@@ -43,25 +43,43 @@ export interface ParsedQuery {
   tags: string[]
   paths: string[]
   words: string[]
+  /** `file:name` (lower case, matches part of the file name) or `file:/regex/flags`. */
+  files: (string | RegExp)[]
 }
 
-/** `tag:#x`, `path:folder` and plain words; every part must match. */
+function fileToken(raw: string): string | RegExp | null {
+  const m = /^\/(.+)\/([a-z]*)$/.exec(raw)
+  if (m) {
+    try {
+      return new RegExp(m[1]!, m[2]!.includes('i') ? m[2] : m[2] + 'i')
+    } catch {
+      return null
+    }
+  }
+  return raw ? raw.toLowerCase() : null
+}
+
+/** `tag:#x`, `path:folder`, `file:name` or `file:/regex/`, and plain words; every part must match. */
 export function parseQuery(q: string): ParsedQuery {
-  const out: ParsedQuery = { tags: [], paths: [], words: [] }
-  for (const raw of q.trim().toLowerCase().split(/\s+/)) {
-    if (!raw) continue
+  const out: ParsedQuery = { tags: [], paths: [], words: [], files: [] }
+  for (const original of q.trim().split(/\s+/)) {
+    if (!original) continue
+    const raw = original.toLowerCase()
     if (raw.startsWith('tag:')) {
       const t = raw.slice(4).replace(/^#/, '')
       if (t) out.tags.push(t)
     } else if (raw.startsWith('path:')) {
       const p = raw.slice(5)
       if (p) out.paths.push(p)
+    } else if (raw.startsWith('file:')) {
+      const f = fileToken(original.slice(5))
+      if (f) out.files.push(f)
     } else out.words.push(raw)
   }
   return out
 }
 
-export const isEmptyQuery = (p: ParsedQuery): boolean => p.tags.length + p.paths.length + p.words.length === 0
+export const isEmptyQuery = (p: ParsedQuery): boolean => p.tags.length + p.paths.length + p.words.length + p.files.length === 0
 
 export function matchesQuery(n: BrainNote, p: ParsedQuery): boolean {
   if (isEmptyQuery(p)) return false
@@ -71,6 +89,7 @@ export function matchesQuery(n: BrainNote, p: ParsedQuery): boolean {
   return (
     p.tags.every((t) => tags.some((x) => x === t || x.startsWith(t + '/'))) &&
     p.paths.every((x) => id.includes(x)) &&
+    p.files.every((f) => (typeof f === 'string' ? title.includes(f) : f.test(n.title))) &&
     p.words.every((w) => title.includes(w) || id.includes(w) || n.aliases.some((a) => a.toLowerCase().includes(w)))
   )
 }
@@ -209,9 +228,20 @@ export function neighbours(g: Graph): number[][] {
   return out
 }
 
-/** Node radius in pixels at zoom 1: grows with the square root of the connections. */
+/** Node radius in pixels at zoom 1: grows with the square root of the connections, so hubs stand out. */
 export function nodeRadius(degree: number, scale: number): number {
-  return Math.min(22, (3 + Math.sqrt(degree) * 1.6) * scale)
+  return Math.min(24, (1.8 + Math.sqrt(degree) * 1.25) * scale)
+}
+
+/** Drawn radius of every node of a graph, in the order of `g.nodes`. */
+export function radiiOf(nodes: readonly GNode[], nodeSize: number): Float32Array {
+  const scale = nodeSize * densityScale(nodes.length)
+  return Float32Array.from(nodes, (n) => nodeRadius(n.degree, scale))
+}
+
+/** Big vaults get smaller dots so the cloud stays readable (about 1.3 for 10 nodes, 0.75 for 1,000, 0.6 for 5,000). */
+export function densityScale(nodeCount: number): number {
+  return Math.min(1.4, Math.max(0.55, 1.6 - 0.28 * Math.log10(Math.max(10, nodeCount))))
 }
 
 /** Resolves a link target as written in a note to a note id, the way the collector does (name, path suffix, alias). */

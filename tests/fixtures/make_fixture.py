@@ -263,10 +263,11 @@ def make_synthetic_vault(root: Path, n: int, links_per_note: int = 4, seed: int 
     rnd = random.Random(seed)
     folders = max(1, int(n ** 0.5) // 2)
     names = [f"f{i % folders}/Note {i}" for i in range(n)]
+    linked = n - n // 8  # the last eighth are orphans: they link nowhere and nothing links to them
     for i, name in enumerate(names):
         out = []
-        for _ in range(links_per_note):
-            j = int(n * rnd.random() ** 2) % n
+        for _ in range(links_per_note if i < linked else 0):
+            j = int(linked * rnd.random() ** 2) % linked
             if j != i:
                 out.append(f"[[{names[j].split('/')[1]}]]")
         w(Path(root) / f"{name}.md", f"#t{i % 40} " + " ".join(out) + "\n")

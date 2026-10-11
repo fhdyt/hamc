@@ -38,6 +38,24 @@ test(`the graph of ${N} notes stays smooth`, async () => {
     // 2. after it settles: zoom in and out for two seconds, as fast as the browser paints
     await expect.poll(async () => (await page.evaluate(() => window.__mcBrainStats?.().settled)) ?? false, { timeout: 5 * 60_000 }).toBe(true)
     const settled = (await page.evaluate(() => window.__mcBrainStats?.()))!
+    // no two nodes may overlap once the layout has settled (a tiny tolerance for the last bit of motion)
+    const overlap = await page.evaluate(() => {
+      const nodes = window.__mcBrainNodes!()
+      let bad = 0
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i]!
+          const b = nodes[j]!
+          if (Math.hypot(a.wx - b.wx, a.wy - b.wy) < (a.wr + b.wr) * 0.8) bad++
+        }
+      }
+      return { bad, pairs: (nodes.length * (nodes.length - 1)) / 2 }
+    })
+    console.log('BRAIN OVERLAP', JSON.stringify(overlap))
+    expect(overlap.bad / Math.max(1, overlap.pairs)).toBeLessThan(0.00005)
+    await page.getByRole('button', { name: 'Fit all nodes' }).click()
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: 'tests/e2e/shots/brain-perf.png' })
     const zoomFps = await page.evaluate(async () => {
       const canvas = document.querySelector('.brain-canvas canvas') as HTMLCanvasElement
       const r = canvas.getBoundingClientRect()
@@ -58,7 +76,6 @@ test(`the graph of ${N} notes stays smooth`, async () => {
     const result = { notes: N, nodes: b.nodes, edges: b.edges, firstGraphMs, layoutFps, tickRate, settleMs: settled.settleMs, zoomFps }
     console.log('BRAIN PERF', JSON.stringify(result))
     writeFileSync('tests/e2e/shots/brain-perf.json', JSON.stringify(result, null, 2))
-    await page.screenshot({ path: 'tests/e2e/shots/brain-perf.png' })
     expect(zoomFps).toBeGreaterThanOrEqual(24)
     expect(layoutFps).toBeGreaterThanOrEqual(8)
   } finally {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_OPTIONS, backlinksOf, buildGraph, fileId, ghostId, isEmptyQuery, matchesQuery, neighbours, nodeRadius, parseQuery, tagId, type GraphOptions } from '../../src/renderer/lib/brain/graphModel'
+import { DEFAULT_OPTIONS, backlinksOf, densityScale, buildGraph, fileId, ghostId, isEmptyQuery, matchesQuery, neighbours, nodeRadius, parseQuery, tagId, type GraphOptions } from '../../src/renderer/lib/brain/graphModel'
 import { sampleBrain, sampleNote } from '../helpers/samples'
 
 const notes = sampleBrain().notes
@@ -8,9 +8,20 @@ const ids = (g: ReturnType<typeof buildGraph>): string[] => g.nodes.map((n) => n
 
 describe('parseQuery and matchesQuery', () => {
   it('splits tag:, path: and plain words', () => {
-    expect(parseQuery('  tag:#Work path:Folder hello  World ')).toEqual({ tags: ['work'], paths: ['folder'], words: ['hello', 'world'] })
+    expect(parseQuery('  tag:#Work path:Folder hello  World ')).toEqual({ tags: ['work'], paths: ['folder'], words: ['hello', 'world'], files: [] })
     expect(isEmptyQuery(parseQuery('   '))).toBe(true)
     expect(isEmptyQuery(parseQuery('tag:'))).toBe(true)
+  })
+
+  it('understands file: with a name part and with a regular expression, keeping its case', () => {
+    const q = parseQuery('file:Plan file:/^\\d{4}-/')
+    expect(q.files[0]).toBe('plan')
+    expect(q.files[1]).toBeInstanceOf(RegExp)
+    expect(matchesQuery(sampleNote({ id: 'x/2026-note.md', title: '2026-note' }), q)).toBe(false) // needs "plan" too
+    expect(matchesQuery(sampleNote({ id: 'x/2026-plan.md', title: '2026-plan' }), q)).toBe(true)
+    expect(matchesQuery(sampleNote({ id: 'x/Plan.md', title: 'Plan' }), q)).toBe(false)
+    expect(parseQuery('file:/(/').files).toEqual([]) // a broken expression is ignored
+    expect(matchesQuery(sampleNote({ id: 'a/A1.md', title: 'A1' }), parseQuery('file:/^a\\d/'))).toBe(true) // regex matches ignore case
   })
 
   it('needs every part to match, tags also match their children, aliases count as words', () => {
@@ -119,10 +130,17 @@ describe('helpers', () => {
     expect(nb[i]!.map((x) => g.nodes[x]!.id).sort()).toEqual(['Alpha.md', 'Alpha.md', 'folder/Gamma.md', 'folder/Gamma.md'])
   })
 
+  it('shrinks dots as the vault grows', () => {
+    expect(densityScale(10)).toBeGreaterThan(densityScale(1000))
+    expect(densityScale(1000)).toBeGreaterThan(densityScale(5000))
+    expect(densityScale(1_000_000)).toBe(0.55)
+    expect(densityScale(1)).toBeLessThanOrEqual(1.4)
+  })
+
   it('grows the radius with connections up to a cap', () => {
     expect(nodeRadius(0, 1)).toBeLessThan(nodeRadius(4, 1))
     expect(nodeRadius(4, 1)).toBeLessThan(nodeRadius(100, 1))
-    expect(nodeRadius(100000, 1)).toBe(22)
+    expect(nodeRadius(100000, 1)).toBe(24)
     expect(nodeRadius(4, 2)).toBeGreaterThan(nodeRadius(4, 1))
   })
 })
