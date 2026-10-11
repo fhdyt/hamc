@@ -1,22 +1,94 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Menu, safeStorage, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { loadCollectorScript } from './collector/channel'
+import { ConnectionManager } from './connection/manager'
+import { registerIpc } from './ipc'
+import { createLogger } from './log'
+import { WEB_PREFERENCES, hardenWebContents, type AppTarget } from './security'
+import { MissionSession } from './session'
+import { SecretStore } from './store/secretStore'
+import { SettingsStore } from './store/settingsStore'
 
-function createWindow(): void {
-  const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    backgroundColor: '#282A36',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false
-    }
-  })
-  const devUrl = process.env['ELECTRON_RENDERER_URL']
-  if (devUrl) void win.loadURL(devUrl)
-  else void win.loadFile(join(__dirname, '../renderer/index.html'))
+if (process.env['MC_USER_DATA']) app.setPath('userData', process.env['MC_USER_DATA'])
+
+const devUrl = process.env['ELECTRON_RENDERER_URL']
+const indexPath = join(__dirname, '../renderer/index.html')
+const target: AppTarget = devUrl ? { devUrl } : { indexFileUrl: pathToFileURL(indexPath).href }
+
+let win: BrowserWindow | null = null
+
+function collectorPath(): string {
+  return app.isPackaged ? join(process.resourcesPath, 'mc_collector.py') : join(app.getAppPath(), 'collector', 'mc_collector.py')
 }
 
-void app.whenReady().then(createWindow)
-app.on('window-all-closed', () => app.quit())
+function buildMenu(): Menu {
+  const edit: MenuItemConstructorOptions = { role: 'editMenu' }
+  const template: MenuItemConstructorOptions[] = process.platform === 'darwin' ? [{ role: 'appMenu' }, edit] : [edit]
+  return Menu.buildFromTemplate(template)
+}
+
+function createWindow(store: SettingsStore): BrowserWindow {
+  const b = store.getSetting('window.bounds')
+  const w = new BrowserWindow({
+    width: b?.width ?? 1280,
+    height: b?.height ?? 800,
+    ...(b?.x !== undefined && b?.y !== undefined ? { x: b.x, y: b.y } : {}),
+    minWidth: 760,
+    minHeight: 520,
+    show: false,
+    backgroundColor: '#282A36',
+    title: 'Hermes Agent Mission Control',
+    icon: join(app.getAppPath(), 'assets', 'brand', 'icon-1024.png'),
+    webPreferences: { ...WEB_PREFERENCES, preload: join(__dirname, '../preload/index.js') }
+  })
+  hardenWebContents(w.webContents, target)
+  w.setMenuBarVisibility(false)
+  w.once('ready-to-show', () => w.show())
+  w.webContents.on('did-finish-load', () => w.webContents.setZoomFactor(store.getSetting('ui.zoom')))
+  w.on('close', () => {
+    if (!w.isMaximized() && !w.isMinimized()) {
+      const r = w.getBounds()
+      store.setSetting('window.bounds', { x: r.x, y: r.y, width: r.width, height: r.height })
+    }
+  })
+  if (devUrl) void w.loadURL(devUrl)
+  else void w.loadFile(indexPath)
+  return w
+}
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+  })
+
+  void app.whenReady().then(() => {
+    const userData = app.getPath('userData')
+    const log = createLogger(userData)
+    const store = new SettingsStore(join(userData, 'app.db'))
+    const secrets = new SecretStore(safeStorage)
+    const manager = new ConnectionManager({ getKnownHost: (h, p) => store.getKnownHost(h, p) })
+    const session = new MissionSession({
+      manager,
+      store,
+      secrets,
+      collectorScript: loadCollectorScript(collectorPath()),
+      send: (channel, payload) => {
+        if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
+      },
+      log
+    })
+    registerIpc({ session, store, getWindow: () => win, target })
+    Menu.setApplicationMenu(buildMenu())
+    win = createWindow(store)
+    win.on('closed', () => (win = null))
+    app.on('before-quit', () => void session.disconnect())
+  })
+
+  app.on('window-all-closed', () => app.quit())
+}
