@@ -123,7 +123,7 @@ function mapBack(text: string, o: Resolved): string {
 }
 
 function runCollector(argv: string[], stream: ServerChannel, o: Resolved): void {
-  const isQuery = argv.includes('--query')
+  const isQuery = argv.includes('uploads_list') // only the uploads list speaks in remote paths
   const args = ['-u', '-', ...argv.slice(3).map((a) => mapArg(a, o)), '--agents-interval', '0.5']
   const child = spawn(pythonExe, args, {
     env: { ...process.env, MC_PROC_ROOT: o.fixture.proc, MC_SYS_ROOT: o.fixture.sysfs },

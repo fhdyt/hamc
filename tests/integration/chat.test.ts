@@ -176,7 +176,7 @@ describe('a chat turn', () => {
     expect(await session.chatSend({ profile: 'default', text: '   ', attachmentIds: [] })).toEqual({ ok: false, error: 'empty' })
     expect(await session.chatSend({ profile: '../x', text: 'hi', attachmentIds: [] })).toEqual({ ok: false, error: 'bad-profile' })
     expect(await session.chatSend({ profile: 'default', text: 'x'.repeat(100_001), attachmentIds: [] })).toEqual({ ok: false, error: 'too-long' })
-    expect(await session.chatSend({ profile: 'default', text: 'hi', attachmentIds: ['a1b2c3d4-e5'] })).toMatchObject({ ok: false, error: 'upload-failed' })
+    expect(await session.chatSend({ profile: 'default', text: 'hi', attachmentIds: ['a1b2c3d4-e5'] })).toMatchObject({ ok: false, error: 'attachment-missing' })
     expect(srv.execLog.length).toBe(before)
   })
 
