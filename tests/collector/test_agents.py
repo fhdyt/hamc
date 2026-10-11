@@ -80,7 +80,8 @@ def test_multiplex_layout_still_marks_served_profiles_active(fx):
     assert data["gateway"]["served"] == ["default", "atlas"]
     assert a["atlas"]["status"] == "idle"
     assert a["default"]["status"] == "idle"
-    assert a["scout"]["status"] == "offline"
+    # scout is not served, but it has an open session with a message from the last seconds
+    assert a["scout"]["status"] == "working"
 
 
 def test_parked_marker(fx):

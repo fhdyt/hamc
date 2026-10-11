@@ -172,14 +172,49 @@ def make_db(path: Path, messages=(), sessions=(), wal: bool = False) -> sqlite3.
     con = sqlite3.connect(path)
     if wal:
         con.execute("PRAGMA journal_mode=WAL")
-    con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, role TEXT, content TEXT, timestamp REAL, active INTEGER DEFAULT 1)")
-    con.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, started_at REAL, ended_at REAL)")
+    con.execute(
+        "CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT, tool_calls TEXT, tool_name TEXT, "
+        "reasoning TEXT, reasoning_content TEXT, timestamp REAL, active INTEGER DEFAULT 1)"
+    )
+    con.execute(
+        "CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, parent_session_id TEXT, model TEXT, title TEXT, started_at REAL, ended_at REAL, "
+        "message_count INTEGER, tool_call_count INTEGER, input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, "
+        "estimated_cost_usd REAL, actual_cost_usd REAL)"
+    )
     for ts, active in messages:
         con.execute("INSERT INTO messages (role, content, timestamp, active) VALUES ('user', 'x', ?, ?)", (ts, active))
     for i, ended in enumerate(sessions):
         con.execute("INSERT INTO sessions (id, started_at, ended_at) VALUES (?, 0, ?)", (f"s{i}", ended))
     con.commit()
     return con
+
+
+def add_session(db: Path, sid: str, source: str = "telegram", started_at: float = 0.0, parent: str | None = None,
+                model: str = "deepseek-v4-flash", ended_at: float | None = None, **cols) -> None:
+    con = sqlite3.connect(db)
+    con.execute(
+        "INSERT INTO sessions (id, source, parent_session_id, model, started_at, ended_at) VALUES (?,?,?,?,?,?)",
+        (sid, source, parent, model, started_at, ended_at),
+    )
+    for k, v in cols.items():
+        con.execute("UPDATE sessions SET %s = ? WHERE id = ?" % k, (v, sid))
+    con.commit()
+    con.close()
+
+
+def add_message(db: Path, sid: str | None, role: str, content=None, ts: float = 0.0, tool_calls=None, tool_name=None,
+                reasoning=None, reasoning_content=None, active: int = 1) -> int:
+    con = sqlite3.connect(db)
+    tc = tool_calls if (tool_calls is None or isinstance(tool_calls, str)) else json.dumps(tool_calls)
+    cur = con.execute(
+        "INSERT INTO messages (session_id, role, content, tool_calls, tool_name, reasoning, reasoning_content, timestamp, active) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (sid, role, content, tc, tool_name, reasoning, reasoning_content, ts, active),
+    )
+    con.commit()
+    mid = cur.lastrowid
+    con.close()
+    return mid
 
 
 def add_profile(home: Path, name: str, display_name: str | None = None, markers=("SOUL.md",)) -> Path:
@@ -246,6 +281,24 @@ def make_fixture(root: Path, now: float | None = None) -> Fixture:
     add_output(scout, "bbbbbbbbbbbb", "bbbbbbbbbbbb_20260920_190257.txt", "legacy loose file\n", loose=True, mtime=now - 5000)
     add_profile(home, "atlas", markers=("SOUL.md",))
     (home / "profiles" / "empty").mkdir(parents=True, exist_ok=True)
+
+    d = home / "state.db"
+    add_session(d, "s-default-1", "telegram", now - 4000, message_count=4, tool_call_count=1, input_tokens=100, output_tokens=50,
+                reasoning_tokens=10, estimated_cost_usd=0.02)
+    add_session(d, "s-default-old", "cli", now - 3 * 86400, message_count=9, tool_call_count=9, input_tokens=900, output_tokens=900,
+                reasoning_tokens=900, estimated_cost_usd=9.0)
+    add_message(d, "s-default-1", "user", "hello agent", now - 3900)
+    add_message(d, "s-default-1", "assistant", "On it.", now - 3890, reasoning_content="User greets; search first.",
+                tool_calls=[{"id": "c1", "type": "function", "function": {"name": "web_search", "arguments": "{\"q\": \"hermes\"}"}}])
+    add_message(d, "s-default-1", "tool", "3 results", now - 3889, tool_name="web_search")
+    add_message(d, "s-default-1", "assistant", "Here is what I found.", now - 3888)
+    sd = scout / "state.db"
+    add_session(sd, "s-scout-1", "cron", now - 20, message_count=2, tool_call_count=0, input_tokens=10, output_tokens=5,
+                reasoning_tokens=0, actual_cost_usd=0.5, estimated_cost_usd=0.4)
+    add_session(sd, "s-scout-child", "subagent", now - 15, parent="s-scout-1")
+    add_message(sd, "s-scout-1", "user", "run the digest", now - 12)
+    add_message(sd, "s-scout-1", "assistant", "digest done", now - 11, reasoning="plan: summarise")
+    add_message(sd, "s-scout-child", "assistant", "child work", now - 11)
     return fx
 
 
