@@ -33,5 +33,5 @@ export const canStream = (f: ChatFlags): boolean => f.oneshot && f.queryFile && 
 
 export function limitedReason(f: ChatFlags): string {
   const missing = [!f.oneshot && '--oneshot', !f.queryFile && '--query-file', !f.streamJson && '--format stream-json'].filter(Boolean)
-  return `This Hermes version has no ${missing.join(', ')}, so replies arrive as plain text without tool steps.${f.resume ? '' : ' It also cannot continue an earlier conversation.'}`
+  return `This Hermes version has no ${missing.join(', ')}, so replies arrive as plain text; tool steps and thinking appear once the server has saved them.${f.resume ? '' : ' It also cannot continue an earlier conversation.'}`
 }

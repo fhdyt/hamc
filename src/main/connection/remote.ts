@@ -79,3 +79,19 @@ export const chatPlainCmd = (hermes: string, profile: string, message: string, q
   ...(source ? ['--source', 'mission-control'] : []),
   ...(resume ? ['--resume', resume] : [])
 ]
+
+/**
+ * Plain output with the message on stdin: for a Hermes that has --query-file but no --format. Nothing of the message
+ * is part of the command, and -Q leaves only the final answer and the session line.
+ */
+export const chatQuietFileCmd = (hermes: string, profile: string, f: { oneshot: boolean; quiet: boolean; source: boolean }, resume: string | null): string[] => [
+  hermes,
+  ...profileArgs(profile),
+  'chat',
+  ...(f.oneshot ? ['--oneshot'] : []),
+  '--query-file',
+  '-',
+  ...(f.quiet ? ['-Q'] : []),
+  ...(f.source ? ['--source', 'mission-control'] : []),
+  ...(resume ? ['--resume', resume] : [])
+]

@@ -27,7 +27,7 @@ def emit(obj):
 
 
 def main(argv):
-    profile, resume, message, plain = "default", None, None, False
+    profile, resume, message, plain = "default", None, None, "--format" not in argv
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -81,6 +81,9 @@ def main(argv):
             emit({"type": "text", "text": part})
         time.sleep(DELAY)
     mf.add_message(db, sid, "assistant", reply, time.time())
+    if plain and "-Q" in argv and "nosid" not in message:
+        sys.stdout.write("\nsession_id: %s\n" % sid)
+        sys.stdout.flush()
     if not plain:
         emit({"type": "result", "exit_code": 0, "duration_ms": 1500, "usage": {"input_tokens": 120, "output_tokens": 45}})
     return 0

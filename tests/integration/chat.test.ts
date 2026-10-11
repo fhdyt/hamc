@@ -170,9 +170,28 @@ describe('a chat turn', () => {
     expect(cmd.slice(cmd.indexOf('chat'))).toEqual(['chat', '-q', 'plain question', '-Q'])
   })
 
+  it('on a Hermes without --format, sends the message on stdin, hides the -Q session line and continues the session', async () => {
+    const help = 'usage: hermes chat [-q QUERY | --query-file PATH] [--oneshot] [-Q] [--resume SESSION_ID] [--source SOURCE]\n'
+    const { session, chat, ended, text, chatCommands } = await setup({ chatHelp: help })
+    await session.chatSend({ profile: 'default', text: 'what is 1+1', attachmentIds: [] })
+    await waitFor(() => ended(1), { label: 'first', timeout: 20_000 })
+    expect(chat[0]).toMatchObject({ kind: 'start', mode: 'plain' })
+    expect(text()).toContain('what I found')
+    expect(text()).not.toContain('session_id')
+    const sid = session.chatGetSession('default')!
+    expect(sid).toMatch(/^s-mc-/)
+    const first = chatCommands()[0]!
+    expect(first.slice(first.indexOf('chat'))).toEqual(['chat', '--oneshot', '--query-file', '-', '-Q', '--source', 'mission-control'])
+    expect(srv.execLog.flat().some((a) => a.includes('what is 1+1'))).toBe(false)
+    await session.chatSend({ profile: 'default', text: 'add 3', attachmentIds: [] })
+    await waitFor(() => ended(2), { label: 'second', timeout: 20_000 })
+    const second = chatCommands()[1]!
+    expect(second.slice(second.indexOf('--resume'))).toEqual(['--resume', sid])
+  })
+
   it('finds the session of a plain turn in state.db and continues it with --resume', async () => {
     const { session, chat, ended, chatCommands } = await setup({ chatHelp: 'usage: hermes chat [-q QUERY] [-Q] [--resume ID]\n' })
-    await session.chatSend({ profile: 'default', text: 'first plain', attachmentIds: [] })
+    await session.chatSend({ profile: 'default', text: 'first plain nosid', attachmentIds: [] })
     await waitFor(() => ended(1), { label: 'first', timeout: 20_000 })
     await waitFor(() => session.chatGetSession('default') !== null, { label: 'session found', timeout: 15_000 })
     const sid = session.chatGetSession('default')!

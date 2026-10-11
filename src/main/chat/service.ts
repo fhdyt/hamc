@@ -3,7 +3,7 @@ import type { ClientChannel } from 'ssh2'
 import type { ChatEvent, ChatSendResult } from '@shared/ipc'
 import { LineSplitter } from '../collector/lines'
 import type { Execer } from '../connection/manager'
-import { backendCmd, chatHelpCmd, chatPlainCmd, chatStreamCmd, runSafe } from '../connection/remote'
+import { backendCmd, chatHelpCmd, chatPlainCmd, chatQuietFileCmd, chatStreamCmd, runSafe } from '../connection/remote'
 import { ASSUMED_FLAGS, canStream, limitedReason, parseChatHelp, type ChatFlags } from './flags'
 import { ChatLineParser } from './parser'
 
@@ -36,6 +36,8 @@ export interface ChatDeps {
 export const MAX_MESSAGE = 100_000
 const PROFILE = /^[A-Za-z0-9._-]{1,64}$/
 const SESSION = /^[A-Za-z0-9._:-]{1,128}$/
+/** The line `hermes chat -Q` prints after the answer, e.g. `session_id: 20261012_101500_ab12cd`. */
+const SESSION_LINE = /^\s*session[ _-]?id\s*[:=]\s*(\S+)\s*$/i
 
 interface Active {
   turn: string
@@ -134,10 +136,12 @@ export class ChatService {
       const flags = await this.flags(hermes)
       const stream = canStream(flags)
       const resume = flags.resume ? this.d.getSession(profile) : null
-      const argv = stream ? chatStreamCmd(hermes, profile, resume) : chatPlainCmd(hermes, profile, message, flags.quiet, flags.source, resume)
+      // plain output can still take the message on stdin when --query-file exists (no length limit, nothing in the command)
+      const viaStdin = stream || flags.queryFile
+      const argv = stream ? chatStreamCmd(hermes, profile, resume) : viaStdin ? chatQuietFileCmd(hermes, profile, flags, resume) : chatPlainCmd(hermes, profile, message, flags.quiet, flags.source, resume)
       let ch: ClientChannel
       try {
-        ch = await this.d.conn.openStream(argv, stream ? message : '')
+        ch = await this.d.conn.openStream(argv, viaStdin ? message : '')
       } catch (e) {
         return { ok: false, error: 'failed-to-start', detail: e instanceof Error ? e.message : String(e) }
       }
@@ -171,9 +175,35 @@ export class ChatService {
     let sawError = false
     ch.setEncoding('utf8')
     ch.stderr.setEncoding('utf8')
+    // plain output: whole lines only, so that the session line of -Q can be taken out of the answer
+    let tail = ''
+    const plainLine = (line: string): void => {
+      const m = SESSION_LINE.exec(line)
+      if (m && SESSION.test(m[1]!)) {
+        if (!sawSession) {
+          sawSession = true
+          this.d.setSession(profile, m[1]!)
+          emit({ kind: 'session', sessionId: m[1]! })
+        }
+        return
+      }
+      emit({ kind: 'text', text: `${line}\n` })
+    }
+    const flushPlain = (): void => {
+      if (tail === '') return
+      const m = SESSION_LINE.exec(tail)
+      if (m) plainLine(tail)
+      else emit({ kind: 'text', text: tail })
+      tail = ''
+    }
     ch.on('data', (chunk: string) => {
       if (!stream) {
-        emit({ kind: 'text', text: chunk })
+        tail += chunk
+        const cut = tail.lastIndexOf('\n')
+        if (cut < 0) return
+        const whole = tail.slice(0, cut)
+        tail = tail.slice(cut + 1)
+        for (const line of whole.split('\n')) plainLine(line)
         return
       }
       for (const line of lines.push(chunk)) {
@@ -195,6 +225,7 @@ export class ChatService {
       exitCode = typeof code === 'number' ? code : null
     })
     ch.on('close', () => {
+      if (!stream) flushPlain()
       if (act.timer) clearTimeout(act.timer)
       if (this.active.get(profile) === act) this.active.delete(profile)
       if (!act.stopped && !sawResult && !sawError && (exitCode === null || exitCode !== 0)) {
