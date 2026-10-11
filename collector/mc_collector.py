@@ -1495,6 +1495,7 @@ def main(argv):
     sampler = Sampler()
     feed = FeedState(args["cursors"])
     feed_reported = set()
+    feed_started = False
     try:
         sampler.sample()
     except Exception as ex:  # noqa: BLE001 - never crash the stream
@@ -1538,6 +1539,11 @@ def main(argv):
                 items, history, errs = feed.poll(args["home"], args["history"])
                 for i in range(0, len(items), FEED_CHUNK):
                     emit("feed", {"items": items[i:i + FEED_CHUNK], "cursors": dict(feed.cursors), "history": history})
+                if not feed_started:
+                    # Say so once even when there is nothing to show, so the screen can stop waiting.
+                    if not items:
+                        emit("feed", {"items": [], "cursors": dict(feed.cursors), "history": not args["cursors"]})
+                    feed_started = True
                 current = set()
                 for e in errs:
                     key = (e["code"], e["profile"])

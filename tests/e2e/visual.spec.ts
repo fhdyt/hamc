@@ -44,7 +44,7 @@ test('captures Connect, host key and the connected screens at 1440x900', async (
   await expect(page.getByText(/checks passed/)).toBeVisible({ timeout: 20_000 })
   await shot('connect-preflight')
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible({ timeout: 20_000 })
-  await expect(page.getByText(/active agents? of 3/)).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText(/\d+\/3 agents online/)).toBeVisible({ timeout: 20_000 })
   await page.waitForTimeout(6000)
   await shot('dashboard-1440')
   await page.getByRole('button', { name: /^Scout, / }).click()
@@ -52,7 +52,7 @@ test('captures Connect, host key and the connected screens at 1440x900', async (
 })
 
 test('captures Settings, the coming-later screen and narrow layouts', async () => {
-  await page.getByRole('button', { name: 'Settings' }).click()
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible()
   await page.waitForTimeout(450)
   await shot('settings-general')

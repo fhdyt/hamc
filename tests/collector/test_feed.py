@@ -349,7 +349,8 @@ def test_cursors_passed_on_the_command_line_skip_old_rows(fx):
         input=SCRIPT.read_bytes(), env=env_for(fx), capture_output=True, timeout=30,
     )
     assert r.returncode == 0, r.stderr.decode()
-    assert [e for e in events_of(r.stdout) if e["type"] == "feed"] == []
+    feeds = [e for e in events_of(r.stdout) if e["type"] == "feed"]
+    assert [(f["data"]["items"], f["data"]["history"]) for f in feeds] == [([], False)]  # nothing new, said once
 
 
 def test_a_full_start_sends_one_history_event_and_stays_zero_change(fx):
@@ -361,3 +362,21 @@ def test_a_full_start_sends_one_history_event_and_stays_zero_change(fx):
     feeds = [e for e in events_of(r.stdout) if e["type"] == "feed"]
     assert len(feeds) == 1 and feeds[0]["data"]["history"] is True
     assert mf.snapshot(fx.root) == before
+
+
+def test_an_empty_feed_is_still_announced_once(fx):
+    """With no messages at all the screen must still be told so, or it waits forever."""
+    import sqlite3
+
+    for db in [fx.home / "state.db", fx.home / "profiles" / "scout" / "state.db"]:
+        con = sqlite3.connect(db)
+        con.execute("DELETE FROM messages")
+        con.commit()
+        con.close()
+    out = subprocess.run(
+        [sys.executable, "-u", str(SCRIPT), str(fx.home), "--ticks", "3", "--interval", "0.1", "--agents-interval", "0.1"],
+        capture_output=True, text=True, timeout=60, env={**os.environ, "MC_PROC_ROOT": str(fx.proc), "MC_SYS_ROOT": str(fx.sysfs)},
+    )
+    feeds = [json.loads(l) for l in out.stdout.splitlines() if l.startswith('{"type":"feed"')]
+    assert len(feeds) == 1
+    assert feeds[0]["data"]["items"] == [] and feeds[0]["data"]["history"] is True

@@ -1,19 +1,17 @@
-import { useMemo } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { saveSetting } from '../../actions'
 import { Icon } from '../../components/Icon'
 import { Panel } from '../../components/Panel'
 import { EmptyState, Skeleton } from '../../components/States'
 import { useNow } from '../../hooks/useNow'
 import { agentColor } from '../../lib/agentColor'
-import { agentLabel, counts, formatCountdown, jobKey, sortJobs, statusColor, statusLabel } from '../../lib/cron'
+import { agentLabel, counts, formatCountdown, isFailure, jobKey, sortJobs, statusColor, statusLabel } from '../../lib/cron'
 import { useAgents } from '../../stores/agents'
 import { useConn } from '../../stores/conn'
 import { useCron } from '../../stores/cron'
 import { useUi } from '../../stores/ui'
 
-const MAX_ROWS = 8
-
-export function CronPanel() {
+export function CronPanel({ style }: { style?: CSSProperties }) {
   const jobs = useCron((s) => s.jobs)
   const receivedAt = useCron((s) => s.receivedAt)
   const openModal = useCron((s) => s.openModal)
@@ -23,66 +21,66 @@ export function CronPanel() {
   const now = useNow()
   const names = useMemo(() => Object.fromEntries(agents.map((a) => [a.profile, a.displayName])), [agents])
   const c = counts(jobs)
-  const rows = useMemo(() => sortJobs(jobs).slice(0, MAX_ROWS), [jobs])
+  const rows = useMemo(() => sortJobs(jobs), [jobs])
 
+  const meta = (
+    <>
+      {c.total} job{c.total === 1 ? '' : 's'}
+      {c.error > 0 && (
+        <>
+          {' · '}
+          <span style={{ color: '#FF5555' }}>{c.error} err</span>
+        </>
+      )}
+      {c.paused > 0 && ` · ${c.paused} paused`}
+    </>
+  )
   const actions = (
     <>
-      <span>{c.total} job{c.total === 1 ? '' : 's'}</span>
-      {c.error > 0 && <span style={{ color: '#FF5555', fontWeight: 600 }}>{c.error} error</span>}
-      {c.paused > 0 && <span style={{ color: '#8B95BD' }}>{c.paused} paused</span>}
       <button type="button" className="ib sm" onClick={() => openModal()} aria-label="Open cron jobs" title="Open cron jobs">
         <Icon name="maximize" size={13} />
       </button>
-      <button
-        type="button"
-        className="ib sm"
-        aria-expanded={open}
-        aria-label={open ? 'Collapse cron panel' : 'Expand cron panel'}
-        title={open ? 'Collapse' : 'Expand'}
-        onClick={() => void saveSetting('dashboard.cronOpen', !open)}
-      >
-        <Icon name={open ? 'chev-up' : 'chev-down'} size={13} />
+      <button type="button" className="ib sm" aria-expanded={open} aria-label={open ? 'Hide cron' : 'Show cron'} title={open ? 'Hide' : 'Show'} onClick={() => void saveSetting('dashboard.cronOpen', !open)}>
+        <Icon name={open ? 'chev-up' : 'chev-down'} size={14} />
       </button>
     </>
   )
 
   return (
-    <Panel variant="card" title="cron" label="Cron jobs" actions={actions}>
+    <Panel variant="card" title="cron" label="Cron jobs" meta={meta} actions={actions} style={style} className="d-panel">
       {open &&
         (receivedAt === null ? (
-          connState === 'connected' || connState === 'connecting' ? (
-            <Skeleton rows={3} />
-          ) : (
-            <EmptyState title="No cron data yet" why="Jobs appear once Mission Control is connected." />
-          )
+          connState === 'connected' || connState === 'connecting' ? <Skeleton rows={3} /> : <EmptyState title="No cron data yet" why="Jobs appear once Mission Control is connected." />
         ) : jobs.length === 0 ? (
           <EmptyState title="No cron jobs yet" why="Jobs are created from a chat with an agent or from the terminal." />
         ) : (
-          <div role="list" aria-label="Cron jobs" style={{ display: 'flex', flexDirection: 'column', gap: 1, minHeight: 0, overflowY: 'auto' }}>
+          <div role="list" aria-label="Cron jobs" className="d-scroll">
             {rows.map((j) => {
-              const label = statusLabel(j.lastStatus)
-              const countdown = j.state === 'paused' ? 'paused' : formatCountdown(j.nextRunTs, now)
+              const running = j.state === 'running'
+              const eta = running ? 'running' : j.state === 'paused' ? 'paused' : formatCountdown(j.nextRunTs, now)
+              const etaColor = running ? '#50FA7B' : isFailure(j.lastStatus) ? '#FF5555' : '#A9B2D3'
               return (
                 <button
                   key={jobKey(j)}
                   type="button"
                   role="listitem"
-                  className="cron-row"
-                  aria-label={`${j.name}, ${agentLabel(j.profile, names)}, ${label}, next run ${countdown}`}
+                  className="dash-row"
+                  aria-label={`${j.name}, ${agentLabel(j.profile, names)}, ${statusLabel(j.lastStatus)}, next run ${eta}`}
                   onClick={() => openModal(jobKey(j))}
                 >
-                  <span className="dot" style={{ background: agentColor(j.profile) }} aria-hidden="true" />
-                  <span className="nm">{j.name}</span>
-                  <span className="cd num">{countdown}</span>
-                  <span className="badge" style={{ color: statusColor(j), borderColor: statusColor(j) }}>{label}</span>
+                  <span className="dr-top">
+                    <span className="dot" style={{ background: statusColor(j) }} aria-hidden="true" />
+                    <span className="dr-name">{j.name}</span>
+                    <span className="num dr-eta" style={{ color: etaColor }}>
+                      {eta}
+                    </span>
+                  </span>
+                  <span className="dr-sub">
+                    <span style={{ color: agentColor(j.profile) }}>{agentLabel(j.profile, names)}</span> · {j.schedule.display}
+                  </span>
                 </button>
               )
             })}
-            {jobs.length > MAX_ROWS && (
-              <button type="button" className="cron-row more" onClick={() => openModal()}>
-                + {jobs.length - MAX_ROWS} more
-              </button>
-            )}
           </div>
         ))}
     </Panel>

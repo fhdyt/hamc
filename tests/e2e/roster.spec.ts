@@ -24,9 +24,9 @@ test.afterAll(async () => {
 test('a profile created while the app is open appears within ten seconds', async () => {
   ;({ app, page } = await launchApp(userData))
   await connectFresh(page, srv)
-  await expect(page.getByText(/active agents? of 3/)).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText(/\d+\/3 agents online/)).toBeVisible({ timeout: 20_000 })
   addProfile(fx.home, 'nova')
-  await expect(page.getByText(/active agents? of 4/).or(page.getByText(/\d active agents? of 4/))).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText(/\d+\/4 agents online/)).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('button', { name: /^nova, offline/ })).toBeVisible()
 })
 

@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { reorderAgentPin, saveSetting, toggleAgentPin } from '../../actions'
 import { Avatar } from '../../components/Avatar'
 import { Icon } from '../../components/Icon'
+import { Resizer } from '../../components/Resizer'
+import { useLiveSetting } from '../../hooks/useLiveSetting'
 import { EmptyState, Skeleton } from '../../components/States'
 import { activeCount, buildRoster, railAgents } from '../../lib/roster'
 import { useAgents } from '../../stores/agents'
@@ -9,7 +11,9 @@ import { useConn } from '../../stores/conn'
 import { useUi } from '../../stores/ui'
 import { AgentDetail, STATUS_COLOR, STATUS_LABEL } from './AgentDetail'
 
-export function AgentsPanel() {
+export function AgentsPanel({ width }: { width: number }) {
+  const roster = useLiveSetting('dashboard.rosterH')
+  const openSettings = useUi((s) => s.openSettings)
   const agents = useAgents((s) => s.agents)
   const pins = useAgents((s) => s.pins)
   const selected = useAgents((s) => s.selected)
@@ -56,11 +60,14 @@ export function AgentsPanel() {
   }
 
   return (
-    <section className="card" aria-label="Agents" style={{ minHeight: 0, overflow: 'hidden' }}>
+    <section className="card d-agents" aria-label="Agents" style={{ flex: `0 0 ${width}px`, minHeight: 0, overflow: 'hidden' }}>
       <div className="ph">
         <h2>agents</h2>
-        <span style={{ color: '#50FA7B', fontSize: 11 }}>{agents.length ? `${online}/${agents.length} online` : ''}</span>
+        <span style={{ color: '#50FA7B', fontSize: 10 }}>{agents.length ? `${online}/${agents.length} online` : ''}</span>
         <span className="ph-actions">
+          <button type="button" className="ib sm" onClick={() => openSettings('agents')} aria-label="Agent settings" title="Agent settings">
+            <Icon name="settings" size={13} />
+          </button>
           <button type="button" className="ib sm" onClick={() => void saveSetting('agents.panelCollapsed', true)} aria-label="Collapse agents panel" title="Collapse">
             <Icon name="chevs-right" size={14} />
           </button>
@@ -94,7 +101,7 @@ export function AgentsPanel() {
         </div>
       )}
 
-      <div role="list" aria-label="Agent list" style={{ flex: '0 1 auto', maxHeight: selected ? '40%' : 'none', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <div role="list" aria-label="Agent list" style={{ flex: selected ? `0 0 ${roster.value}px` : '0 1 auto', maxHeight: selected ? undefined : '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
         {agents.length === 0 ? (
           connState === 'connected' ? <Skeleton rows={4} /> : <EmptyState title="No agents yet" why="Agents appear after the first successful connection." />
         ) : (
@@ -144,6 +151,9 @@ export function AgentsPanel() {
         )}
       </div>
 
+      {selected && (
+        <Resizer orientation="horizontal" value={roster.value} min={60} max={480} label="Resize agent list and chat" onChange={roster.onChange} onCommit={roster.onCommit} />
+      )}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <AgentDetail />
       </div>
