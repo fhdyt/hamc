@@ -1,3 +1,4 @@
+import { isFailure } from '@shared/cron'
 import type { CronJob } from '@shared/events'
 import { jobKey } from './store'
 
@@ -10,11 +11,7 @@ export interface CronAlert {
   lastRunTs: number
 }
 
-export function isFailure(status: string | null): boolean {
-  if (!status) return false
-  const s = status.toLowerCase()
-  return s === 'error' || s === 'delivery_failed' || s === 'blocked_config' || s.startsWith('error')
-}
+export { isFailure }
 
 /**
  * Decides which cron runs deserve a notification. The first batch after a reset is only a baseline, so jobs that
