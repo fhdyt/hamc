@@ -1,0 +1,25 @@
+  <aside class="mc-side {{sideCls}}" aria-label="Sidebar">
+    <div class="mc-side-logo">
+      <img class="lg-img" src="assets/logo-mark.png" width="28" height="28" alt="Hermes Agent Mission Control">
+      <span class="lg-text" aria-hidden="true">HERMES AGENT<br>MISSION CONTROL</span>
+    </div>
+    <nav aria-label="Main" class="mc-side-nav">
+      <a href="Main.dc.html" class="sn {{nav.dash}}" aria-current="{{navCur.dash}}" title="Dashboard · Ctrl+1"><i-con name="layout" size="15"></i-con><span class="tl">Dashboard</span></a>
+      <a href="Chat.dc.html" class="sn {{nav.chat}}" aria-current="{{navCur.chat}}" aria-label="Chat, 2 unread" title="Chat · Ctrl+2"><i-con name="message" size="15"></i-con><span class="tl">Chat</span><span class="bd" aria-hidden="true" style="background: #8BE9FD">2</span></a>
+      <a href="LiveFeed.dc.html" class="sn {{nav.feed}}" aria-current="{{navCur.feed}}" title="Live feed · Ctrl+3"><i-con name="activity" size="15"></i-con><span class="tl">Live feed</span></a>
+      <span class="sn-sep" aria-hidden="true"></span>
+      <a href="Sessions.dc.html" class="sn {{nav.sess}}" aria-current="{{navCur.sess}}" title="Sessions · Ctrl+4"><i-con name="history" size="15"></i-con><span class="tl">Sessions</span></a>
+      <a href="Kanban.dc.html" class="sn {{nav.kanban}}" aria-current="{{navCur.kanban}}" title="Kanban · Ctrl+5"><i-con name="kanban" size="15"></i-con><span class="tl">Kanban</span></a>
+      <a href="Usage.dc.html" class="sn {{nav.usage}}" aria-current="{{navCur.usage}}" title="Usage · Ctrl+6"><i-con name="chart" size="15"></i-con><span class="tl">Usage</span></a>
+      <span class="sn-sep" aria-hidden="true"></span>
+      <a href="Skills.dc.html" class="sn {{nav.skills}}" aria-current="{{navCur.skills}}" title="Skills · Ctrl+7"><i-con name="layers" size="15"></i-con><span class="tl">Skills</span></a>
+      <a href="Logs.dc.html" class="sn {{nav.logs}}" aria-current="{{navCur.logs}}" aria-label="Logs, 2 errors in the last hour" title="Logs · Ctrl+8"><i-con name="file-text" size="15"></i-con><span class="tl">Logs</span><span class="bd" aria-hidden="true" style="background: #FFB86C">2</span></a>
+      <a href="Brain.dc.html" class="sn {{nav.brain}}" aria-current="{{navCur.brain}}" title="Second brain · Ctrl+9"><i-con name="share" size="15"></i-con><span class="tl">Second brain</span></a>
+      <a href="Server.dc.html" class="sn {{nav.server}}" aria-current="{{navCur.server}}" title="Server · Ctrl+0"><i-con name="server" size="15"></i-con><span class="tl">Server</span></a>
+    </nav>
+    <div class="mc-side-foot">
+      <button type="button" class="sn {{termOn}}" onClick="{{toggleTerminal}}" aria-pressed="{{termPressed}}" title="Terminal · Ctrl+`"><i-con name="terminal" size="15"></i-con><span class="tl">Terminal</span></button>
+      <button type="button" class="sn" onClick="{{openPalette}}" title="Search and commands · Ctrl+K"><i-con name="search" size="15"></i-con><span class="tl">Search</span><kbd class="tl" style="margin-left: auto">Ctrl K</kbd></button>
+      <button type="button" class="sn" onClick="{{toggleSide}}" aria-expanded="{{sideExpanded}}" aria-label="Collapse sidebar" title="{{sideToggleTitle}}"><i-con name="chevs-left" size="15"></i-con><span class="tl">Collapse</span></button>
+    </div>
+  </aside>

@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Second brain — Hermes Agent Mission Control</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;family=VT323&amp;display=swap">
+<style>
+/*@shared-css*/
+body{margin:0;background:#282A36}
+a{color:#50FA7B}a:hover{color:#8BE9FD}
+input:focus,button:focus-visible{outline:1px solid #50FA7B;outline-offset:1px}
+@keyframes mcpulse{0%{transform:scale(.5);opacity:1}100%{transform:scale(1.7);opacity:0}}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="zoom: {{uiZoom}}; height: calc(100vh / {{uiZoom}}); overflow: hidden; background: #282A36; color: #F8F8F2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: {{fs}}px; line-height: 1.45; display: flex; flex-direction: column">
+<div class="mc-body">
+<!--@part sidebar-->
+<div class="mc-col">
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1; min-height: 0; overflow-y: auto">
+
+    <main style="flex: 999 1 560px; min-width: 0; height: 100%; box-sizing: border-box; padding: 20px 24px 16px; display: flex; flex-direction: column; gap: 14px">
+
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px">
+        <h1 style="margin: 0; font-size: 13px; font-weight: 600; color: #F8F8F2">Second brain</h1>
+        <div role="tablist" aria-label="Second brain views" style="display: flex; gap: 2px; padding: 2px; border: 1px solid #44475A; border-radius: 8px; background: #21222C">
+          <sc-for list="{{brainTabs}}" as="t">
+            <button type="button" role="tab" data-key="{{t.key}}" aria-selected="{{t.selected}}" onClick="{{t.pick}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 12px; border: 0; border-radius: 6px; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-size: 11px; cursor: pointer">{{t.label}}</button>
+          </sc-for>
+        </div>
+        <sc-if value="{{tabGraph}}"><button type="button" class="ib {{leftOn}}" onClick="{{toggleLeft}}" aria-pressed="{{leftPressed}}" aria-label="Toggle graph controls" title="Graph controls"><i-con name="panel-left" size="15"></i-con></button></sc-if>
+        <sc-if value="{{tabGraph}}"><button type="button" class="ib sm" onClick="{{openSettings}}" aria-label="Change vault path" title="Change vault path"><i-con name="folder" size="13"></i-con></button></sc-if>
+        <span style="color: #A9B2D3; font-size: 11px">{{headNote}}</span>
+        <span style="margin-left: auto; display: flex; align-items: center; gap: 6px; color: #8BE9FD; font-size: 11px"><span class="dot" style="background: #8BE9FD"></span>live</span>
+        <sc-if value="{{tabGraph}}"><button type="button" class="ib sm" onClick="{{refit}}" aria-label="Fit all nodes" title="Fit all nodes"><i-con name="maximize" size="13"></i-con></button></sc-if>
+        <sc-if value="{{tabGraph}}"><button type="button" class="ib {{rightOn}}" onClick="{{toggleRight}}" aria-pressed="{{rightPressed}}" aria-label="Toggle note preview" title="Note preview"><i-con name="panel-right" size="15"></i-con></button></sc-if>
+      </div>
+
+      <sc-if value="{{tabTime}}" hint-placeholder-val="{{false}}">
+      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px">
+        <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+          <div role="group" aria-label="Agent" style="display: flex; flex-wrap: wrap; gap: 4px">
+            <sc-for list="{{tlAgents}}" as="c">
+              <button type="button" data-key="{{c.key}}" aria-pressed="{{c.pressed}}" onClick="{{c.pick}}" style="display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border: 1px solid {{c.border}}; border-radius: 11px; background: {{c.bg}}; color: {{c.fg}}; font: inherit; font-size: 11px; cursor: pointer">{{c.label}}</button>
+            </sc-for>
+          </div>
+          <div role="group" aria-label="File" style="display: flex; gap: 4px">
+            <sc-for list="{{tlFiles}}" as="f">
+              <button type="button" data-key="{{f.key}}" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}" style="display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border: 1px solid {{f.border}}; border-radius: 6px; background: {{f.bg}}; color: {{f.fg}}; font: inherit; font-size: 11px; cursor: pointer">{{f.label}}</button>
+            </sc-for>
+          </div>
+          <span style="margin-left: auto; color: #8B95BD; font-size: 11px">snapshots kept locally in app.db · nothing is written to the VPS</span>
+        </div>
+
+        <div style="flex: 1; min-height: 0; display: flex; flex-wrap: wrap; gap: 14px; overflow-y: auto">
+          <section aria-label="Versions" style="position: relative; flex: 1 1 320px; max-width: 400px; min-width: 0; min-height: 300px; display: flex; flex-direction: column; border: 1px solid #44475A; background: #21222C; padding-top: 18px">
+            <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ versions ├</h2>
+            <div role="listbox" aria-label="Versions" style="flex: 1; min-height: 0; overflow-y: auto; font-size: 11px">
+              <sc-for list="{{tlVersions}}" as="v">
+                <div data-key="{{v.key}}">
+                  <sc-if value="{{v.newDay}}"><div style="padding: 6px 12px 2px; color: #8B95BD">{{v.day}}</div></sc-if>
+                  <button type="button" role="option" aria-selected="{{v.selected}}" onClick="{{v.pick}}" style="display: flex; flex-direction: column; gap: 3px; width: 100%; box-sizing: border-box; padding: 7px 12px; border: 0; border-bottom: 1px dashed #343746; background: {{v.bg}}; color: inherit; font: inherit; text-align: left; cursor: pointer">
+                    <span style="display: flex; align-items: center; gap: 8px"><span class="dot" style="background: {{v.color}}"></span><span class="num" style="color: #F8F8F2; font-weight: 600">{{v.time}}</span><span style="color: {{v.color}}">{{v.who}}</span><span style="margin-left: auto; color: #8B95BD">{{v.tag}}</span></span>
+                    <span style="padding-left: 14px; display: flex; align-items: center; gap: 8px"><span style="color: #50FA7B">+{{v.added}}</span><span style="color: #FF5555">−{{v.removed}}</span><span class="num" style="color: #A9B2D3">{{v.chars}} / {{v.limit}}</span><span style="flex: 1; height: 3px; background: #343746"><span style="display: block; height: 3px; width: {{v.pct}}%; background: {{v.barColor}}"></span></span></span>
+                  </button>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+
+          <section aria-label="Changes" style="position: relative; flex: 999 1 420px; min-width: 0; min-height: 300px; display: flex; flex-direction: column; border: 1px solid #44475A; background: #21222C; padding-top: 18px">
+            <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ what changed ├</h2>
+            <div style="flex: none; display: flex; flex-direction: column; gap: 4px; padding: 0 16px 10px; border-bottom: 1px solid #44475A">
+              <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px"><span style="font-size: 14px; font-weight: 600; color: #F8F8F2">{{tlSel.title}}</span><span style="color: {{tlSel.color}}">{{tlSel.who}}</span></div>
+              <span style="color: #A9B2D3; font-size: 11px">{{tlSel.how}}</span>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px">
+                <button type="button" onClick="{{tlRestore}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 11px; border: 1px solid #6272A4; border-radius: 6px; background: transparent; color: #F8F8F2; font: inherit; cursor: pointer"><i-con name="undo" size="13"></i-con>Restore in the editor</button>
+                <button type="button" onClick="{{tlCopy}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 11px; border: 1px solid #44475A; border-radius: 6px; background: transparent; color: #A9B2D3; font: inherit; cursor: pointer"><i-con name="copy" size="13"></i-con>Copy this version</button>
+              </div>
+            </div>
+            <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 1.55">
+              <sc-for list="{{tlDiff}}" as="d">
+                <div data-key="{{d.key}}" style="display: flex; gap: 10px; padding: 4px 8px; border-radius: 4px; background: {{d.bg}}; color: {{d.fg}}"><span style="flex: none; width: 10px">{{d.sign}}</span><span style="min-width: 0; overflow-wrap: anywhere">{{d.t}}</span></div>
+              </sc-for>
+              <sc-if value="{{tlHasSame}}"><button type="button" onClick="{{tlToggleSame}}" aria-expanded="{{tlSameOpen}}" style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 0 9px; border: 1px dashed #44475A; border-radius: 6px; background: transparent; color: #A9B2D3; font: inherit; font-size: 11px; cursor: pointer">{{tlSameLabel}}</button></sc-if>
+              <sc-if value="{{tlSameShown}}"><div class="mc-down" style="display: flex; flex-direction: column; gap: 4px"><sc-for list="{{tlSame}}" as="s"><div data-key="{{s.key}}" style="padding: 4px 8px; color: #8B95BD; overflow-wrap: anywhere">{{s.t}}</div></sc-for></div></sc-if>
+              <sc-if value="{{tlFirst}}"><div style="color: #8B95BD; padding-top: 6px">First snapshot of this file. Later versions show what changed against it.</div></sc-if>
+            </div>
+          </section>
+        </div>
+        <p style="flex: none; margin: 0; color: #8B95BD; font-size: 11px">One version per change, checked about every 30 s while Mission Control is connected. Changes made while it was closed arrive as a single “while away” version. Authorship is a best guess from session activity at that moment.</p>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{tabGraph}}" hint-placeholder-val="{{true}}">
+      <div style="flex: 1; min-height: 0; display: flex; gap: 10px">
+
+        <sc-if value="{{leftOpen}}" hint-placeholder-val="{{true}}">
+        <aside class="mc-slide" aria-label="Graph controls" style="flex: 0 0 220px; overflow-y: auto; border: 1px solid #44475A; border-radius: 12px; background: #21222C; padding: 12px; display: flex; flex-direction: column; gap: 12px; font-size: 11px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="color: #BD93F9; font-weight: 600">Filters</span>
+            <label for="gq" class="vh">Search notes</label>
+            <input id="gq" type="search" placeholder="search files…" style="background: #282A36; border: 1px solid #44475A; color: #F8F8F2; font: inherit; padding: 6px 8px">
+            <label style="display: flex; gap: 8px; align-items: center; color: #A9B2D3"><input type="checkbox" checked style="accent-color: #50FA7B"> Tags</label>
+            <label style="display: flex; gap: 8px; align-items: center; color: #A9B2D3"><input type="checkbox" style="accent-color: #50FA7B"> Attachments</label>
+            <label style="display: flex; gap: 8px; align-items: center; color: #A9B2D3"><input type="checkbox" style="accent-color: #50FA7B"> Existing files only</label>
+            <label style="display: flex; gap: 8px; align-items: center; color: #A9B2D3"><input type="checkbox" checked style="accent-color: #50FA7B"> Orphans</label>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 5px; padding-top: 10px; border-top: 1px dashed #44475A">
+            <span style="color: #BD93F9; font-weight: 600">Groups</span>
+            <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+              <div style="display: flex; gap: 8px; align-items: center; color: #A9B2D3"><span style="width: 10px; height: 10px; border-radius: 50%; background: {{g.color}}"></span>{{g.query}}</div>
+            </sc-for>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 5px; padding-top: 10px; border-top: 1px dashed #44475A">
+            <span style="color: #BD93F9; font-weight: 600">Display</span>
+            <label style="display: flex; gap: 8px; align-items: center; color: #A9B2D3"><input type="checkbox" style="accent-color: #50FA7B"> Arrows</label>
+            <label for="r1" style="color: #A9B2D3">Text fade threshold</label>
+            <input id="r1" type="range" min="0" max="100" value="40" style="accent-color: #BD93F9">
+            <label for="r2" style="color: #A9B2D3">Node size</label>
+            <input id="r2" type="range" min="0" max="100" value="55" style="accent-color: #BD93F9">
+            <label for="r3" style="color: #A9B2D3">Link thickness</label>
+            <input id="r3" type="range" min="0" max="100" value="30" style="accent-color: #BD93F9">
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 5px; padding-top: 10px; border-top: 1px dashed #44475A">
+            <span style="color: #BD93F9; font-weight: 600">Forces</span>
+            <label for="f1" style="color: #A9B2D3">Center force</label>
+            <input id="f1" type="range" min="0" max="100" value="45" style="accent-color: #BD93F9">
+            <label for="f2" style="color: #A9B2D3">Repel force</label>
+            <input id="f2" type="range" min="0" max="100" value="70" style="accent-color: #BD93F9">
+            <label for="f3" style="color: #A9B2D3">Link force</label>
+            <input id="f3" type="range" min="0" max="100" value="60" style="accent-color: #BD93F9">
+            <label for="f4" style="color: #A9B2D3">Link distance</label>
+            <input id="f4" type="range" min="0" max="100" value="35" style="accent-color: #BD93F9">
+          </div>
+          <button type="button" style="display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; border-radius: 6px; background: transparent; border: 1px solid #BD93F9; color: #BD93F9; font: inherit; cursor: pointer"><i-con name="play" size="12"></i-con>Animate</button>
+        </aside>
+        </sc-if>
+
+        <section id="brain-graph" aria-label="Graph view" onPointerDown="{{panStart}}" onWheel="{{wheelZoom}}" style="position: relative; cursor: grab; touch-action: none; flex: 1; min-width: 0; border: 1px solid #44475A; border-radius: 14px; background: #21222C; overflow: hidden; display: flex; align-items: center; justify-content: center">
+          <div id="brain-canvas" style="position: absolute; left: 0; top: 0; width: 640px; height: 560px; transform: {{gTransform}}; transform-origin: 0 0">
+            <sc-for list="{{edges}}" as="e" hint-placeholder-count="40">
+              <div style="position: absolute; left: {{e.x}}px; top: {{e.y}}px; width: {{e.len}}px; height: 1px; background: {{e.color}}; opacity: {{e.o}}; transform: rotate({{e.a}}deg); transform-origin: 0 0; pointer-events: none"></div>
+            </sc-for>
+            <div aria-hidden="true" style="position: absolute; left: {{fresh.l}}px; top: {{fresh.t}}px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #8BE9FD; animation: mcpulse 1.6s ease-out 3; pointer-events: none"></div>
+            <sc-for list="{{nodes}}" as="n" hint-placeholder-count="40">
+              <button type="button" onClick="{{n.pick}}" onPointerDown="{{n.grab}}" onMouseOver="{{n.hover}}" onMouseOut="{{n.unhover}}" aria-label="{{n.title}}" style="position: absolute; left: {{n.l}}px; top: {{n.t}}px; width: {{n.d}}px; height: {{n.d}}px; padding: 0; border-radius: 50%; border: {{n.border}}; background: {{n.bg}}; opacity: {{n.o}}; box-shadow: {{n.ring}}; cursor: grab; touch-action: none"></button>
+              <sc-if value="{{n.showLabel}}" hint-placeholder-val="{{false}}">
+                <span style="position: absolute; left: {{n.x}}px; top: {{n.ly}}px; transform: translateX(-50%); white-space: nowrap; font-size: 11px; color: {{n.labelColor}}; opacity: {{n.lo}}; pointer-events: none">{{n.title}}</span>
+              </sc-if>
+            </sc-for>
+            <span style="position: absolute; left: {{fresh.lx}}px; top: {{fresh.ly}}px; padding: 1px 6px; border: 1px solid #8BE9FD; background: #282A36; color: #8BE9FD; font-size: 10px; pointer-events: none">new · scout 20:41</span>
+          </div>
+        </section>
+
+        <sc-if value="{{rightOpen}}" hint-placeholder-val="{{true}}">
+        <aside class="mc-slide" aria-label="Note preview" style="flex: 0 0 280px; overflow-y: auto; border: 1px solid #44475A; border-radius: 12px; background: #21222C; padding: 14px; display: flex; flex-direction: column; gap: 10px; font-size: 11px">
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <h2 style="margin: 0; font-size: 16px; color: {{sel.color}}">{{sel.title}}</h2>
+            <span style="color: #8B95BD; overflow-wrap: anywhere">{{sel.path}}</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <sc-for list="{{sel.tags}}" as="t" hint-placeholder-count="2">
+              <span style="padding: 1px 6px; border: 1px solid #6272A4; border-radius: 4px; color: #A9B2D3">#{{t}}</span>
+            </sc-for>
+          </div>
+          <p style="margin: 0; padding: 10px; background: #282A36; border: 1px solid #44475A; color: #F8F8F2">{{sel.excerpt}}</p>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <span style="color: #BD93F9; font-weight: 600">Linked mentions · {{sel.linkCount}}</span>
+            <sc-for list="{{sel.links}}" as="k" hint-placeholder-count="5">
+              <button type="button" onClick="{{k.pick}}" style="display: flex; gap: 8px; align-items: center; min-height: 28px; padding: 0; background: transparent; border: 0; color: #F8F8F2; font: inherit; cursor: pointer; text-align: left"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{k.color}}"></span><span style="color: #BD93F9">[[</span>{{k.title}}<span style="color: #BD93F9">]]</span></button>
+            </sc-for>
+          </div>
+          <div style="display: flex; gap: 6px; padding-top: 8px; border-top: 1px dashed #44475A">
+            <button type="button" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; border-radius: 6px; background: transparent; border: 1px solid #6272A4; color: #A9B2D3; font: inherit; cursor: pointer"><i-con name="share" size="12"></i-con>Local graph</button>
+            <button type="button" onClick="{{openSel}}" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; border-radius: 6px; background: transparent; border: 1px solid #6272A4; color: #A9B2D3; font: inherit; cursor: pointer"><i-con name="eye" size="12"></i-con>Read note</button>
+          </div>
+        </aside>
+        </sc-if>
+      </div>
+      </sc-if>
+    </main>
+  </div>
+</div>
+</div>
+<!--@shared-html-->
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    var saved = {};
+    try { saved = JSON.parse(window.localStorage.getItem('mc.brain.layout') || '{}') || {}; } catch (e) { saved = {}; }
+    this.state = { sel: 0, hoverNode: null, leftOpen: saved.leftOpen !== false, rightOpen: saved.rightOpen !== false, tab: 'graph', tlAgent: 'atlas', tlFile: 'MEMORY', tlSel: 0, tlSameOpen: false };
+    this.state = Object.assign(this.sharedState(), this.state);
+    var m = /[?&]tab=(\w+)/.exec(window.location.search);
+    if (m && (m[1] === 'timeline' || m[1] === 'graph')) { this.state.tab = m[1]; }
+  }
+  // Sample history of an agent's memory files, oldest first. Real app: snapshots of MEMORY.md, USER.md and SOUL.md taken on change.
+  tlHistory(agent, file) {
+    var E = {
+      m1: 'User prefers short, direct answers; bullets over paragraphs.',
+      m2: 'Vault lives in /root/vault; daily notes are in notes/daily/.',
+      m2b: 'Vault lives in /root/vault; daily notes live in notes/daily/ (renamed from journal/).',
+      m3: 'Telegram group -1001… is the user’s personal channel; use it for briefings only.',
+      m4: 'Morning briefing: skip empty sections, max 120 words.',
+      m5: 'User is in UTC+7; schedule things in local time unless told otherwise.',
+      m6: 'Dentist appointment Friday 09:00 (one-time).',
+      m7: 'scout handles research; ask scout before running long web crawls.',
+      u1: 'Name: Fikri. Works on infra, writes in Indonesian and English.',
+      u2: 'Prefers Dracula-themed tools and monospaced UIs.',
+      u3: 'Timezone UTC+7; usually online 08:00–23:00.',
+      s1: '# atlas',
+      s2: 'You are atlas, the operator’s chief of staff.',
+      s3: 'Short, direct answers; bullets over paragraphs.',
+      s4: 'Ask before anything destructive.',
+      s5: 'Never reveal secrets from .env or auth.json.'
+    };
+    var mem = [
+      { t: 'Sep 22 09:10', day: 'Sep 22', who: 'agent', tag: 'created', how: 'session 20260922_091002 · memory tool', items: [E.m1, E.m2] },
+      { t: 'Sep 30 14:02', day: 'Sep 30', who: 'agent', tag: 'memory tool', how: 'session 20260930_140011 · memory tool', items: [E.m1, E.m2, E.m3] },
+      { t: 'Oct 3 22:31', day: 'Oct 3', who: 'agent', tag: 'memory tool', how: 'session 20261003_222901 · memory tool', items: [E.m1, E.m2, E.m3, E.m5, E.m7] },
+      { t: 'Oct 7 22:14', day: 'Oct 7', who: 'agent', tag: 'memory tool', how: 'session 20261007_221030_9c01 · memory tool', items: [E.m1, E.m2, E.m3, E.m5, E.m7, E.m6] },
+      { t: 'Oct 10 09:15', day: 'Oct 10', who: 'agent', tag: 'memory tool', how: 'session 20261010_091510_e710 · memory tool', items: [E.m1, E.m2, E.m3, E.m5, E.m7] },
+      { t: 'Oct 11 18:41', day: 'Oct 11', who: 'agent', tag: 'memory tool', how: 'session 20261011_182204_a91f · memory tool', items: [E.m1, E.m2, E.m3, E.m5, E.m7, E.m4] },
+      { t: 'Oct 11 20:02', day: 'Oct 11', who: 'you', tag: 'Mission Control', how: 'edited in Settings → Agents → Memory and written to the VPS', items: [E.m1, E.m2b, E.m3, E.m5, E.m7, E.m4] }
+    ];
+    var usr = [
+      { t: 'Sep 22 09:12', day: 'Sep 22', who: 'agent', tag: 'created', how: 'session 20260922_091002 · memory tool', items: [E.u1] },
+      { t: 'Sep 25 18:40', day: 'Sep 25', who: 'you', tag: 'Mission Control', how: 'edited in Settings → Agents → User profile', items: [E.u1, E.u2] },
+      { t: 'Oct 3 22:33', day: 'Oct 3', who: 'agent', tag: 'memory tool', how: 'session 20261003_222901 · memory tool', items: [E.u1, E.u2, E.u3] }
+    ];
+    var soul = [
+      { t: 'Sep 22 09:00', day: 'Sep 22', who: 'you', tag: 'while away', how: 'found changed when Mission Control connected; edited outside this app', items: [E.s1, E.s2, E.s3] },
+      { t: 'Oct 1 11:20', day: 'Oct 1', who: 'you', tag: 'Mission Control', how: 'edited in Settings → Agents → Soul', items: [E.s1, E.s2, E.s3, E.s4, E.s5] }
+    ];
+    var h = file === 'USER' ? usr : (file === 'SOUL' ? soul : mem);
+    return agent === 'atlas' ? h : h.slice(0, 2);
+  }
+  tlVals(g) {
+    var self = this;
+    var st = this.state;
+    var meta = {};
+    this.baseAgents().forEach(function (a) { meta[a.name] = a; });
+    var hist = this.tlHistory(st.tlAgent, st.tlFile);
+    var limit = st.tlFile === 'USER' ? 1375 : (st.tlFile === 'SOUL' ? 0 : 2200);
+    var fileLabel = st.tlFile + '.md';
+    var whoColor = function (w, tag) { return tag === 'while away' ? '#FFB86C' : (w === 'agent' ? meta[st.tlAgent].color : '#50FA7B'); };
+    var newest = hist.map(function (v, i) {
+      var prev = i ? hist[i - 1].items : [];
+      var chars = v.items.join(st.tlFile === 'SOUL' ? '\n' : '\n§\n').length;
+      return { v: v, i: i, prev: prev, added: v.items.filter(function (x) { return prev.indexOf(x) < 0; }).length, removed: prev.filter(function (x) { return v.items.indexOf(x) < 0; }).length, chars: chars };
+    }).reverse();
+    var sel = newest[Math.min(st.tlSel, newest.length - 1)];
+    var lastDay = null;
+    var versions = newest.map(function (n, k) {
+      var parts = n.v.t.split(' ');
+      var time = parts[parts.length - 1];
+      var newDay = n.v.day !== lastDay;
+      lastDay = n.v.day;
+      var pct = limit ? Math.min(100, Math.round(n.chars / limit * 100)) : 0;
+      return {
+        key: 'v' + n.i, newDay: newDay, day: n.v.day, time: time, who: n.v.who === 'agent' ? meta[st.tlAgent].label : 'you', color: whoColor(n.v.who, n.v.tag), tag: k === 0 ? 'current' : n.v.tag,
+        added: n.added, removed: n.removed, chars: n.chars.toLocaleString('en-US'), limit: limit ? limit.toLocaleString('en-US') : 'no limit', pct: pct, barColor: pct >= 90 ? '#FFB86C' : '#50FA7B',
+        selected: k === Math.min(st.tlSel, newest.length - 1) ? 'true' : 'false', bg: k === Math.min(st.tlSel, newest.length - 1) ? '#44475A' : 'transparent',
+        pick: function () { self.setState({ tlSel: k, tlSameOpen: false }); }
+      };
+    });
+    var cur = sel.v;
+    var diff = [];
+    var same = [];
+    cur.items.forEach(function (t, i) { if (sel.prev.indexOf(t) < 0) { diff.push({ key: 'a' + i, sign: '+', t: t, bg: '#24382d', fg: '#50FA7B' }); } else { same.push({ key: 's' + i, t: t }); } });
+    sel.prev.forEach(function (t, i) { if (cur.items.indexOf(t) < 0) { diff.push({ key: 'r' + i, sign: '−', t: t, bg: '#3a2530', fg: '#FF5555' }); } });
+    var mkBtn = function (arr, curKey, onPick) { return arr.map(function (o) { var on = o[0] === curKey; return { key: o[0], label: o[1], pressed: on ? 'true' : 'false', bg: on ? '#44475A' : 'transparent', border: on ? '#6272A4' : '#44475A', fg: on ? '#F8F8F2' : '#A9B2D3', pick: function () { onPick(o[0]); } }; }); };
+    return {
+      brainTabs: [['graph', 'Graph'], ['timeline', 'Memory timeline']].map(function (t) { var on = st.tab === t[0]; return { key: t[0], label: t[1], selected: on ? 'true' : 'false', bg: on ? '#44475A' : 'transparent', fg: on ? '#F8F8F2' : '#A9B2D3', pick: function () { self.setState({ tab: t[0] }); } }; }),
+      tabGraph: st.tab === 'graph', tabTime: st.tab === 'timeline',
+      headNote: st.tab === 'graph' ? g.nodes.filter(function (n) { return !n.tag && !n.unresolved; }).length + ' notes · ' + g.links.length + ' links · 1 unresolved' : newest.length + ' versions of ' + fileLabel + ' for ' + meta[st.tlAgent].label,
+      tlAgents: this.orderedAgents(this.baseAgents()).map(function (a) { var on = st.tlAgent === a.name; return { key: a.name, label: a.label, pressed: on ? 'true' : 'false', bg: on ? '#44475A' : 'transparent', border: on ? a.color : '#44475A', fg: on ? a.color : '#A9B2D3', pick: function () { self.setState({ tlAgent: a.name, tlSel: 0, tlSameOpen: false }); } }; }),
+      tlFiles: mkBtn([['MEMORY', 'MEMORY.md'], ['USER', 'USER.md'], ['SOUL', 'SOUL.md']], st.tlFile, function (f) { self.setState({ tlFile: f, tlSel: 0, tlSameOpen: false }); }),
+      tlVersions: versions,
+      tlSel: { title: fileLabel + ' · ' + cur.t, who: cur.who === 'agent' ? meta[st.tlAgent].label + ' (agent)' : 'you', color: whoColor(cur.who, cur.tag), how: cur.how + ' · version ' + (sel.i + 1) + ' of ' + newest.length },
+      tlDiff: diff, tlFirst: sel.i === 0, tlSame: same, tlHasSame: same.length > 0 && sel.i > 0,
+      tlSameShown: st.tlSameOpen && sel.i > 0, tlSameOpen: st.tlSameOpen ? 'true' : 'false',
+      tlSameLabel: (st.tlSameOpen ? 'Hide ' : 'Show ') + same.length + ' unchanged ' + (same.length === 1 ? 'entry' : 'entries'),
+      tlToggleSame: function () { self.setState({ tlSameOpen: !st.tlSameOpen }); },
+      tlRestore: function () {
+        var items = cur.items.slice();
+        var p = { setOpen: true, notifOpen: false, setTab: 'agents', cfgAgent: st.tlAgent, reviewing: false, saved: false };
+        if (st.tlFile === 'USER') { p.userCur = items; p.cfgTab = 'user'; } else if (st.tlFile === 'SOUL') { p.soul = items.join('\n'); p.cfgTab = 'soul'; } else { p.memCur = items; p.cfgTab = 'memory'; }
+        self.setState(p);
+      },
+      tlCopy: function () { self.notify({ kind: 'ok', title: 'Version copied', body: fileLabel + ' · ' + cur.t }); }
+    };
+  }
+/*@shared-js*/
+  componentDidMount() {
+    var self = this;
+    this.sharedMount();
+    this.onResize = function () { self.fitGraph(); };
+    window.addEventListener('resize', this.onResize);
+    setTimeout(function () { self.fitGraph(); }, 0);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('resize', this.onResize);
+  }
+  componentDidUpdate() {
+    this.fitGraph();
+  }
+  fitGraph() {
+    var el = document.getElementById('brain-graph');
+    if (!el) { return; }
+    this.viewFit('brain', 'brain-graph', 640, 560, 0);
+  }
+  setPanels(patch) {
+    var s = Object.assign({ leftOpen: this.state.leftOpen, rightOpen: this.state.rightOpen }, patch);
+    this.setState(patch);
+    this.saveKey('mc.brain.layout', s);
+  }
+  graph() {
+    var G = { projects: '#50FA7B', research: '#50FA7B', people: '#50FA7B', daily: '#50FA7B', none: '#8B95BD' };
+    var named = [
+      ['Hermes Mission Control', 320, 270, 'projects', ['project', 'active'], 'Desktop ops console for the Hermes fleet. See [[Zero-Change Principle]], [[Collector Design]] and [[Graph View Spec]].'],
+      ['Zero-Change Principle', 230, 190, 'projects', ['principle'], 'Nothing is installed or changed on the VPS; writes only happen on an explicit user action.'],
+      ['Collector Design', 410, 180, 'projects', ['design'], 'Python collector piped over stdin; streams JSON lines for metrics, messages, cron and vault changes.'],
+      ['Graph View Spec', 420, 330, 'projects', ['design', 'ui'], 'Force-directed graph modelled on Obsidian: hover highlight, groups, forces, local graph.'],
+      ['Release Plan', 250, 360, 'projects', ['plan'], 'Milestones M1–M7 from foundation to signed installers for three OSes.'],
+      ['Obsidian Graph Internals', 520, 250, 'research', ['obsidian'], 'Obsidian renders with WebGL and runs d3-force in a worker; forces map to the sliders.'],
+      ['d3-force Notes', 560, 150, 'research', ['layout'], 'center, charge (repel), link strength and distance — the four knobs we expose.'],
+      ['PixiJS Performance', 580, 340, 'research', ['perf'], 'Batch sprites, freeze layout after it settles, fade labels below a zoom threshold.'],
+      ['SSH Multiplexing', 470, 90, 'research', ['ssh'], 'One connection, many channels: collector, chat exec, SFTP.'],
+      ['SQLite WAL', 330, 90, 'research', ['sqlite'], 'Readers never block the writer; open state.db with mode=ro.'],
+      ['Speculative Decoding', 150, 90, 'research', ['paper', 'new'], 'Written by scout at 20:41 from arxiv-watch; links back to [[Nous Research]].'],
+      ['Nous Research', 180, 270, 'people', ['org'], 'Makers of Hermes Agent and the Hermes model family.'],
+      ['Client — Acme', 110, 380, 'people', ['client'], 'Weekly sync on Thursdays; wants the uptime report in Telegram.'],
+      ['Team Sync', 200, 470, 'people', ['meeting'], 'Recurring notes; action items roll into [[Release Plan]].'],
+      ['2026-10-08', 380, 460, 'daily', ['daily'], 'Hermes v0.21.6 released. Reviewed multiplex gateway behaviour.'],
+      ['2026-10-09', 460, 470, 'daily', ['daily'], 'Drafted the PRD; decided on Electron.'],
+      ['2026-10-10', 540, 450, 'daily', ['daily'], 'Mockups in Dracula palette; graph view spec.'],
+      ['Auto-update', 100, 200, 'none', [], 'Unresolved link — no note with this name exists yet.']
+    ];
+    var links = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 11], [1, 9], [1, 2], [2, 8], [2, 9], [3, 5], [3, 6], [3, 7], [5, 6], [5, 7], [4, 12], [4, 13], [11, 10], [14, 0], [15, 0], [16, 0], [16, 3], [15, 4], [14, 13], [12, 13], [4, 17], [7, 16], [10, 9]];
+    var nodes = named.map(function (n, i) {
+      return { i: i, title: n[0], x: n[1], y: n[2], group: n[3], color: G[n[3]], tags: n[4], excerpt: n[5], path: (n[3] === 'none' ? '(unresolved)' : n[3] + '/' + n[0] + '.md'), unresolved: n[3] === 'none', sat: false };
+    });
+    var seed = 11;
+    function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    var anchors = [0, 2, 3, 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 4, 1, 8];
+    for (var s = 0; s < 36; s++) {
+      var p = nodes[anchors[s % anchors.length]];
+      var ang = rnd() * Math.PI * 2;
+      var rad = 30 + rnd() * 42;
+      var x = Math.max(12, Math.min(628, Math.round(p.x + Math.cos(ang) * rad)));
+      var y = Math.max(12, Math.min(548, Math.round(p.y + Math.sin(ang) * rad)));
+      var id = nodes.length;
+      nodes.push({ i: id, title: p.group + '/note-' + (s + 1 < 10 ? '0' : '') + (s + 1), x: x, y: y, group: p.group, color: p.color, tags: [], excerpt: 'Short note linked from [[' + p.title + ']].', path: p.group + '/note-' + (s + 1) + '.md', unresolved: false, sat: true });
+      links.push([p.i, id]);
+    }
+    var tagIdx = {};
+    named.forEach(function (n, k) { n[4].forEach(function (tg) { if (!tagIdx[tg]) { tagIdx[tg] = []; } tagIdx[tg].push(k); }); });
+    Object.keys(tagIdx).forEach(function (tg, ti) {
+      var ns = tagIdx[tg].map(function (k) { return nodes[k]; });
+      var cx = ns.reduce(function (s2, n) { return s2 + n.x; }, 0) / ns.length;
+      var cy = ns.reduce(function (s2, n) { return s2 + n.y; }, 0) / ns.length;
+      var a2 = ti * 2.4;
+      var tid = nodes.length;
+      nodes.push({ i: tid, title: '#' + tg, x: Math.max(16, Math.min(624, Math.round(cx + Math.cos(a2) * 40))), y: Math.max(16, Math.min(544, Math.round(cy + Math.sin(a2) * 40))), group: 'tag', color: '#8B95BD', tags: [], excerpt: 'Tag used by ' + ns.length + ' note' + (ns.length > 1 ? 's' : '') + '.', path: 'tag', unresolved: false, sat: false, tag: true });
+      tagIdx[tg].forEach(function (k) { links.push([k, tid]); });
+    });
+    return { nodes: nodes, links: links };
+  }
+  renderVals() {
+    var self = this;
+    var g = this.graph();
+    this.physEnsure('brain', g.nodes, g.links);
+    g.nodes.forEach(function (n) { var q = self.physAt('brain', n.i); if (q) { n.x = Math.round(q.x); n.y = Math.round(q.y); } });
+    var sel = this.state.sel;
+    var focus = this.state.hoverNode != null ? this.state.hoverNode : sel;
+    var fresh = g.nodes[10];
+    var deg = g.nodes.map(function () { return 0; });
+    var nb = {};
+    g.links.forEach(function (l) {
+      deg[l[0]]++; deg[l[1]]++;
+      if (l[0] === focus) { nb[l[1]] = true; }
+      if (l[1] === focus) { nb[l[0]] = true; }
+    });
+    var selNode = g.nodes[sel];
+    var focusColor = g.nodes[focus].tag ? '#8B95BD' : '#50FA7B';
+    var selLinks = {};
+    g.links.forEach(function (l) { if (l[0] === sel) { selLinks[l[1]] = true; } if (l[1] === sel) { selLinks[l[0]] = true; } });
+    var edges = g.links.map(function (l) {
+      var a = g.nodes[l[0]], b = g.nodes[l[1]];
+      var dx = b.x - a.x, dy = b.y - a.y;
+      var hovering = self.state.hoverNode != null;
+      var hot = hovering && (l[0] === focus || l[1] === focus);
+      return { x: a.x, y: a.y, len: Math.round(Math.sqrt(dx * dx + dy * dy)), a: (Math.atan2(dy, dx) * 180 / Math.PI).toFixed(2), color: hot ? focusColor : '#6272A4', o: hot ? 0.9 : (hovering ? 0.15 : 0.45) };
+    });
+    var nodes = g.nodes.map(function (n) {
+      var r = n.sat ? 3 : (n.tag ? 5 : Math.min(15, 4 + deg[n.i] * 1.1));
+      var bright = self.state.hoverNode == null || n.i === focus || !!nb[n.i];
+      var lo = self.labelAlpha('brain', n.sat, bright && self.state.hoverNode != null ? true : n.i === sel);
+      return {
+        title: n.title, x: n.x, ly: n.y + r + 3, l: n.x - r, t: n.y - r, d: Math.round(r * 2),
+        bg: n.unresolved ? 'transparent' : n.color,
+        border: n.unresolved ? '1px dashed #8B95BD' : '0',
+        o: bright ? 1 : 0.35,
+        ring: n.i === sel ? '0 0 0 2px #282A36, 0 0 0 4px #F8F8F2' : 'none',
+        showLabel: lo > 0.02,
+        labelColor: n.tag ? '#8B95BD' : (bright ? '#F8F8F2' : '#A9B2D3'),
+        lo: lo,
+        hover: function () { if (self.state.hoverNode !== n.i) { self.setState({ hoverNode: n.i }); } },
+        unhover: function () { if (self.state.hoverNode === n.i) { self.setState({ hoverNode: null }); } },
+        grab: self.physGrab('brain', n.i, 'brain-canvas', 640),
+        pick: function () { if (self.physClickOk('brain')) { self.setState({ sel: n.i, noteIdx: n.i }); } }
+      };
+    });
+    var linked = Object.keys(selLinks).map(function (k) { return g.nodes[+k]; }).sort(function (a, b) { return (a.sat ? 1 : 0) - (b.sat ? 1 : 0); });
+    return Object.assign(this.sharedVals(), this.navFor('brain'), this.noteVals(g), this.tlVals(g), {
+      gTransform: this.viewTransform('brain'),
+      panStart: this.viewPan('brain', 'brain-graph'),
+      wheelZoom: this.viewWheel('brain', 'brain-graph'),
+      leftOpen: this.state.leftOpen, rightOpen: this.state.rightOpen,
+      leftOn: this.state.leftOpen ? 'on' : '', rightOn: this.state.rightOpen ? 'on' : '',
+      leftPressed: this.state.leftOpen ? 'true' : 'false', rightPressed: this.state.rightOpen ? 'true' : 'false',
+      toggleLeft: function () { self.setPanels({ leftOpen: !self.state.leftOpen }); },
+      toggleRight: function () { self.setPanels({ rightOpen: !self.state.rightOpen }); },
+      openSel: function () { self.setState({ noteIdx: self.state.sel }); },
+      refit: function () { self.viewFit('brain', 'brain-graph', 640, 560, 0, true); },
+      noteCount: g.nodes.filter(function (n) { return !n.tag && !n.unresolved; }).length,
+      linkCount: g.links.length,
+      edges: edges,
+      nodes: nodes,
+      groups: [
+        { query: 'Notes', color: '#50FA7B' },
+        { query: 'Tags', color: '#8B95BD' }
+      ],
+      fresh: { l: fresh.x - 18, t: fresh.y - 18, lx: fresh.x + 22, ly: fresh.y - 26 },
+      sel: {
+        title: selNode.title, path: selNode.path, color: selNode.unresolved ? '#A9B2D3' : selNode.color,
+        tags: selNode.tags, excerpt: selNode.excerpt, linkCount: linked.length,
+        links: linked.slice(0, 8).map(function (n) { return { title: n.title, color: n.color, pick: function () { self.setState({ sel: n.i }); } }; })
+      }
+    });
+  }
+}
+</script>
+</body>
+</html>

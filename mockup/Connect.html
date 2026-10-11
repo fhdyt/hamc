@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<title>Connect — Hermes Agent Mission Control</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#282A36}
+a{color:#50FA7B}a:hover{color:#8BE9FD}
+input:focus{outline:1px solid #50FA7B;outline-offset:0}
+</style>
+<script src="mc-runtime.js" defer></script>
+</head>
+<body>
+<div id="mc-root"></div>
+<script type="text/x-dc-template" id="mc-template">
+<div style="min-height: 100vh; background: #282A36; color: #F8F8F2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; align-items: center; padding: 48px 16px; box-sizing: border-box; gap: 28px">
+
+  <div style="text-align: center; display: flex; flex-direction: column; gap: 6px">
+    <img src="assets/logo-mark.png" width="96" height="96" alt="Hermes Agent Mission Control" style="align-self: center">
+    <div style="color: #A9B2D3; font-size: 11px; font-weight: 700; letter-spacing: 3px">HERMES AGENT MISSION CONTROL</div>
+    <div style="color: #A9B2D3">remote ops console for Hermes Agent · zero-change · read-only by default</div>
+  </div>
+
+  <div style="width: 100%; max-width: 1120px; display: flex; flex-wrap: wrap; gap: 20px">
+
+    <section aria-label="Connect to VPS" style="position: relative; flex: 1 1 380px; border: 1px solid #6272A4; background: #21222C; padding: 26px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+      <h1 style="position: absolute; top: -10px; left: 14px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #50FA7B">┤ first-time setup ├</h1>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px">
+        <span style="color: #8B95BD">recent:</span>
+        <a href="Main.html" style="padding: 2px 8px; border: 1px solid #44475A; text-decoration: none; color: #A9B2D3">prod-vps · root@203.0.113.42</a>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 12px">
+        <div style="flex: 3 1 220px; display: flex; flex-direction: column; gap: 4px">
+          <label for="host" style="color: #A9B2D3; font-size: 12px">host / public ip</label>
+          <input id="host" type="text" value="203.0.113.42" style="background: #282A36; border: 1px solid #6272A4; color: #50FA7B; font: inherit; padding: 9px 10px">
+        </div>
+        <div style="flex: 1 1 90px; display: flex; flex-direction: column; gap: 4px">
+          <label for="port" style="color: #A9B2D3; font-size: 12px">ssh port</label>
+          <input id="port" type="text" inputmode="numeric" value="22" style="background: #282A36; border: 1px solid #6272A4; color: #50FA7B; font: inherit; padding: 9px 10px">
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <label for="user" style="color: #A9B2D3; font-size: 12px">username <span style="color: #8B95BD">(the user that runs Hermes)</span></label>
+        <input id="user" type="text" value="root" style="background: #282A36; border: 1px solid #6272A4; color: #50FA7B; font: inherit; padding: 9px 10px">
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px">
+        <label for="pass" style="color: #A9B2D3; font-size: 12px">password</label>
+        <input id="pass" type="password" value="hunter2hunter2" style="background: #282A36; border: 1px solid #6272A4; color: #50FA7B; font: inherit; padding: 9px 10px">
+      </div>
+      <label style="display: flex; align-items: center; gap: 10px; color: #F8F8F2; min-height: 44px; cursor: pointer">
+        <input type="checkbox" checked style="accent-color: #50FA7B; width: 16px; height: 16px">
+        remember &amp; auto-connect on launch <span style="color: #8B95BD; font-size: 12px">(password → OS keychain)</span>
+      </label>
+      <a href="Main.html" style="display: block; text-align: center; padding: 12px; background: #50FA7B; color: #282A36; font-weight: 700; text-decoration: none; letter-spacing: 2px">[ TEST &amp; CONNECT ]</a>
+      <p style="margin: 0; color: #8B95BD; font-size: 11px">Asked only once. Next time the app opens it connects automatically — change it anytime with <span style="color: #50FA7B">edit connection</span>. Nothing is installed or changed on your VPS.</p>
+    </section>
+
+    <div style="flex: 1 1 420px; display: flex; flex-direction: column; gap: 20px">
+
+      <section aria-label="Host key verification" style="position: relative; border: 1px solid #FFB86C; background: #21222C; padding: 24px 18px 16px; display: flex; flex-direction: column; gap: 10px">
+        <h2 style="position: absolute; top: -10px; left: 14px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #FFB86C">┤ first connection: verify host key ├</h2>
+        <div style="color: #F8F8F2">203.0.113.42 presented an <span style="color: #FFB86C">ED25519</span> key:</div>
+        <code style="display: block; padding: 8px 10px; background: #282A36; border: 1px dashed #FFB86C; color: #FFB86C; overflow-wrap: anywhere">SHA256:Xq3vR8kP2mWfN0aJ7cLzQyT5uE1bHdG4sK9oV6iY9fA</code>
+        <div style="color: #A9B2D3; font-size: 12px">Compare with <span style="color: #F8F8F2">ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</span> on the server.</div>
+        <div style="display: flex; gap: 10px">
+          <button type="button" style="min-height: 40px; padding: 0 16px; background: #FFB86C; color: #282A36; border: 0; font: inherit; font-weight: 700; cursor: pointer">TRUST &amp; CONTINUE</button>
+          <button type="button" style="min-height: 40px; padding: 0 16px; background: transparent; color: #FFB86C; border: 1px solid #FFB86C; font: inherit; cursor: pointer">CANCEL</button>
+        </div>
+      </section>
+
+      <section aria-label="Preflight" style="position: relative; border: 1px solid #44475A; background: #21222C; padding: 24px 18px 16px; display: flex; flex-direction: column; gap: 5px">
+        <h2 style="position: absolute; top: -10px; left: 14px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #50FA7B">┤ preflight ├</h2>
+        <sc-for list="{{checks}}" as="c" hint-placeholder-count="9">
+          <div style="display: flex; gap: 8px; white-space: nowrap; overflow: hidden; font-size: 12px">
+            <span style="color: #8B95BD">&gt;</span>
+            <span style="color: #F8F8F2">{{c.label}}</span>
+            <span style="flex: 1; overflow: hidden; color: #44475A">..............................................................</span>
+            <span style="color: {{c.color}}">{{c.result}}</span>
+          </div>
+        </sc-for>
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #44475A; color: #50FA7B">9/9 checks passed — opening console<span style="color: #50FA7B">_</span></div>
+      </section>
+    </div>
+  </div>
+</div>
+</script>
+<script type="text/x-dc" id="mc-logic">
+class Component extends DCLogic {
+  renderVals() {
+    var ok = '#50FA7B';
+    return {
+      checks: [
+        { label: 'ssh root@203.0.113.42 -p 22', result: 'OK 38ms', color: ok },
+        { label: 'host key SHA256:Xq3v…9fA', result: 'TRUSTED', color: ok },
+        { label: 'hermes home ~/.hermes', result: 'FOUND', color: ok },
+        { label: 'hermes --version', result: 'v0.21.6', color: ok },
+        { label: 'profiles (multiplex gateway)', result: '5 · gateway up', color: ok },
+        { label: 'state.db ?mode=ro', result: 'schema 31 OK', color: ok },
+        { label: 'hermes cli', result: '~/.local/bin/hermes', color: ok },
+        { label: 'python (hermes shebang)', result: '3.11.9', color: ok },
+        { label: 'zero-change mode', result: 'ON · 0 files written', color: '#8BE9FD' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

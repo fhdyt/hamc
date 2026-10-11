@@ -1,0 +1,432 @@
+  <sc-if value="{{termOpen}}" hint-placeholder-val="{{false}}">
+    <section aria-label="Terminal" style="position: fixed; left: 0; right: 0; bottom: 26px; z-index: 30; height: {{termH}}px; display: flex; flex-direction: column; border-top: 1px solid #6272A4; background: #191A21; box-shadow: 0 -12px 32px rgba(0, 0, 0, .4); animation: mcTermUp .22s cubic-bezier(.2,.8,.2,1) both">
+      <div id="term-resizer" role="separator" aria-orientation="horizontal" aria-label="Resize terminal" aria-valuemin="120" aria-valuemax="600" aria-valuenow="{{termH}}" tabindex="0" title="Drag to resize" onPointerDown="{{termGrab}}" onKeyDown="{{termSepKey}}" class="mc-hsep" style="flex: none; height: 6px; display: flex; align-items: center; justify-content: center; cursor: row-resize; touch-action: none">
+        <span style="width: 48px; height: 2px; border-radius: 1px; background: #44475A; transition: background-color .15s"></span>
+      </div>
+      <div style="flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 4px 12px">
+        <span style="color: #BD93F9; display: flex"><i-con name="terminal" size="13"></i-con></span>
+        <span style="color: #F8F8F2; font-weight: 600">Terminal</span>
+        <span style="color: #8B95BD; font-size: 11px">root@203.0.113.42 · bash</span>
+        <span style="margin-left: auto; display: flex; gap: 2px">
+          <button type="button" class="ib sm" onClick="{{termClear}}" aria-label="Clear terminal" title="Clear"><i-con name="trash" size="13"></i-con></button>
+          <button type="button" class="ib sm" onClick="{{toggleTerminal}}" aria-label="Close terminal" title="Close (Ctrl+`)"><i-con name="chev-down" size="14"></i-con></button>
+        </span>
+      </div>
+      <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px; display: flex; flex-direction: column-reverse; border-top: 1px solid #343746; font-size: 11px; line-height: 1.5">
+        <div>
+          <sc-for list="{{termLines}}" as="ln" hint-placeholder-count="3"><div data-key="{{ln.key}}" style="white-space: pre-wrap; overflow-wrap: anywhere; color: {{ln.color}}">{{ln.text}}</div></sc-for>
+        </div>
+      </div>
+      <div style="flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 12px 6px; font-size: 11px">
+        <label for="term-in" style="color: #50FA7B; white-space: nowrap">root@vps:~#</label>
+        <input id="term-in" type="text" autocomplete="off" spellcheck="false" value="{{termDraft}}" onChange="{{termInput}}" onKeyDown="{{termKey}}" placeholder="try: help" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: #F8F8F2; font: inherit">
+      </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{palOpen}}" hint-placeholder-val="{{false}}">
+    <div class="mc-fade" onClick="{{closePalette}}" style="position: fixed; inset: 0; z-index: 56; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px; background: rgba(25, 26, 33, .78)">
+      <div class="mc-pop" role="dialog" aria-modal="true" aria-label="Command palette" onClick="{{stop}}" style="width: 100%; max-width: 560px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #6272A4; border-radius: 14px; background: #21222C; box-shadow: 0 24px 60px rgba(0, 0, 0, .55)">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid #44475A; color: #A9B2D3">
+          <i-con name="search" size="15"></i-con>
+          <input id="pal-in" type="text" role="combobox" aria-expanded="true" aria-controls="pal-list" autocomplete="off" spellcheck="false" value="{{palQ}}" onChange="{{palType}}" onKeyDown="{{palKey}}" placeholder="Go to a screen, an agent, a session, a note, or run a command" style="flex: 1; min-width: 0; height: 44px; border: 0; outline: none; background: transparent; color: #F8F8F2; font: inherit">
+          <kbd>Esc</kbd>
+        </div>
+        <div id="pal-list" role="listbox" aria-label="Results" style="max-height: 340px; overflow-y: auto; padding: 4px 0">
+          <sc-for list="{{palItems}}" as="pi" hint-placeholder-count="6">
+            <button type="button" role="option" class="pal-row" aria-selected="{{pi.selected}}" onClick="{{pi.run}}" data-key="{{pi.key}}">
+              <span class="pal-chip" style="color: {{pi.chipColor}}">{{pi.kind}}</span>
+              <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{pi.title}}</span>
+              <span style="flex: none; color: #8B95BD; font-size: 11px">{{pi.hint}}</span>
+            </button>
+          </sc-for>
+          <sc-if value="{{palEmpty}}" hint-placeholder-val="{{false}}"><div style="padding: 18px 14px; color: #8B95BD; text-align: center">Nothing matches “{{palQ}}”. Try a screen name, an agent, or a session title.</div></sc-if>
+        </div>
+        <div style="display: flex; gap: 14px; padding: 6px 14px; border-top: 1px solid #44475A; color: #8B95BD; font-size: 11px"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <footer aria-label="Status bar" style="position: relative; z-index: 30; flex: none; height: 26px; display: flex; align-items: stretch; border-top: 1px solid #44475A; background: #191A21; font-size: 11px">
+    <button type="button" class="sb-item" onClick="{{openConnection}}" title="root@203.0.113.42 · hermes v0.21.6 · {{sbOnline}} agents online · 38 ms" style="background: #2E6B40; color: #F8F8F2"><i-con name="server" size="12"></i-con>root@203.0.113.42</button>
+    <span style="flex: 1"></span>
+    <span class="sb-item" style="cursor: default"><i-con name="cpu" size="12"></i-con>34%</span>
+    <span class="sb-item" style="cursor: default"><i-con name="memory" size="12"></i-con>38%</span>
+    <button type="button" class="sb-item" onClick="{{toggleNotifs}}" aria-label="Notifications" title="Notifications" style="position: relative">
+      <i-con name="bell" size="13"></i-con>
+      <sc-if value="{{sbHasUnread}}" hint-placeholder-val="{{false}}"><span class="mc-pop" style="min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box; border-radius: 7px; background: #FF5555; color: #191A21; font-size: 9px; font-weight: 700; line-height: 14px; text-align: center">{{sbUnread}}</span></sc-if>
+    </button>
+    <span style="display: inline-flex; align-items: stretch" role="group" aria-label="Text size">
+      <button type="button" class="sb-item" onClick="{{zoomOut}}" aria-label="Smaller text" title="Smaller text (Ctrl −)" style="padding: 0 6px"><i-con name="minus" size="12"></i-con></button>
+      <button type="button" class="sb-item num" onClick="{{zoomReset}}" aria-label="Reset text size" title="Reset text size" style="padding: 0 2px; min-width: 34px; justify-content: center">{{zoomPct}}</button>
+      <button type="button" class="sb-item" onClick="{{zoomIn}}" aria-label="Larger text" title="Larger text (Ctrl +)" style="padding: 0 6px"><i-con name="plus" size="12"></i-con></button>
+    </span>
+    <button type="button" class="sb-item" onClick="{{openSettings}}" aria-label="Settings" title="Settings"><i-con name="settings" size="13"></i-con></button>
+  </footer>
+
+  <sc-if value="{{notifOpen}}" hint-placeholder-val="{{false}}">
+    <section class="mc-pop" aria-label="Notifications" style="position: fixed; right: 8px; bottom: 30px; z-index: 40; width: 320px; max-height: 360px; display: flex; flex-direction: column; border: 1px solid #44475A; border-radius: 10px; background: #21222C; box-shadow: 0 12px 32px rgba(0, 0, 0, .45); transform-origin: bottom right">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #44475A">
+        <span style="color: #F8F8F2; font-weight: 600">Notifications</span>
+        <button type="button" class="ib sm" onClick="{{clearNotifs}}" aria-label="Clear all" title="Clear all" style="margin-left: auto"><i-con name="trash" size="13"></i-con></button>
+        <button type="button" class="ib sm" onClick="{{toggleNotifs}}" aria-label="Close" title="Close"><i-con name="x" size="14"></i-con></button>
+      </div>
+      <div style="overflow-y: auto; padding: 4px 0">
+        <sc-for list="{{notifs}}" as="n" hint-placeholder-count="0">
+          <div data-key="{{n.id}}" class="mc-in" style="display: flex; gap: 8px; padding: 6px 10px; border-bottom: 1px dashed #343746">
+            <span class="dot" style="background: {{n.color}}"></span>
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+              <span style="color: #F8F8F2; font-weight: 600">{{n.title}}</span>
+              <span style="color: #A9B2D3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{n.body}}</span>
+            </div>
+            <span style="color: #8B95BD; font-size: 10px">{{n.time}}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{noNotifs}}" hint-placeholder-val="{{true}}"><div style="padding: 18px 10px; color: #8B95BD; text-align: center">All caught up</div></sc-if>
+      </div>
+    </section>
+  </sc-if>
+
+  <div aria-live="polite" style="position: fixed; right: 12px; bottom: 34px; z-index: 45; display: flex; flex-direction: column; gap: 8px; width: 300px; pointer-events: none">
+    <sc-for list="{{toasts}}" as="t" hint-placeholder-count="0">
+      <div data-key="{{t.id}}" class="mc-slide" role="status" style="position: relative; overflow: hidden; display: flex; gap: 10px; padding: 10px 12px; border: 1px solid {{t.color}}; border-radius: 10px; background: #21222C; box-shadow: 0 10px 28px rgba(0, 0, 0, .45); pointer-events: auto">
+        <span style="color: {{t.color}}; padding-top: 1px">
+          <sc-if value="{{t.isChat}}" hint-placeholder-val="{{false}}"><i-con name="message" size="15"></i-con></sc-if>
+          <sc-if value="{{t.isAlert}}" hint-placeholder-val="{{false}}"><i-con name="alert" size="15"></i-con></sc-if>
+          <sc-if value="{{t.isOk}}" hint-placeholder-val="{{true}}"><i-con name="check" size="15"></i-con></sc-if>
+        </span>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+          <span style="color: #F8F8F2; font-weight: 700">{{t.title}}</span>
+          <span style="color: #A9B2D3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">{{t.body}}</span>
+        </div>
+        <button type="button" class="ib sm" onClick="{{t.close}}" aria-label="Dismiss"><i-con name="x" size="13"></i-con></button>
+        <span aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: {{t.color}}; transform-origin: left; animation: mcToastBar 5.2s linear both"></span>
+      </div>
+    </sc-for>
+  </div>
+
+  <sc-if value="{{setOpen}}" hint-placeholder-val="{{false}}">
+    <div class="mc-fade" onClick="{{closeSettings}}" style="position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(25, 26, 33, .78)">
+      <div class="mc-pop" role="dialog" aria-modal="true" aria-labelledby="set-title" onClick="{{stop}}" style="width: 100%; max-width: 940px; height: min(640px, 100%); display: flex; flex-direction: column; overflow: hidden; border: 1px solid #6272A4; border-radius: 14px; background: #21222C; box-shadow: 0 24px 60px rgba(0, 0, 0, .55)">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #44475A">
+          <i-con name="settings" size="15"></i-con>
+          <h2 id="set-title" style="margin: 0; font-size: 13px; font-weight: 600; color: #F8F8F2">Settings</h2>
+          <button type="button" class="ib" onClick="{{closeSettings}}" aria-label="Close settings" style="margin-left: auto"><i-con name="x" size="15"></i-con></button>
+        </div>
+        <div style="flex: 1; min-height: 0; display: flex">
+          <nav aria-label="Settings sections" style="flex: 0 0 170px; padding: 8px; border-right: 1px solid #44475A; display: flex; flex-direction: column; gap: 2px">
+            <sc-for list="{{setTabs}}" as="tb" hint-placeholder-count="8">
+              <button type="button" class="set-tab" aria-current="{{tb.current}}" onClick="{{tb.pick}}" style="background: {{tb.bg}}; color: {{tb.fg}}">{{tb.label}}</button>
+            </sc-for>
+          </nav>
+          <div data-key="{{setTab}}" class="mc-fade" style="flex: 1; min-width: 0; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 4px">
+            <h3 style="margin: 0 0 8px; font-size: 13px; color: #F8F8F2">{{setTitle}}</h3>
+            <sc-for list="{{setRows}}" as="r" hint-placeholder-count="6">
+              <div data-key="{{r.rowKey}}" style="display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 6px 0; border-bottom: 1px dashed #343746">
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+                  <span style="color: #F8F8F2">{{r.label}}</span>
+                  <span style="color: #8B95BD; font-size: 11px">{{r.hint}}</span>
+                  <sc-if value="{{r.isInfo}}" hint-placeholder-val="{{false}}"><span style="color: #A9B2D3; font-size: 11px">{{r.text}}</span></sc-if>
+                </div>
+                <sc-if value="{{r.isToggle}}" hint-placeholder-val="{{true}}">
+                  <button type="button" class="sw" role="switch" aria-checked="{{r.checked}}" aria-label="{{r.label}}" onClick="{{r.toggle}}"></button>
+                </sc-if>
+                <sc-if value="{{r.isAlert}}" hint-placeholder-val="{{false}}">
+                  <span style="display: flex; align-items: center; gap: 6px"><input type="number" class="fld" aria-label="{{r.label}} threshold" value="{{r.v}}" onChange="{{r.onV}}" style="width: 64px"><span style="color: #8B95BD">{{r.unit}}</span></span>
+                  <button type="button" class="sw" role="switch" aria-checked="{{r.checked}}" aria-label="{{r.label}}" onClick="{{r.toggle}}"></button>
+                </sc-if>
+                <sc-if value="{{r.isNum}}" hint-placeholder-val="{{false}}">
+                  <span style="display: flex; align-items: center; gap: 6px"><input type="number" class="fld" aria-label="{{r.label}}" value="{{r.value}}" min="{{r.min}}" max="{{r.max}}" onChange="{{r.onInput}}" style="width: 72px"><span style="color: #8B95BD">{{r.unit}}</span></span>
+                </sc-if>
+                <sc-if value="{{r.isText}}" hint-placeholder-val="{{false}}">
+                  <input type="text" class="fld" aria-label="{{r.label}}" value="{{r.value}}" onChange="{{r.onInput}}" style="width: 240px; color: #F1FA8C">
+                </sc-if>
+                <sc-if value="{{r.isSel}}" hint-placeholder-val="{{false}}">
+                  <select class="fld" aria-label="{{r.label}}" onChange="{{r.onSel}}">
+                    <sc-for list="{{r.opts}}" as="o"><sc-if value="{{o.sel}}"><option value="{{o.v}}" selected>{{o.label}}</option></sc-if><sc-if value="{{o.unsel}}"><option value="{{o.v}}">{{o.label}}</option></sc-if></sc-for>
+                  </select>
+                </sc-if>
+                <sc-if value="{{r.isActions}}" hint-placeholder-val="{{false}}">
+                  <span style="display: flex; gap: 6px">
+                    <sc-for list="{{r.acts}}" as="ac">
+                      <sc-if value="{{ac.primary}}"><button type="button" onClick="{{ac.run}}" style="min-height: 28px; padding: 0 12px; border: 0; border-radius: 6px; background: #50FA7B; color: #282A36; font: inherit; font-weight: 700; cursor: pointer">{{ac.label}}</button></sc-if>
+                      <sc-if value="{{ac.plain}}"><button type="button" onClick="{{ac.run}}" style="min-height: 28px; padding: 0 12px; border: 1px solid #6272A4; border-radius: 6px; background: transparent; color: #F8F8F2; font: inherit; cursor: pointer">{{ac.label}}</button></sc-if>
+                      <sc-if value="{{ac.danger}}"><button type="button" onClick="{{ac.run}}" style="min-height: 28px; padding: 0 12px; border: 1px solid #FF5555; border-radius: 6px; background: transparent; color: #FF5555; font: inherit; cursor: pointer">{{ac.label}}</button></sc-if>
+                    </sc-for>
+                  </span>
+                </sc-if>
+              </div>
+            </sc-for>
+
+            <sc-if value="{{setIsAgents}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; gap: 14px; align-items: flex-start">
+                <div style="flex: 0 0 160px; display: flex; flex-direction: column; gap: 4px">
+                  <span style="color: #8B95BD; font-size: 11px; margin-bottom: 2px">Drag to reorder</span>
+                  <sc-for list="{{setAgents}}" as="a" hint-placeholder-count="5">
+                    <button type="button" data-key="{{a.name}}" draggable="true" onClick="{{a.pick}}" onDragStart="{{a.onDragStart}}" onDragOver="{{a.onDragOver}}" onDrop="{{a.onDrop}}" onDragEnd="{{a.onDragEnd}}" style="display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 4px 8px; border: 1px solid {{a.border}}; border-radius: 8px; background: {{a.bg}}; opacity: {{a.opacity}}; color: inherit; font: inherit; text-align: left; cursor: pointer">
+                      <span style="color: #6272A4; display: flex; cursor: grab"><i-con name="grip" size="12"></i-con></span>
+                      <agent-avatar of="a" size="24"></agent-avatar>
+                      <span style="color: {{a.color}}; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{a.label}}</span>
+                    </button>
+                  </sc-for>
+                  <button type="button" class="cb" onClick="{{startNewProfile}}" style="justify-content: flex-start; min-height: 32px; margin-top: 4px; border-style: dashed; color: #A9B2D3"><i-con name="plus" size="12"></i-con>New profile</button>
+                </div>
+
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+                  <div role="tablist" aria-label="Agent settings" style="display: flex; flex-wrap: wrap; border-bottom: 1px solid #44475A">
+                    <sc-for list="{{cfgTabs}}" as="ct" hint-placeholder-count="5">
+                      <button type="button" role="tab" aria-selected="{{ct.selected}}" onClick="{{ct.pick}}" style="display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; margin-bottom: -1px; border: 0; border-bottom: 2px solid {{ct.line}}; background: transparent; color: {{ct.fg}}; font: inherit; cursor: pointer">{{ct.label}}<sc-if value="{{ct.dirty}}"><span class="dot" style="background: #FFB86C"></span></sc-if></button>
+                    </sc-for>
+                  </div>
+
+                  <div data-key="{{cfgKey}}" class="mc-fade" style="display: flex; flex-direction: column; gap: 12px">
+                    <sc-if value="{{cfgProfile}}" hint-placeholder-val="{{true}}">
+                      <div style="display: flex; align-items: center; gap: 16px">
+                        <agent-avatar of="cfgA" size="72"></agent-avatar>
+                        <div style="display: flex; flex-direction: column; gap: 4px">
+                          <span style="color: {{cfgA.color}}; font-size: 15px; font-weight: 700">{{cfgA.label}}</span>
+                          <span style="color: #A9B2D3">profile {{cfgA.name}} · {{cfgA.model}} · {{cfgA.provider}}</span>
+                          <span style="display: flex; gap: 6px; margin-top: 4px">
+                            <label for="{{cfgPhotoId}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border: 1px solid #6272A4; border-radius: 6px; color: #F8F8F2; cursor: pointer"><i-con name="camera" size="13"></i-con>Choose photo</label>
+                            <input id="{{cfgPhotoId}}" type="file" accept="image/*" onChange="{{cfgOnPhoto}}" class="vh">
+                            <sc-if value="{{cfgA.hasAvatar}}"><button type="button" class="ib" onClick="{{cfgRemovePhoto}}" aria-label="Remove photo" title="Remove photo" style="border-color: #44475A"><i-con name="trash" size="13"></i-con></button></sc-if>
+                          </span>
+                        </div>
+                      </div>
+                      <div style="display: flex; flex-direction: column; gap: 4px; max-width: 360px">
+                        <label for="{{cfgNameId}}" style="color: #A9B2D3">Display name</label>
+                        <span style="display: flex; gap: 6px">
+                          <input id="{{cfgNameId}}" type="text" class="fld" maxlength="24" value="{{cfgName}}" onChange="{{cfgOnName}}" placeholder="{{cfgA.name}}" style="flex: 1; min-width: 0">
+                          <sc-if value="{{cfgHasName}}"><button type="button" class="ib" onClick="{{cfgResetName}}" aria-label="Use the profile name" title="Use the profile name" style="border-color: #44475A"><i-con name="undo" size="13"></i-con></button></sc-if>
+                        </span>
+                      </div>
+                      <span style="color: #8B95BD; font-size: 11px">Name and photo stay in this app. The Hermes profile on the VPS keeps its name.</span>
+                    </sc-if>
+
+                    <sc-if value="{{cfgModel}}" hint-placeholder-val="{{false}}">
+                      <div role="radiogroup" aria-label="Provider" style="display: flex; flex-wrap: wrap; gap: 6px">
+                        <sc-for list="{{providers}}" as="pv" hint-placeholder-count="5">
+                          <button type="button" role="radio" aria-checked="{{pv.checked}}" onClick="{{pv.pick}}" style="display: flex; flex-direction: column; align-items: flex-start; min-height: 40px; padding: 3px 10px; border: 1px solid {{pv.border}}; border-radius: 6px; background: {{pv.bg}}; color: #F8F8F2; font: inherit; cursor: pointer"><span style="font-weight: 600">{{pv.label}}</span><span style="font-size: 10px; color: #8B95BD">{{pv.sub}}</span></button>
+                        </sc-for>
+                      </div>
+                      <sc-if value="{{provCustom}}" hint-placeholder-val="{{false}}">
+                        <label style="display: flex; flex-direction: column; gap: 4px; color: #A9B2D3">Provider name<input type="text" class="fld" value="{{customName}}" onChange="{{onCustomName}}"></label>
+                      </sc-if>
+                      <sc-if value="{{provOauth}}" hint-placeholder-val="{{false}}">
+                        <span style="color: #A9B2D3">Signed in with OAuth. Sign in again from a terminal: <code style="color: #F1FA8C">hermes -p {{cfgA.name}} auth add nous --type oauth</code></span>
+                      </sc-if>
+                      <sc-if value="{{provHasBase}}" hint-placeholder-val="{{true}}">
+                        <label style="display: flex; flex-direction: column; gap: 4px; color: #A9B2D3">Base URL<input type="url" class="fld" value="{{base}}" onChange="{{onBase}}" placeholder="https://your-endpoint.example/v1" style="color: #F1FA8C"></label>
+                      </sc-if>
+                      <sc-if value="{{provNeedsKey}}" hint-placeholder-val="{{true}}">
+                        <label style="display: flex; flex-direction: column; gap: 4px; color: #A9B2D3">API key <span style="color: #8B95BD; font-size: 11px">{{keyNote}}</span><input type="password" autocomplete="off" class="fld" value="{{apiKey}}" onChange="{{onKey}}" placeholder="{{keyPlaceholder}}"></label>
+                      </sc-if>
+                      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+                        <button type="button" onClick="{{fetchModels}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border: 1px solid #8BE9FD; border-radius: 6px; background: transparent; color: #8BE9FD; font: inherit; cursor: pointer"><i-con name="refresh" size="12"></i-con>{{fetchLabel}}</button>
+                        <span style="color: {{fetchColor}}; font-size: 11px">{{fetchNote}}</span>
+                      </div>
+                      <sc-if value="{{hasModels}}" hint-placeholder-val="{{false}}">
+                        <input type="search" class="fld" aria-label="Filter models" value="{{mFilter}}" onChange="{{onFilter}}" placeholder="Filter models">
+                        <div role="radiogroup" aria-label="Models" style="max-height: 150px; overflow-y: auto; border: 1px solid #44475A; border-radius: 6px">
+                          <sc-for list="{{models}}" as="md" hint-placeholder-count="4">
+                            <button type="button" role="radio" aria-checked="{{md.checked}}" onClick="{{md.pick}}" style="display: flex; width: 100%; align-items: center; gap: 10px; min-height: 30px; padding: 0 10px; border: 0; border-bottom: 1px solid #343746; background: {{md.bg}}; color: #F8F8F2; font: inherit; text-align: left; cursor: pointer"><span class="dot" style="width: 8px; height: 8px; border: 1px solid {{md.dot}}; background: {{md.fill}}"></span><span style="flex: 1">{{md.id}}</span><span style="color: #8B95BD; font-size: 10px">ctx {{md.ctx}}</span></button>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                      <div role="group" aria-label="Reasoning effort" style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px">
+                        <span style="color: #A9B2D3; margin-right: 4px">Reasoning</span>
+                        <sc-for list="{{efforts}}" as="ef"><button type="button" onClick="{{ef.pick}}" aria-pressed="{{ef.pressed}}" style="min-height: 26px; padding: 0 8px; border: 1px solid {{ef.border}}; border-radius: 6px; background: {{ef.bg}}; color: {{ef.fg}}; font: inherit; font-size: 11px; cursor: pointer">{{ef.label}}</button></sc-for>
+                      </div>
+                      <pre style="margin: 0; padding: 8px 10px; border: 1px solid #44475A; border-radius: 6px; background: #191A21; color: #F1FA8C; font: inherit; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere">{{cmdPreview}}</pre>
+                      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+                        <button type="button" onClick="{{testModel}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 1px solid #8BE9FD; border-radius: 6px; background: transparent; color: #8BE9FD; font: inherit; cursor: pointer"><i-con name="play" size="11"></i-con>Test</button>
+                        <button type="button" onClick="{{saveModel}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: {{modelSaveBg}}; color: #282A36; font: inherit; font-weight: 700; cursor: pointer"><i-con name="save" size="12"></i-con>Save</button>
+                        <span style="color: {{testColor}}; font-size: 11px">{{testText}}</span>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{cfgSoul}}" hint-placeholder-val="{{false}}">
+                      <div style="display: flex; flex-wrap: wrap; gap: 12px">
+                        <label style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; color: #A9B2D3">SOUL.md <span style="color: #8B95BD; font-size: 11px">{{soulLen}} characters</span>
+                          <textarea id="cfg-soul" rows="14" value="{{soul}}" onChange="{{onSoul}}" style="resize: vertical; border: 1px solid #44475A; border-radius: 6px; background: #191A21; color: #F8F8F2; font: inherit; font-size: 11px; line-height: 1.6; padding: 8px 10px"></textarea>
+                        </label>
+                        <div style="flex: 1 1 220px; padding: 10px 12px 4px; border: 1px solid #44475A; border-radius: 8px; background: #282A36; font-size: 11px"><md-view list="{{soulBlocks}}"></md-view></div>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{cfgEntries}}" hint-placeholder-val="{{false}}">
+                      <div style="display: flex; align-items: center; gap: 10px">
+                        <span style="color: #F8F8F2; font-weight: 600">{{entFile}}</span>
+                        <sc-if value="{{entDirty}}"><span style="color: #FFB86C; font-size: 11px"><span class="dot" style="background: #FFB86C"></span> unsaved</span></sc-if>
+                        <span class="num" style="margin-left: auto; color: {{entColor}}; font-size: 11px">{{entCount}} / {{entLimit}}</span>
+                      </div>
+                      <div role="img" aria-label="{{entCount}} of {{entLimit}} characters" style="height: 4px; border-radius: 2px; background: #44475A"><div style="height: 4px; border-radius: 2px; width: {{entPct}}%; background: {{entColor}}; transition: width .2s"></div></div>
+                      <sc-for list="{{entries}}" as="en" hint-placeholder-count="4">
+                        <div data-key="{{en.key}}" style="display: flex; gap: 6px; align-items: stretch">
+                          <label for="{{en.id}}" class="vh">Entry {{en.n}}</label>
+                          <textarea id="{{en.id}}" rows="2" value="{{en.text}}" onChange="{{en.change}}" style="flex: 1; resize: vertical; border: 1px solid {{en.border}}; border-radius: 6px; background: #282A36; color: #F8F8F2; font: inherit; font-size: 11px; padding: 6px 8px"></textarea>
+                          <button type="button" class="ib" onClick="{{en.remove}}" aria-label="Delete entry {{en.n}}" title="Delete entry" style="height: auto; color: #FF5555"><i-con name="trash" size="13"></i-con></button>
+                        </div>
+                      </sc-for>
+                      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+                        <button type="button" onClick="{{addEntry}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border: 1px dashed #6272A4; border-radius: 6px; background: transparent; color: #A9B2D3; font: inherit; cursor: pointer"><i-con name="plus" size="12"></i-con>Add entry</button>
+                        <span style="flex: 1"></span>
+                        <button type="button" onClick="{{revertEntries}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border: 1px solid #6272A4; border-radius: 6px; background: transparent; color: #A9B2D3; font: inherit; cursor: pointer"><i-con name="undo" size="12"></i-con>Revert</button>
+                        <button type="button" onClick="{{reviewEntries}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 12px; border: 0; border-radius: 6px; background: {{entSaveBg}}; color: #282A36; font: inherit; font-weight: 700; cursor: pointer"><i-con name="save" size="12"></i-con>Review &amp; save</button>
+                      </div>
+                      <sc-if value="{{reviewing}}" hint-placeholder-val="{{false}}">
+                        <div class="mc-down" style="display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid #50FA7B; border-radius: 8px">
+                          <sc-for list="{{diff}}" as="df"><div data-key="{{df.key}}" style="display: flex; gap: 8px; padding: 3px 6px; border-radius: 4px; background: {{df.bg}}; color: {{df.fg}}; font-size: 11px"><span>{{df.sign}}</span><span style="overflow-wrap: anywhere">{{df.text}}</span></div></sc-for>
+                          <button type="button" onClick="{{writeEntries}}" style="align-self: flex-end; display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 12px; border: 0; border-radius: 6px; background: #50FA7B; color: #282A36; font: inherit; font-weight: 700; cursor: pointer"><i-con name="check" size="12"></i-con>Write to VPS</button>
+                        </div>
+                      </sc-if>
+                    </sc-if>
+
+                    <sc-if value="{{cfgMcp}}" hint-placeholder-val="{{false}}">
+                      <span style="color: #A9B2D3">MCP servers for {{cfgA.label}} <span style="color: #8B95BD">· <code style="color: #F1FA8C">hermes -p {{cfgA.name}} mcp list</code></span></span>
+                      <div style="border: 1px solid #44475A; border-radius: 8px; overflow: hidden">
+                        <sc-for list="{{mcpRows}}" as="m" hint-placeholder-count="3">
+                          <div data-key="{{m.name}}" style="display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-bottom: 1px dashed #343746">
+                            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px">
+                              <span style="color: #F8F8F2; font-weight: 600">{{m.name}}</span><span class="tag">{{m.transport}}</span>
+                              <span style="padding: 0 6px; border: 1px solid {{m.color}}; color: {{m.color}}; font-size: 11px">{{m.status}}</span>
+                              <span style="color: #8B95BD; font-size: 11px">{{m.tools}}</span>
+                              <button type="button" class="cb" onClick="{{m.test}}" style="margin-left: auto"><i-con name="play" size="11"></i-con>{{m.testLabel}}</button>
+                            </div>
+                            <code style="color: #F1FA8C; font-size: 11px; overflow-wrap: anywhere">{{m.target}}</code>
+                            <span style="font-size: 11px; color: #8B95BD">{{m.env}}</span>
+                            <sc-if value="{{m.hasNote}}"><span style="font-size: 11px; color: {{m.noteColor}}">{{m.note}}</span></sc-if>
+                          </div>
+                        </sc-for>
+                      </div>
+                      <div style="display: flex; gap: 8px; padding: 8px 10px; border: 1px solid #44475A; border-radius: 8px; background: #282A36; color: #A9B2D3; font-size: 11px">
+                        <span style="color: #8BE9FD; display: flex; padding-top: 1px"><i-con name="lock" size="13"></i-con></span>
+                        <span>Names, commands and URLs only. The config can hold tokens inline in <code style="color: #F1FA8C">env</code> and <code style="color: #F1FA8C">headers</code>, so Mission Control lists servers through <code style="color: #F1FA8C">mcp list</code> and never reads those values. Test starts the server once to check it connects.</span>
+                      </div>
+                      <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                        <button type="button" class="cb" onClick="{{mcpAdd}}"><i-con name="terminal" size="12"></i-con>Add a server in the terminal</button>
+                        <button type="button" class="cb" onClick="{{mcpRemove}}"><i-con name="terminal" size="12"></i-con>Remove one in the terminal</button>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{cfgTools}}" hint-placeholder-val="{{false}}">
+                      <span style="color: #A9B2D3">Toolsets for {{cfgA.label}} per platform <span style="color: #8B95BD">· <code style="color: #F1FA8C">hermes -p {{cfgA.name}} tools --summary</code></span></span>
+                      <div style="border: 1px solid #44475A; border-radius: 8px; overflow-x: auto">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 12px">
+                          <thead><tr style="color: #A9B2D3"><th style="padding: 6px 10px; text-align: left; font-weight: 600">TOOLSET</th><sc-for list="{{tsCols}}" as="c"><th data-key="{{c.key}}" style="padding: 6px 8px; text-align: center; font-weight: 600">{{c.label}}</th></sc-for></tr></thead>
+                          <tbody>
+                            <sc-for list="{{tsRows}}" as="r">
+                              <tr data-key="{{r.name}}" style="border-top: 1px dashed #343746">
+                                <td style="padding: 5px 10px"><span style="color: #F8F8F2">{{r.name}}</span><span style="display: block; color: #8B95BD; font-size: 11px">{{r.hint}}</span></td>
+                                <sc-for list="{{r.cells}}" as="c"><td data-key="{{c.key}}" style="padding: 0 8px; text-align: center"><button type="button" role="checkbox" class="ckb" aria-checked="{{c.checked}}" aria-label="{{c.label}}" onClick="{{c.toggle}}" style="border-color: {{c.border}}"><sc-if value="{{c.on}}"><i-con name="check" size="12"></i-con></sc-if></button></td></sc-for>
+                              </tr>
+                            </sc-for>
+                          </tbody>
+                        </table>
+                      </div>
+                      <span style="color: #8B95BD; font-size: 11px">Orange outlines are changes you have not applied. Applying affects new sessions; restart the gateway to reach chats already running. Approval policy is read-only and lives in Logs → Approvals.</span>
+                      <sc-if value="{{tsHasPending}}">
+                        <div class="mc-down" style="display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid #FFB86C; border-radius: 8px; background: #282A36">
+                          <span style="color: #F8F8F2; font-weight: 600">{{tsPendingTitle}}</span>
+                          <pre class="cmd">{{tsCommands}}</pre>
+                          <span style="display: flex; gap: 6px; justify-content: flex-end"><button type="button" class="cb" onClick="{{tsDiscard}}">Discard</button><button type="button" class="cb pri" onClick="{{tsApply}}"><i-con name="check" size="12"></i-con>Apply on the VPS</button></span>
+                        </div>
+                      </sc-if>
+                    </sc-if>
+
+                    <sc-if value="{{cfgFallback}}" hint-placeholder-val="{{false}}">
+                      <span style="color: #A9B2D3">If {{cfgA.label}}’s main model fails, Hermes tries these in order <span style="color: #8B95BD">· <code style="color: #F1FA8C">hermes -p {{cfgA.name}} fallback list</code></span></span>
+                      <div style="border: 1px solid #44475A; border-radius: 8px; overflow: hidden">
+                        <sc-for list="{{fbRows}}" as="f">
+                          <div data-key="{{f.key}}" style="display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 10px; border-bottom: 1px dashed #343746">
+                            <span class="num" style="width: 18px; color: #8B95BD">{{f.n}}</span>
+                            <span style="color: #F8F8F2; font-weight: 600">{{f.provider}}</span>
+                            <span style="flex: 1; min-width: 0; color: #F1FA8C; overflow-wrap: anywhere">{{f.model}}</span>
+                            <span class="tag">{{f.note}}</span>
+                          </div>
+                        </sc-for>
+                        <sc-if value="{{fbEmpty}}"><div style="padding: 14px 10px; color: #A9B2D3">No fallback models yet. If the main model is down, this agent stops with an error.</div></sc-if>
+                      </div>
+                      <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                        <button type="button" class="cb" onClick="{{fbAdd}}"><i-con name="terminal" size="12"></i-con>Add one in the terminal</button>
+                        <button type="button" class="cb" onClick="{{fbRemove}}"><i-con name="terminal" size="12"></i-con>Remove one in the terminal</button>
+                      </div>
+                      <span style="color: #8B95BD; font-size: 11px">Adding and removing run in the terminal so Hermes can show its own picker. Mission Control only fills in the command; you press Enter.</span>
+                    </sc-if>
+
+                    <sc-if value="{{cfgBackup}}" hint-placeholder-val="{{false}}">
+                      <span style="color: #A9B2D3">Download a copy of {{cfgA.label}}’s files to this computer. Nothing is written on the VPS.</span>
+                      <div style="border: 1px solid #44475A; border-radius: 8px; overflow: hidden">
+                        <sc-for list="{{bkRows}}" as="b">
+                          <div data-key="{{b.key}}" style="display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 4px 10px; border-bottom: 1px dashed #343746">
+                            <button type="button" role="checkbox" class="ckb" aria-checked="{{b.checked}}" aria-label="{{b.label}}" onClick="{{b.toggle}}"><sc-if value="{{b.on}}"><i-con name="check" size="12"></i-con></sc-if></button>
+                            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span style="color: #F8F8F2">{{b.label}}</span><span style="color: #8B95BD; font-size: 11px">{{b.hint}}</span></div>
+                            <span class="num" style="color: #A9B2D3; font-size: 11px">{{b.size}}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                      <div style="display: flex; gap: 8px; padding: 8px 10px; border: 1px solid #44475A; border-radius: 8px; background: #282A36; color: #A9B2D3; font-size: 11px">
+                        <span style="color: #8BE9FD; display: flex; padding-top: 1px"><i-con name="lock" size="13"></i-con></span>
+                        <span>Never included: <code style="color: #F1FA8C">.env</code>, <code style="color: #F1FA8C">auth.json</code> and cached MCP tokens. <code style="color: #F1FA8C">config.yaml</code> is saved with <code style="color: #F1FA8C">env</code>, <code style="color: #F1FA8C">headers</code> and API-key values blanked.</span>
+                      </div>
+                      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+                        <button type="button" class="cb pri" onClick="{{bkRun}}"><i-con name="download" size="13"></i-con>Download {{bkCount}} items ({{bkTotal}})</button>
+                        <span style="color: #8B95BD; font-size: 11px">to ~/Documents/hermes-backups/{{cfgA.name}}-2026-10-11.zip</span>
+                      </div>
+                      <span style="color: #8B95BD; font-size: 11px">To restore, copy files back yourself or run <code style="color: #F1FA8C">hermes import</code> in the terminal; Mission Control does not overwrite a profile in one click.</span>
+                    </sc-if>
+
+                    <sc-if value="{{cfgNew}}" hint-placeholder-val="{{false}}">
+                      <span style="color: #F8F8F2; font-weight: 600">Create a new agent profile</span>
+                      <label style="display: flex; flex-direction: column; gap: 4px; max-width: 360px; color: #A9B2D3">Profile name<input id="np-name" type="text" class="fld" maxlength="24" autocomplete="off" spellcheck="false" value="{{npName}}" onChange="{{onNpName}}" placeholder="lowercase letters, numbers, hyphens"></label>
+                      <sc-if value="{{npNameBad}}"><span style="color: #FF5555; font-size: 11px">{{npNameMsg}}</span></sc-if>
+                      <label style="display: flex; flex-direction: column; gap: 4px; max-width: 360px; color: #A9B2D3">Description (optional)<input id="np-desc" type="text" class="fld" maxlength="80" value="{{npDesc}}" onChange="{{onNpDesc}}" placeholder="What this agent is for"></label>
+                      <label style="display: flex; flex-direction: column; gap: 4px; max-width: 360px; color: #A9B2D3">Start from
+                        <select class="fld" onChange="{{onNpFrom}}">
+                          <sc-for list="{{npFromOpts}}" as="o"><sc-if value="{{o.sel}}"><option value="{{o.v}}" selected>{{o.label}}</option></sc-if><sc-if value="{{o.unsel}}"><option value="{{o.v}}">{{o.label}}</option></sc-if></sc-for>
+                        </select>
+                      </label>
+                      <span style="display: flex; align-items: center; gap: 10px; color: #A9B2D3"><button type="button" class="sw" role="switch" aria-checked="{{npNoSkills}}" aria-label="Start without bundled skills" onClick="{{toggleNpSkills}}"></button>Start without bundled skills</span>
+                      <pre class="cmd">$ {{npCmd}}</pre>
+                      <span style="color: #8B95BD; font-size: 11px">Creates a folder under ~/.hermes/profiles. Nothing else changes: model, gateway and platforms stay unconfigured until you set them up here.</span>
+                      <span style="display: flex; gap: 6px"><button type="button" class="cb pri" onClick="{{npCreate}}"><i-con name="plus" size="12"></i-con>Create profile</button><button type="button" class="cb" onClick="{{npCancel}}">Cancel</button></span>
+                    </sc-if>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{noteOpen}}" hint-placeholder-val="{{false}}">
+    <div class="mc-fade" onClick="{{closeNote}}" style="position: fixed; inset: 0; z-index: 55; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(25, 26, 33, .78)">
+      <article class="mc-pop" role="dialog" aria-modal="true" aria-labelledby="note-title" onClick="{{stop}}" style="width: 100%; max-width: 680px; max-height: min(720px, 100%); display: flex; flex-direction: column; overflow: hidden; border: 1px solid #6272A4; border-radius: 14px; background: #21222C; box-shadow: 0 24px 60px rgba(0, 0, 0, .55)">
+        <div style="flex: none; display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px 10px 18px; border-bottom: 1px solid #44475A">
+          <div data-key="{{note.key}}" class="mc-fade" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+            <h2 id="note-title" style="margin: 0; font-size: 16px; font-weight: 700; color: {{note.color}}; overflow-wrap: anywhere">{{note.title}}</h2>
+            <span style="color: #8B95BD; font-size: 11px; overflow-wrap: anywhere">{{note.path}}</span>
+            <sc-if value="{{note.hasTags}}">
+              <span style="display: flex; flex-wrap: wrap; gap: 6px; padding-top: 3px">
+                <sc-for list="{{note.tags}}" as="tg"><button type="button" onClick="{{tg.pick}}" style="min-height: 22px; padding: 0 7px; border: 1px solid #6272A4; border-radius: 4px; background: transparent; color: #A9B2D3; font: inherit; font-size: 11px; cursor: pointer">{{tg.title}}</button></sc-for>
+              </span>
+            </sc-if>
+          </div>
+          <button type="button" class="ib" onClick="{{closeNote}}" aria-label="Close note" title="Close (Esc)"><i-con name="x" size="15"></i-con></button>
+        </div>
+        <div data-key="{{note.key}}" class="mc-fade" style="flex: 1; min-height: 0; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 14px; line-height: 1.6">
+          <div class="md-note"><md-view list="{{note.blocks}}"></md-view></div>
+          <sc-if value="{{note.hasLinks}}">
+            <section aria-label="{{note.linkLabel}}" style="display: flex; flex-direction: column; gap: 4px; padding-top: 10px; border-top: 1px dashed #44475A">
+              <span style="color: #BD93F9; font-weight: 600">{{note.linkLabel}} · {{note.linkCount}}</span>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                <sc-for list="{{note.linked}}" as="k"><button type="button" data-key="{{k.key}}" onClick="{{k.pick}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 9px; border: 1px solid #44475A; border-radius: 6px; background: #282A36; color: #F8F8F2; font: inherit; font-size: 11px; cursor: pointer"><span class="dot" style="background: {{k.color}}"></span>{{k.title}}</button></sc-for>
+              </div>
+            </section>
+          </sc-if>
+        </div>
+      </article>
+    </div>
+  </sc-if>

@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chat — Hermes Agent Mission Control</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;family=VT323&amp;display=swap">
+<style>
+/*@shared-css*/
+body{background:#282A36}
+.bub-me{padding:8px 12px;border:1px solid #6272A4;border-radius:10px 10px 2px 10px;background:#44475A;color:#F8F8F2}
+.bub-ag{padding:10px 12px;border:1px solid #44475A;border-radius:10px 10px 10px 2px;background:#21222C}
+.chip{padding:2px 8px;border:1px solid currentColor;border-radius:4px}
+@media (max-width:760px){.dm-list{flex-basis:60px!important}.dm-text,.dm-title{display:none!important}}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="zoom: {{uiZoom}}; height: calc(100vh / {{uiZoom}}); overflow: hidden; background: #282A36; color: #F8F8F2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: {{fs}}px; line-height: 1.45; display: flex; flex-direction: column">
+<div class="mc-body">
+<!--@part sidebar-->
+<div class="mc-col">
+
+  <div style="flex: 1; min-height: 0; display: flex">
+
+      <aside class="dm-list" aria-label="Agents" style="flex: 0 0 240px; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; border-right: 1px solid #44475A; background: #21222C">
+        <div class="dm-title" style="flex: none; padding: 16px 16px 8px; color: #8B95BD; font-size: 11px">Direct messages</div>
+        <sc-for list="{{agents}}" as="a" hint-placeholder-count="5">
+          <button type="button" data-key="{{a.name}}" onClick="{{a.pick}}" aria-current="{{a.current}}" title="{{a.label}}" style="flex: none; display: flex; gap: 10px; align-items: center; text-align: left; min-height: 48px; padding: 6px 14px; background: {{a.bg}}; border: 0; border-bottom: 1px solid #343746; color: inherit; font: inherit; cursor: pointer; transition: background-color .15s">
+            <span style="position: relative; display: flex"><agent-avatar of="a" size="28"></agent-avatar><span class="dot" style="position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; border: 2px solid #282A36; background: {{a.dot}}"></span></span>
+            <span class="dm-text" style="display: flex; flex-direction: column; min-width: 0"><span style="color: {{a.color}}; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{a.label}}</span><span style="font-size: 11px; color: #A9B2D3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{a.preview}}</span></span>
+          </button>
+        </sc-for>
+      </aside>
+
+      <main style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column">
+        <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 12px 24px; border-bottom: 1px solid #44475A">
+          <h1 style="margin: 0; font-size: 16px; color: {{sel.color}}">@{{sel.label}}</h1>
+          <span style="color: #A9B2D3; font-size: 12px">{{sel.model}}</span>
+          <span style="color: #8B95BD; font-size: 12px">session a1b2c3 · source mission-control</span>
+          <div style="margin-left: auto; display: flex; gap: 8px">
+            <button type="button" class="ib" aria-label="Chat history" title="History"><i-con name="clock" size="15"></i-con></button>
+            <button type="button" class="ib" aria-label="New chat" title="New chat"><i-con name="plus" size="16"></i-con></button>
+          </div>
+        </div>
+
+        <section id="conv" aria-label="Conversation" style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column-reverse">
+          <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 16px">
+          <sc-if value="{{notAtlas}}" hint-placeholder-val="{{false}}">
+            <div style="align-self: center; padding: 6px 12px; border: 1px dashed #44475A; border-radius: 8px; color: #8B95BD; font-size: 11px">No messages with {{sel.label}} yet</div>
+          </sc-if>
+          <sc-if value="{{isAtlas}}" hint-placeholder-val="{{true}}">
+
+            <div style="display: flex; flex-direction: column; gap: 4px; align-self: flex-end; max-width: 80%">
+              <span style="color: #8B95BD; font-size: 11px; text-align: right">you · 20:40:58</span>
+              <div class="bub-me">what changed in hermes this week? short list pls</div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px; max-width: 88%">
+              <span style="color: #8B95BD; font-size: 11px">atlas · 20:41:12 · 14.2s · 42.3k tok</span>
+              <button type="button" onClick="{{toggleThink}}" aria-expanded="{{thinkOpenStr}}" style="align-self: flex-start; min-height: 28px; padding: 0 10px; border: 1px dashed #6272A4; border-radius: 6px; background: transparent; color: #8BE9FD; font: inherit; cursor: pointer">{{thinkLabel}}</button>
+              <sc-if value="{{thinkOpen}}" hint-placeholder-val="{{true}}">
+                <div style="display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-left: 2px solid #8BE9FD; border-radius: 0 6px 6px 0; background: #21222C; color: #8BE9FD; font-style: italic">
+                  <p style="margin: 0"><span style="font-style: normal; color: #8B95BD">step 1 ·</span> User wants a short changelog. Check the releases page instead of relying on memory, then summarise in ≤5 bullets.</p>
+                  <p style="margin: 0"><span style="font-style: normal; color: #8B95BD">step 2 ·</span> Notes mention multiplex fixes and a cron fire-claim fix. Fetch the release page for specifics.</p>
+                </div>
+              </sc-if>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px">
+                <span class="chip" style="color: #FFB86C">web_search ✓ 1.8s</span>
+                <span class="chip" style="color: #FFB86C">web_extract ✓ 2.4s</span>
+              </div>
+              <div class="bub-ag" style="display: flex; flex-direction: column; gap: 6px">
+                <p style="margin: 0">Hermes <span style="color: #50FA7B">v0.21.6</span> (Oct 8):</p>
+                <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px">
+                  <li>multiplex gateway fixes</li>
+                  <li>cron fire-claim race fixed</li>
+                  <li>dashboard opens <code style="color: #F1FA8C">state.db</code> read-only first</li>
+                </ul>
+                <div style="position: relative; margin-top: 4px; padding: 8px 10px; border: 1px solid #44475A; border-radius: 6px; background: #282A36">
+                  <button type="button" aria-label="Copy code" style="position: absolute; top: 4px; right: 4px; min-height: 26px; padding: 0 8px; background: transparent; border: 1px solid #6272A4; color: #A9B2D3; font: inherit; font-size: 11px; cursor: pointer"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                  <code style="color: #F1FA8C; font-size: 12px">hermes update &amp;&amp; hermes --version</code>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px; align-self: flex-end; max-width: 80%">
+              <span style="color: #8B95BD; font-size: 11px; text-align: right">you · 20:43:20</span>
+              <div class="bub-me">clean up ~/tmp/mail-cache while you're at it</div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px; max-width: 88%">
+              <span style="color: #8B95BD; font-size: 11px">atlas · 20:43:27</span>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px">
+                <span class="chip" style="color: #FF5555">terminal ✕ blocked</span>
+              </div>
+              <div style="padding: 8px 12px; border: 1px dashed #FF5555; border-radius: 8px; color: #FF5555">Command blocked by Hermes approval policy (approvals.single_query_mode: deny).</div>
+              <div class="bub-ag">I couldn't delete it from a one-shot session — your Hermes policy blocks destructive commands there. Run <code style="color: #F1FA8C">rm -rf ~/tmp/mail-cache</code> yourself, or allow it in <code style="color: #F1FA8C">command_allowlist</code>.</div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px; align-self: flex-end; max-width: 80%">
+              <span style="color: #8B95BD; font-size: 11px; text-align: right">you · 20:46:02</span>
+              <div class="bub-me" style="display: flex; flex-direction: column; gap: 6px">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid #BD93F9; border-radius: 6px; background: #282A36">
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#BD93F9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg>
+                  <div style="display: flex; flex-direction: column; min-width: 0">
+                    <span style="color: #F8F8F2">q3-infra-report.pdf</span>
+                    <span style="color: #A9B2D3; font-size: 11px; overflow-wrap: anywhere">2.1 MB · ~/hermes-uploads/atlas/20261010/q3-infra-report.pdf</span>
+                  </div>
+                </div>
+                <span>summarize the cost section in 3 bullets</span>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px; max-width: 88%">
+              <span style="color: #8B95BD; font-size: 11px">atlas · 20:46:15 · 9.8s</span>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px">
+                <span class="chip" style="color: #FFB86C">read_file ✓ 0.4s</span>
+              </div>
+              <div class="bub-ag">
+                <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px">
+                  <li>GPU spend is the largest line item and grew quarter over quarter</li>
+                  <li>Storage cost is flat after the cold-tier migration</li>
+                  <li>Report recommends reserved instances for the inference fleet</li>
+                </ul>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 88%">
+              <span style="color: #8B95BD; font-size: 11px">atlas · streaming · 312 tok · 4.1s</span>
+              <div class="bub-ag" style="border-color: #6272A4">Draft for the release post: "Hermes v0.21.6 is out — steadier multiplex gateways, a fixed cron race, and a safer read-only dashboard<span style="color: #50FA7B">▌</span></div>
+            </div>
+
+          </sc-if>
+          <sc-for list="{{sent}}" as="m" hint-placeholder-count="0">
+            <sc-if value="{{m.isUser}}">
+              <div data-key="{{m.key}}" class="mc-send" style="display: flex; flex-direction: column; gap: 4px; align-self: flex-end; max-width: 80%">
+                <span style="color: #8B95BD; font-size: 11px; text-align: right">you · just now</span>
+                <div class="bub-me">{{m.text}}</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{m.isAgent}}">
+              <div data-key="{{m.key}}" style="display: flex; flex-direction: column; gap: 4px; max-width: 88%">
+                <span style="color: #8B95BD; font-size: 11px">{{sel.label}} · just now</span>
+                <div class="bub-ag mc-recv" style="padding-bottom: 4px"><md-view list="{{m.blocks}}"></md-view></div>
+              </div>
+            </sc-if>
+            <sc-if value="{{m.isTyping}}">
+              <div data-key="typing" class="mc-recv" role="status" aria-label="{{sel.label}} is typing" style="align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid #44475A; border-radius: 10px 10px 10px 2px; background: #21222C; color: #8B95BD; font-size: 11px"><span class="mc-dots" style="color: {{sel.color}}"><i></i><i></i><i></i></span>{{sel.label}}</div>
+            </sc-if>
+          </sc-for>
+          </div>
+        </section>
+
+        <form style="flex: none; padding: 10px 20px 12px; border-top: 1px solid #44475A; display: flex; flex-direction: column; gap: 6px">
+          <label for="msg" class="vh">Message {{sel.label}}</label>
+          <sc-if value="{{hasFiles}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; flex-wrap: wrap; gap: 8px">
+              <sc-for list="{{files}}" as="f" hint-placeholder-count="2">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 10px; border: 1px solid #BD93F9; border-radius: 8px; background: #21222C; font-size: 11px">
+                  <div style="display: flex; flex-direction: column; gap: 3px; min-width: 150px">
+                    <span style="color: #F8F8F2">{{f.name}} <span style="color: #A9B2D3">· {{f.size}}</span></span>
+                    <div style="height: 4px; background: #44475A"><div style="height: 4px; width: {{f.pct}}%; background: {{f.barColor}}"></div></div>
+                    <span style="color: {{f.statusColor}}; font-size: 11px">{{f.status}}</span>
+                  </div>
+                  <button type="button" class="ib sm" onClick="{{f.remove}}" aria-label="Remove {{f.name}}" title="Remove"><i-con name="x" size="13"></i-con></button>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="display: flex; gap: 8px; align-items: stretch">
+            <label for="file" class="ib" title="Attach files" style="width: 38px; height: auto; border: 1px solid #44475A; color: #BD93F9"><i-con name="paperclip" size="16"></i-con><span class="vh">Attach files</span></label>
+            <input id="file" type="file" multiple onChange="{{onFiles}}" class="vh">
+            <textarea id="msg" rows="2" value="{{draft}}" onChange="{{onDraft}}" onKeyDown="{{draftKey}}" placeholder="Ask or assign a task" style="flex: 1; resize: none; background: #21222C; border: 1px solid #44475A; border-radius: 8px; color: #F8F8F2; font: inherit; padding: 8px 10px"></textarea>
+            <button type="button" onClick="{{send}}" aria-label="Send" title="Send (Enter)" style="width: 42px; display: flex; align-items: center; justify-content: center; background: #50FA7B; color: #282A36; border: 0; border-radius: 8px; cursor: pointer"><span data-key="{{sendKey}}" class="{{sendAnim}}" style="display: flex"><i-con name="send" size="16"></i-con></span></button>
+            <button type="button" aria-label="Stop" title="Stop the agent" style="width: 42px; display: flex; align-items: center; justify-content: center; background: transparent; color: #FF5555; border: 1px solid #FF5555; border-radius: 8px; cursor: pointer"><i-con name="stop" size="15"></i-con></button>
+          </div>
+</form>
+      </main>
+  </div>
+</div>
+</div>
+<!--@shared-html-->
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      agent: 'atlas', thinkOpen: true, draft: '', sent: [],
+      files: [
+        { id: 1, name: 'grafana-cpu.png', size: '340 KB', pct: 100, done: true },
+        { id: 2, name: 'gateway-logs.tar.gz', size: '18.4 MB', pct: 62, done: false }
+      ]
+    };
+    this.state = Object.assign(this.sharedState(), this.state);
+  }
+/*@shared-js*/
+  componentDidMount() {
+    this.sharedMount();
+  }
+  componentDidUpdate() {
+    // Keep the newest message in view when one arrives (the list itself is the only scroller).
+    var n = this.state.sent.length;
+    if (n !== this.lastSent) {
+      this.lastSent = n;
+      var el = document.getElementById('conv');
+      if (el) { el.scrollTop = el.scrollHeight; }
+    }
+  }
+  sendNow() {
+    var self = this;
+    var t = (this.state.draft || '').trim();
+    if (!t) { return; }
+    var k = Date.now();
+    this.setState({ sent: this.state.sent.concat([{ key: 'u' + k, type: 'user', text: t }, { key: 'typing', type: 'typing' }]), draft: '', agent: 'atlas', sendKey: (this.state.sendKey || 0) + 1 });
+    setTimeout(function () {
+      var rest = self.state.sent.filter(function (m) { return m.type !== 'typing'; });
+      self.setState({ sent: rest.concat([{ key: 'a' + Date.now(), type: 'agent', text: 'Got it. I will run that and post the result here.' + String.fromCharCode(10) + '- checking the vault first' + String.fromCharCode(10) + '- then drafting the summary with `web_search`' }]) });
+    }, 1500);
+  }
+  fmt(n) {
+    if (n > 1048576) { return (n / 1048576).toFixed(1) + ' MB'; }
+    return Math.max(1, Math.round(n / 1024)) + ' KB';
+  }
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var list = [
+      { name: 'atlas', color: '#50FA7B', dot: '#50FA7B', model: 'anthropic/claude-opus-5.5', preview: 'streaming…' },
+      { name: 'scout', color: '#FFB86C', dot: '#50FA7B', model: 'anthropic/claude-sonnet-5.5', preview: 'working · cron' },
+      { name: 'scribe', color: '#8BE9FD', dot: '#A9B2D3', model: 'nousresearch/hermes-4-405b', preview: 'idle' },
+      { name: 'herald', color: '#FF79C6', dot: '#A9B2D3', model: 'anthropic/claude-haiku-5.5', preview: 'idle' },
+      { name: 'ledger', color: '#8B95BD', dot: '#8B95BD', model: 'anthropic/claude-sonnet-5.5', preview: 'parked · chat still works' }
+    ];
+    list.forEach(function (a) { a.label = self.displayName(a.name); });
+    var sel = list.filter(function (a) { return a.name === st.agent; })[0];
+    var agents = this.orderedAgents(list).map(function (a) {
+      var cur = a.name === st.agent;
+      return Object.assign({}, a, self.agentLook(a.name, a.color), { bg: cur ? '#44475A' : 'transparent', current: cur ? 'true' : 'false', pick: function () { self.setState({ agent: a.name }); } });
+    });
+    return Object.assign(this.sharedVals(), this.navFor('chat'), {
+      agents: agents,
+      sel: sel,
+      isAtlas: st.agent === 'atlas',
+      notAtlas: st.agent !== 'atlas',
+      thinkOpen: st.thinkOpen,
+      thinkOpenStr: st.thinkOpen ? 'true' : 'false',
+      thinkLabel: (st.thinkOpen ? '▾' : '▸') + ' thinking · 2 steps',
+      toggleThink: function () { self.setState({ thinkOpen: !self.state.thinkOpen }); },
+      draft: st.draft,
+      sent: st.sent.map(function (m) { return { key: m.key, text: m.text, isUser: m.type === 'user', isAgent: m.type === 'agent', isTyping: m.type === 'typing', blocks: m.type === 'agent' ? self.md(m.text) : [] }; }),
+      sendKey: 's' + (st.sendKey || 0),
+      sendAnim: st.sendKey ? 'mc-fly' : '',
+      draftKey: function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); self.state.draft = e.target.value; self.sendNow(); } },
+      hasFiles: st.files.length > 0,
+      files: st.files.map(function (f) {
+        return {
+          name: f.name, size: f.size, pct: f.pct,
+          barColor: f.done ? '#50FA7B' : '#BD93F9',
+          status: f.done ? 'uploaded ✓' : ('uploading ' + f.pct + '%'),
+          statusColor: f.done ? '#50FA7B' : '#BD93F9',
+          remove: function () { self.setState({ files: self.state.files.filter(function (x) { return x.id !== f.id; }) }); }
+        };
+      }),
+      onFiles: function (e) {
+        var picked = Array.prototype.slice.call((e.target && e.target.files) || []);
+        var base = Date.now();
+        var add = picked.map(function (f, i) { return { id: base + i, name: f.name, size: self.fmt(f.size), pct: 100, done: true }; });
+        self.setState({ files: self.state.files.concat(add) });
+      },
+      onDraft: function (e) { self.setState({ draft: e.target.value }); },
+      send: function () { self.sendNow(); }
+    });
+  }
+}
+</script>
+</body>
+</html>

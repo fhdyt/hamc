@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<title>Launch — Hermes Agent Mission Control</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#191A21}
+a{color:#50FA7B}a:hover{color:#8BE9FD}
+button:focus-visible{outline:1px solid #50FA7B;outline-offset:1px}
+</style>
+<script src="mc-runtime.js" defer></script>
+</head>
+<body>
+<div id="mc-root"></div>
+<script type="text/x-dc-template" id="mc-template">
+<div style="min-height: 100vh; box-sizing: border-box; padding: 48px 16px; background: #191A21; color: #F8F8F2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px">
+
+  <div style="text-align: center; display: flex; flex-direction: column; gap: 8px">
+    <img src="assets/logo-mark.png" width="96" height="96" alt="Hermes Agent Mission Control" style="align-self: center">
+    <div style="color: #A9B2D3; font-size: 11px; font-weight: 700; letter-spacing: 3px">HERMES AGENT MISSION CONTROL</div>
+    <div style="color: #A9B2D3">auto-connecting to <span style="color: #F8F8F2; font-weight: 700">prod-vps</span> · root@203.0.113.42:22</div>
+  </div>
+
+  <section aria-label="Startup steps" aria-live="polite" style="width: 100%; max-width: 560px; box-sizing: border-box; border: 1px solid #44475A; border-radius: 14px; background: #21222C; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px">
+    <sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+      <div style="display: flex; gap: 10px; align-items: baseline">
+        <span style="width: 18px; color: {{s.color}}">{{s.icon}}</span>
+        <span style="color: {{s.textColor}}">{{s.label}}</span>
+        <span style="margin-left: auto; color: #8B95BD; font-size: 11px; white-space: nowrap">{{s.detail}}</span>
+      </div>
+    </sc-for>
+    <div style="height: 4px; margin-top: 6px; border-radius: 2px; background: #44475A"><div style="height: 4px; border-radius: 2px; width: {{pct}}%; background: #50FA7B"></div></div>
+    <sc-if value="{{done}}" hint-placeholder-val="{{false}}">
+      <a href="Main.html" style="align-self: center; margin-top: 6px; padding: 10px 18px; border-radius: 8px; background: #50FA7B; color: #282A36; font-weight: 700; text-decoration: none">connected — open dashboard</a>
+    </sc-if>
+  </section>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: center">
+    <a href="Connect.html" style="display: flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid #6272A4; border-radius: 8px; color: #50FA7B; text-decoration: none">edit connection</a>
+    <button type="button" onClick="{{restart}}" style="min-height: 40px; padding: 0 14px; background: transparent; border: 1px solid #44475A; border-radius: 8px; color: #A9B2D3; font: inherit; cursor: pointer">replay</button>
+  </div>
+
+  <section aria-label="When auto-connect fails" style="width: 100%; max-width: 560px; box-sizing: border-box; border: 1px dashed #44475A; border-radius: 12px; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #A9B2D3">
+    <span style="color: #BD93F9; letter-spacing: 2px; font-size: 11px">IF AUTO-CONNECT FAILS</span>
+    <span><span style="color: #FFB86C">host unreachable / timeout</span> → retry with backoff, dashboard opens in offline mode</span>
+    <span><span style="color: #FF5555">password rejected</span> → edit connection opens with everything prefilled</span>
+    <span><span style="color: #FF5555">host key changed</span> → blocked until you verify the new fingerprint</span>
+  </section>
+</div>
+</script>
+<script type="text/x-dc" id="mc-logic">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { step: 0 };
+  }
+  componentDidMount() {
+    this.tick();
+  }
+  componentWillUnmount() {
+    clearTimeout(this.timer);
+  }
+  tick() {
+    var self = this;
+    clearTimeout(this.timer);
+    if (this.state.step >= 5) { return; }
+    this.timer = setTimeout(function () { self.setState({ step: self.state.step + 1 }); self.tick(); }, 650);
+  }
+  renderVals() {
+    var self = this;
+    var at = this.state.step;
+    var defs = [
+      ['password loaded from OS keychain', 'saved 2026-10-10'],
+      ['ssh handshake · host key matches', 'SHA256:Xq3v…9fA · 38ms'],
+      ['hermes found', 'v0.21.6 · 5 profiles'],
+      ['state.db opened read-only', 'schema 31'],
+      ['collector streaming (stdin)', '0 files written']
+    ];
+    var steps = defs.map(function (d, i) {
+      var done = i < at;
+      var running = i === at;
+      return {
+        label: d[0], detail: done ? d[1] : '',
+        icon: done ? '✓' : (running ? '…' : '·'),
+        color: done ? '#50FA7B' : (running ? '#8BE9FD' : '#6272A4'),
+        textColor: done ? '#F8F8F2' : (running ? '#8BE9FD' : '#8B95BD')
+      };
+    });
+    return {
+      steps: steps,
+      pct: Math.round(Math.min(at, 5) / 5 * 100),
+      done: at >= 5,
+      restart: function () { self.setState({ step: 0 }); setTimeout(function () { self.tick(); }, 0); }
+    };
+  }
+}
+</script>
+</body>
+</html>

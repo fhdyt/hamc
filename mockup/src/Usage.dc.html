@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Usage — Hermes Agent Mission Control</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;family=VT323&amp;display=swap">
+<style>
+/*@shared-css*/
+body{margin:0;background:#282A36}
+a{color:#50FA7B}a:hover{color:#8BE9FD}
+input:focus,button:focus-visible{outline:1px solid #50FA7B;outline-offset:1px}
+.chip{display:inline-flex;align-items:center;gap:5px;min-height:22px;padding:0 8px;border:1px solid #44475A;border-radius:11px;background:transparent;color:#A9B2D3;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+.chip:hover{color:#F8F8F2;border-color:#6272A4}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 11px;border:1px solid #6272A4;border-radius:6px;background:transparent;color:#F8F8F2;font:inherit;cursor:pointer;text-decoration:none}
+.btn:hover{background:#343746}
+.tabx{display:flex;align-items:center;gap:6px;min-height:32px;padding:0 14px;margin-bottom:-1px;border:0;border-bottom:2px solid transparent;background:transparent;color:#A9B2D3;font:inherit;cursor:pointer}
+.tabx:hover{color:#F8F8F2}
+.tabx[aria-selected="true"]{color:#F8F8F2;border-bottom-color:#50FA7B}
+.col{flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;justify-content:center;border:0;background:transparent;padding:0 1px;cursor:pointer}
+.col:hover .bar{filter:brightness(1.25)}
+.bar{width:100%;max-width:34px;display:flex;flex-direction:column-reverse;transition:height .25s cubic-bezier(.2,.7,.2,1)}
+.th{padding:4px 8px;font-weight:600;text-align:left;color:#A9B2D3;white-space:nowrap}
+.sortb{display:inline-flex;align-items:center;gap:4px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer}
+.sortb:hover{color:#F8F8F2}
+.sk{display:block;border-radius:3px;background:#343746}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="zoom: {{uiZoom}}; height: calc(100vh / {{uiZoom}}); overflow: hidden; background: #282A36; color: #F8F8F2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: {{fs}}px; line-height: 1.45; display: flex; flex-direction: column">
+<div class="mc-body">
+<!--@part sidebar-->
+<div class="mc-col">
+
+
+  <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 20px 24px 20px; display: flex; flex-direction: column; gap: 16px">
+
+    <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px">
+      <h1 style="margin: 0; font-family: 'VT323', monospace; font-size: 34px; line-height: 1; font-weight: 400; color: #50FA7B">USAGE</h1>
+      <span style="color: #A9B2D3">{{summary}}</span>
+      <span style="margin-left: auto; color: #8B95BD">source: state.db · sessions.input_tokens, output_tokens, estimated_cost_usd · read-only</span>
+    </div>
+
+    <div style="flex: none; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 14px; border-bottom: 1px solid #44475A">
+      <div role="tablist" aria-label="Usage views" style="display: flex">
+        <sc-for list="{{tabs}}" as="t">
+          <button type="button" role="tab" class="tabx" data-key="{{t.key}}" aria-selected="{{t.selected}}" onClick="{{t.pick}}">{{t.label}}</button>
+        </sc-for>
+      </div>
+      <div role="group" aria-label="Agent" style="display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 5px">
+        <sc-for list="{{chips}}" as="c" hint-placeholder-count="6">
+          <button type="button" class="chip" data-key="{{c.key}}" aria-pressed="{{c.pressed}}" onClick="{{c.pick}}" style="background: {{c.bg}}; border-color: {{c.border}}; color: {{c.fg}}">{{c.label}}</button>
+        </sc-for>
+      </div>
+      <span style="margin-left: auto; padding-bottom: 4px"><label for="use-range" class="vh">Time range</label>
+        <select id="use-range" class="fld" onChange="{{onRange}}">
+          <sc-for list="{{ranges}}" as="o"><sc-if value="{{o.sel}}"><option value="{{o.v}}" selected>{{o.label}}</option></sc-if><sc-if value="{{o.unsel}}"><option value="{{o.v}}">{{o.label}}</option></sc-if></sc-for>
+        </select>
+      </span>
+    </div>
+
+    <sc-if value="{{isError}}" hint-placeholder-val="{{false}}">
+      <section role="alert" style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 14px; border: 1px solid #FF5555; background: #21222C">
+        <span style="color: #FF5555; display: flex"><i-con name="alert" size="16"></i-con></span>
+        <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px">
+          <span style="color: #F8F8F2; font-weight: 600">Can’t read session totals</span>
+          <span style="color: #A9B2D3">state.db is locked. Numbers below are the last successful read, 20:41. Retrying in 5 s.</span>
+        </div>
+        <button type="button" class="btn" onClick="{{retry}}"><i-con name="refresh" size="13"></i-con>Retry now</button>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+      <section style="flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 24px 18px; border: 1px solid #44475A; background: #21222C">
+        <span style="color: #F8F8F2; font-weight: 600">No usage recorded for this selection</span>
+        <span style="color: #A9B2D3">Totals come from finished and running sessions. Widen the range or pick All agents.</span>
+        <button type="button" class="btn" onClick="{{resetFilters}}">Show all agents, 30 days</button>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{showCost}}" hint-placeholder-val="{{true}}">
+      <section aria-label="Cost per day" style="flex: none; position: relative; border: 1px solid #44475A; background: #21222C; padding: 22px 16px 12px">
+        <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ cost per day, USD ├</h2>
+        <sc-if value="{{overCount}}"><div style="margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; color: #FFB86C"><i-con name="alert" size="13"></i-con><span>{{overText}}</span><a href="Sessions.dc.html" style="color: #FFB86C; text-decoration: underline">Open that day in Sessions</a></div></sc-if>
+        <div style="display: flex; gap: 8px">
+          <div aria-hidden="true" class="num" style="flex: none; width: 40px; height: 190px; display: flex; flex-direction: column-reverse; justify-content: space-between; text-align: right; color: #8B95BD; font-size: 10px">
+            <sc-for list="{{yTicks}}" as="y"><span>{{y.t}}</span></sc-for>
+          </div>
+          <div style="flex: 1; min-width: 0">
+            <div role="img" aria-label="{{chartLabel}}" style="position: relative; height: 190px; border-left: 1px solid #44475A; border-bottom: 1px solid #44475A">
+              <sc-for list="{{gridLines}}" as="g"><span aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: {{g.pct}}%; border-top: 1px dashed #2f3140"></span></sc-for>
+              <span aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: {{thrPct}}%; border-top: 1px dashed #FFB86C; z-index: 2"></span>
+              <span style="position: absolute; right: 4px; bottom: calc({{thrPct}}% + 2px); z-index: 2; color: #FFB86C; font-size: 10px; background: #21222C; padding: 0 3px">alert at {{thrLabel}}/day</span>
+              <div style="position: absolute; inset: 0; display: flex; align-items: flex-end">
+                <sc-for list="{{days}}" as="d">
+                  <button type="button" class="col" data-key="{{d.key}}" aria-pressed="{{d.pressed}}" onClick="{{d.pick}}" title="{{d.title}}" aria-label="{{d.title}}">
+                    <span class="bar" style="height: {{d.h}}%; outline: {{d.outline}}; outline-offset: 1px">
+                      <sc-for list="{{d.segs}}" as="s"><span style="display: block; height: {{s.h}}%; background: {{s.color}}"></span></sc-for>
+                    </span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <div aria-hidden="true" style="display: flex; padding-top: 4px; color: #8B95BD; font-size: 10px">
+              <sc-for list="{{days}}" as="d"><span style="flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: visible">{{d.label}}</span></sc-for>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px 14px; padding-top: 10px; color: #A9B2D3; font-size: 11px">
+          <sc-for list="{{legend}}" as="l"><span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 10px; height: 10px; background: {{l.color}}"></span>{{l.label}}</span></sc-for>
+          <span style="margin-left: auto; color: #8B95BD">click a bar to pin that day</span>
+        </div>
+      </section>
+
+      <div style="flex: none; display: flex; flex-wrap: wrap; gap: 20px 14px">
+        <section aria-label="By agent" style="flex: 999 1 460px; min-width: 0; position: relative; border: 1px solid #44475A; background: #21222C; padding: 22px 0 8px">
+          <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ {{dayTitle}} by agent ├</h2>
+          <div style="overflow-x: auto">
+            <table style="width: 100%; min-width: 560px; border-collapse: collapse; font-size: 12px">
+              <thead><tr><th class="th" style="padding-left: 14px">AGENT</th><th class="th" style="text-align: right">SESSIONS</th><th class="th" style="text-align: right">IN</th><th class="th" style="text-align: right">OUT</th><th class="th" style="text-align: right">CACHE READ</th><th class="th" style="text-align: right">COST</th><th class="th" style="padding-right: 14px; width: 24%">SHARE</th></tr></thead>
+              <tbody>
+                <sc-for list="{{agentRows}}" as="r">
+                  <tr data-key="{{r.key}}" style="border-top: 1px dashed #343746">
+                    <td style="padding: 6px 8px 6px 14px; color: {{r.color}}; font-weight: 600">{{r.label}}</td>
+                    <td class="num" style="padding: 0 8px; text-align: right; color: #A9B2D3">{{r.sessions}}</td>
+                    <td class="num" style="padding: 0 8px; text-align: right; color: #A9B2D3">{{r.tin}}</td>
+                    <td class="num" style="padding: 0 8px; text-align: right; color: #A9B2D3">{{r.tout}}</td>
+                    <td class="num" style="padding: 0 8px; text-align: right; color: #A9B2D3">{{r.cache}}</td>
+                    <td class="num" style="padding: 0 8px; text-align: right; color: #F1FA8C">{{r.cost}}</td>
+                    <td style="padding: 0 14px 0 8px"><span style="display: flex; align-items: center; gap: 8px"><span style="flex: 1; height: 6px; background: #343746"><span style="display: block; height: 6px; width: {{r.share}}%; background: {{r.color}}"></span></span><span class="num" style="width: 34px; text-align: right; color: #A9B2D3">{{r.share}}%</span></span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section aria-label="By model" style="flex: 1 1 320px; min-width: 0; position: relative; border: 1px solid #44475A; background: #21222C; padding: 22px 0 8px">
+          <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ by model ├</h2>
+          <div style="overflow-x: auto">
+            <table style="width: 100%; min-width: 300px; border-collapse: collapse; font-size: 12px">
+              <thead><tr><th class="th" style="padding-left: 14px">MODEL</th><th class="th" style="text-align: right">API CALLS</th><th class="th" style="text-align: right; padding-right: 14px">COST</th></tr></thead>
+              <tbody>
+                <sc-for list="{{modelRows}}" as="r">
+                  <tr data-key="{{r.key}}" style="border-top: 1px dashed #343746">
+                    <td style="padding: 6px 8px 6px 14px"><span style="color: #F8F8F2">{{r.model}}</span><span style="display: block; color: #8B95BD; font-size: 11px">{{r.provider}}</span></td>
+                    <td class="num" style="padding: 0 8px; text-align: right; color: #A9B2D3">{{r.calls}}</td>
+                    <td class="num" style="padding: 0 14px 0 8px; text-align: right; color: #F1FA8C">{{r.cost}}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      <p style="margin: 0; color: #8B95BD; font-size: 11px">Cost is the provider-reported figure when there is one; rows marked est. use the model’s published price per token. Subscription and OAuth providers can show $0.00.</p>
+    </sc-if>
+
+    <sc-if value="{{showTools}}" hint-placeholder-val="{{false}}">
+      <div style="flex: none; display: flex; flex-wrap: wrap; gap: 20px 14px">
+        <section aria-label="Tools" style="flex: 999 1 560px; min-width: 0; position: relative; border: 1px solid #44475A; background: #21222C; padding: 22px 0 8px">
+          <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ tool calls ├</h2>
+          <div style="overflow-x: auto">
+            <table style="width: 100%; min-width: 640px; border-collapse: collapse; font-size: 12px">
+              <thead>
+                <tr>
+                  <th class="th" style="padding-left: 14px">TOOL</th>
+                  <th class="th" style="text-align: right" aria-sort="{{sort.calls}}"><button type="button" class="sortb" onClick="{{sortCalls}}">CALLS<i-con name="arrow-down" size="11"></i-con></button></th>
+                  <th class="th" style="width: 22%"></th>
+                  <th class="th" style="text-align: right" aria-sort="{{sort.err}}"><button type="button" class="sortb" onClick="{{sortErr}}">ERRORS<i-con name="arrow-down" size="11"></i-con></button></th>
+                  <th class="th" style="text-align: right; padding-right: 14px" aria-sort="{{sort.ms}}"><button type="button" class="sortb" onClick="{{sortMs}}">AVG TIME<i-con name="arrow-down" size="11"></i-con></button></th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{toolRows}}" as="t">
+                  <tr data-key="{{t.name}}" style="border-top: 1px dashed #343746; background: {{t.bg}}">
+                    <td style="padding: 0 8px 0 14px"><button type="button" onClick="{{t.pick}}" style="min-height: 32px; padding: 0; border: 0; background: transparent; color: #F8F8F2; font: inherit; cursor: pointer; text-decoration: underline; text-decoration-color: #6272A4">{{t.name}}</button></td>
+                    <td class="num" style="padding: 0 8px; text-align: right; color: #A9B2D3">{{t.calls}}</td>
+                    <td style="padding: 0 8px"><span style="display: block; height: 6px; background: #343746"><span style="display: block; height: 6px; width: {{t.bar}}%; background: #FFB86C"></span></span></td>
+                    <td class="num" style="padding: 0 8px; text-align: right; color: {{t.errColor}}">{{t.err}}<span style="color: {{t.errColor}}"> {{t.errFlag}}</span></td>
+                    <td class="num" style="padding: 0 14px 0 8px; text-align: right; color: #A9B2D3">≈{{t.avg}}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <aside aria-label="Tool detail" style="flex: 1 1 300px; min-width: 0; position: relative; border: 1px solid #44475A; background: #21222C; padding: 22px 14px 14px; display: flex; flex-direction: column; gap: 8px; font-size: 12px">
+          <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ {{tsel.name}} ├</h2>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 12px">
+            <span style="color: #A9B2D3">calls</span><span class="num">{{tsel.calls}}</span>
+            <span style="color: #A9B2D3">failed</span><span class="num" style="color: {{tsel.errColor}}">{{tsel.err}}</span>
+            <span style="color: #A9B2D3">avg time</span><span class="num">≈{{tsel.avg}}</span>
+            <span style="color: #A9B2D3">slowest</span><span class="num">≈{{tsel.slow}}</span>
+            <span style="color: #A9B2D3">last used</span><span>{{tsel.last}}</span>
+          </div>
+          <div style="color: #A9B2D3; padding-top: 6px; border-top: 1px dashed #44475A">calls by agent</div>
+          <sc-for list="{{tsel.byAgent}}" as="a">
+            <div data-key="{{a.key}}" style="display: flex; align-items: center; gap: 8px"><span style="width: 56px; color: {{a.color}}; font-weight: 600">{{a.label}}</span><span style="flex: 1; height: 6px; background: #343746"><span style="display: block; height: 6px; width: {{a.pct}}%; background: {{a.color}}"></span></span><span class="num" style="width: 40px; text-align: right; color: #A9B2D3">{{a.n}}</span></div>
+          </sc-for>
+          <div style="color: #A9B2D3; padding-top: 6px; border-top: 1px dashed #44475A">recent failures</div>
+          <sc-for list="{{tsel.fails}}" as="f">
+            <a data-key="{{f.key}}" href="Sessions.dc.html" style="display: flex; flex-direction: column; gap: 1px; padding: 4px 6px; border: 1px dashed #5c3a3a; color: #FF5555; text-decoration: none"><span style="overflow-wrap: anywhere">{{f.msg}}</span><span style="color: #8B95BD; font-size: 11px">{{f.who}} · {{f.when}}</span></a>
+          </sc-for>
+          <sc-if value="{{tsel.noFails}}"><span style="color: #8B95BD">No failures in this range.</span></sc-if>
+        </aside>
+      </div>
+      <p style="margin: 0; color: #8B95BD; font-size: 11px">Counts come from tool rows in <code style="padding: 0 4px; border-radius: 3px; background: #191A21; color: #F1FA8C">messages</code>. Time is the gap between a call and its result row, so it is approximate. A call counts as failed when its result text reports an error, which is a best-effort check.</p>
+    </sc-if>
+
+    <sc-if value="{{isLoading}}" hint-placeholder-val="{{false}}">
+      <section aria-busy="true" aria-label="Loading usage" style="flex: none; border: 1px solid #44475A; background: #21222C; padding: 22px 16px; display: flex; align-items: flex-end; gap: 10px; height: 190px">
+        <sc-for list="{{skeleton}}" as="s"><span data-key="{{s.key}}" class="sk" style="flex: 1; height: {{s.h}}%"></span></sc-for>
+      </section>
+    </sc-if>
+  </div>
+</div>
+</div>
+<!--@shared-html-->
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'cost', agent: 'all', range: '14d', day: null, sortBy: 'calls', tool: 'terminal', loading: true, retried: false };
+    this.state = Object.assign(this.sharedState(), this.state);
+    var fl = this.filterLoad();
+    this.state.agent = fl.agent;
+    this.state.range = { today: '7d', '7d': '7d', '14d': '14d', '30d': '30d', all: '30d' }[fl.range] || '14d';
+    this.demo = this.demoState();
+  }
+/*@shared-js*/
+  componentDidMount() {
+    var self = this;
+    this.sharedMount();
+    if (this.demo !== 'loading') { setTimeout(function () { self.setState({ loading: false }); }, 550); }
+  }
+  series() {
+    // 30 days of sample per-agent cost, deterministic. Real app: GROUP BY date(started_at), profile over `sessions`.
+    var base = { atlas: [2.6, 1.8], scout: [1.4, 1.2], scribe: [0.7, 0.6], herald: [0.2, 0.15], ledger: [0.12, 0.1] };
+    var out = [];
+    var anchor = new Date(2026, 9, 11);
+    var names = this.baseAgents().map(function (a) { return a.name; });
+    // Agents beyond the first five (?agents=N) get a deterministic, smaller sample spend.
+    names.forEach(function (n, k) { if (!base[n]) { base[n] = [0.15 + (k % 4) * 0.12, 0.08 + (k % 3) * 0.05]; } });
+    for (var i = 29; i >= 0; i--) {
+      var d = new Date(anchor.getTime() - i * 86400000);
+      var cost = {};
+      names.forEach(function (a, k) {
+        var wave = Math.abs(Math.sin((i + 1) * (k + 2.3))) ;
+        var v = base[a][0] * (0.35 + wave) + base[a][1] * 0.2;
+        if (a === 'scout' && i === 4) { v += 9.5; }
+        if (a === 'ledger' && i % 5 === 0) { v = 0; }
+        if (d.getDay() === 0 || d.getDay() === 6) { v *= 0.55; }
+        cost[a] = Math.round(v * 100) / 100;
+      });
+      out.push({ date: d, cost: cost });
+    }
+    return out;
+  }
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var S = st.settings;
+    var agentsBase = this.orderedAgents(this.baseAgents());
+    var names = agentsBase.map(function (a) { return a.name; });
+    var meta = {};
+    agentsBase.forEach(function (a) { meta[a.name] = a; });
+    var N = { '7d': 7, '14d': 14, '30d': 30 }[st.range];
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var all = this.series().slice(-N);
+    var shown = st.agent === 'all' ? names : [st.agent];
+    var totals = all.map(function (d) { return shown.reduce(function (s, a) { return s + d.cost[a]; }, 0); });
+    var thr = Number(S.aCostV) || 12;
+    var maxV = Math.max.apply(null, totals.concat([thr * (st.agent === 'all' ? 1 : 0.4)]));
+    var nice = [0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100].filter(function (n) { return n * 4 >= maxV * 1.05; })[0] || 100;
+    var top = nice * 4;
+    var money = function (v) { return '$' + v.toFixed(2); };
+    var fmt = function (n) { return n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)); };
+    var empty = this.demo === 'empty';
+    var busy = st.loading || this.demo === 'loading';
+    var overIdx = [];
+    totals.forEach(function (t, i) { if (S.aCost && t > thr) { overIdx.push(i); } });
+    var dayIdx = st.day != null && st.day < N ? st.day : null;
+    var dlabel = function (d) { return months[d.date.getMonth()] + ' ' + d.date.getDate(); };
+    var days = all.map(function (d, i) {
+      var tot = totals[i];
+      var segs = shown.map(function (a) { return { h: tot > 0 ? (d.cost[a] / tot * 100) : 0, color: meta[a].color }; });
+      var every = N > 20 ? 3 : (N > 10 ? 2 : 1);
+      return {
+        key: 'd' + i, h: empty ? 0 : tot / top * 100, segs: segs, label: (i % every === (N - 1) % every) ? dlabel(d) : '',
+        title: dlabel(d) + ' · ' + money(tot) + (S.aCost && tot > thr ? ' · over the alert threshold' : '') + ' · ' + shown.map(function (a) { return meta[a].label + ' ' + money(d.cost[a]); }).join(', '),
+        pressed: dayIdx === i ? 'true' : 'false', outline: dayIdx === i ? '1px solid #F8F8F2' : (S.aCost && tot > thr ? '1px solid #FFB86C' : 'none'),
+        pick: function () { self.setState({ day: dayIdx === i ? null : i }); }
+      };
+    });
+    var rangeDays = dayIdx != null ? [all[dayIdx]] : all;
+    var agentRows = shown.map(function (a) {
+      var c = rangeDays.reduce(function (s, d) { return s + d.cost[a]; }, 0);
+      return { a: a, c: c };
+    });
+    var grand = agentRows.reduce(function (s, r) { return s + r.c; }, 0) || 1;
+    var rowsOut = agentRows.map(function (r) {
+      return { key: r.a, label: meta[r.a].label, color: meta[r.a].color, sessions: Math.round(r.c * 9 + 1), tin: fmt(Math.round(r.c * 52000)), tout: fmt(Math.round(r.c * 3800)), cache: fmt(Math.round(r.c * 40000)), cost: money(r.c), share: Math.round(r.c / grand * 100) };
+    }).sort(function (x, y) { return parseFloat(y.cost.slice(1)) - parseFloat(x.cost.slice(1)); });
+    var modelOf = { atlas: ['claude-opus-5.5', 'openrouter'], scout: ['claude-sonnet-5.5', 'anthropic'], scribe: ['hermes-4-405b', 'nous'], herald: ['claude-haiku-5.5', 'openrouter'], ledger: ['claude-sonnet-5.5', 'anthropic'] };
+    var byModel = {};
+    agentRows.forEach(function (r) { var m = modelOf[r.a] || [meta[r.a].model, meta[r.a].provider]; byModel[m[0]] = byModel[m[0]] || { model: m[0], provider: m[1], c: 0 }; byModel[m[0]].c += r.c; });
+    var modelRows = Object.keys(byModel).map(function (k) { return { key: k, model: k, provider: byModel[k].provider, calls: Math.round(byModel[k].c * 95).toLocaleString('en-US'), cost: money(byModel[k].c), c: byModel[k].c }; }).sort(function (x, y) { return y.c - x.c; });
+    var totalSum = totals.reduce(function (s, t) { return s + t; }, 0);
+    var today = totals[totals.length - 1];
+
+    // Tools tab (sample counts; real app: aggregate messages.tool_name and tool_calls)
+    var tools = [
+      { name: 'terminal', calls: 1842, err: 57, avg: 1.9, slow: 38, last: '2 min ago', fails: ['exit 127: himalaya: command not found', 'timeout after 60 s: apt list --upgradable'] },
+      { name: 'read_file', calls: 1310, err: 11, avg: 0.12, slow: 1.4, last: '3 min ago', fails: ['ENOENT: ~/vault/archive/2024-q3.md'] },
+      { name: 'skill_view', calls: 310, err: 0, avg: 0.18, slow: 0.9, last: '14 min ago', fails: [] },
+      { name: 'write_file', calls: 402, err: 1, avg: 0.2, slow: 0.8, last: '20 min ago', fails: ['permission denied: /etc/hosts'] },
+      { name: 'patch', calls: 388, err: 10, avg: 0.35, slow: 2.2, last: '1 h ago', fails: ['hunk 2 did not apply cleanly'] },
+      { name: 'web_search', calls: 356, err: 5, avg: 1.1, slow: 6.4, last: '5 min ago', fails: ['rate limited (429)'] },
+      { name: 'web_extract', calls: 221, err: 14, avg: 2.4, slow: 18, last: '5 min ago', fails: ['403 Forbidden: example.com/report', 'content too large'] },
+      { name: 'browser_navigate', calls: 140, err: 12, avg: 3.2, slow: 24, last: 'yesterday', fails: ['net::ERR_NAME_NOT_RESOLVED', 'navigation timeout'] },
+      { name: 'execute_code', calls: 118, err: 6, avg: 2.9, slow: 31, last: '3 h ago', fails: ['ModuleNotFoundError: pandas'] },
+      { name: 'send_message', calls: 88, err: 4, avg: 0.4, slow: 1.2, last: '55 min ago', fails: ['403 Forbidden: bot was kicked from the group chat'] },
+      { name: 'delegate_task', calls: 64, err: 2, avg: 41, slow: 188, last: 'yesterday', fails: ['subagent exceeded its turn limit'] },
+      { name: 'cronjob_manage', calls: 58, err: 1, avg: 0.3, slow: 0.9, last: '2 h ago', fails: ['unknown job: morning-brief'] },
+      { name: 'session_search', calls: 141, err: 0, avg: 0.24, slow: 1.1, last: '8 min ago', fails: [] },
+      { name: 'memory', calls: 97, err: 0, avg: 0.2, slow: 0.6, last: '1 h ago', fails: [] }
+    ];
+    var rate = function (t) { return t.err / t.calls; };
+    var sortFns = { calls: function (a, b) { return b.calls - a.calls; }, err: function (a, b) { return rate(b) - rate(a); }, ms: function (a, b) { return b.avg - a.avg; } };
+    var maxCalls = 1842;
+    var tsorted = tools.slice().sort(sortFns[st.sortBy]);
+    var secs = function (v) { return v < 1 ? Math.round(v * 1000) + ' ms' : (v >= 60 ? Math.floor(v / 60) + 'm ' + Math.round(v % 60) + 's' : v.toFixed(1) + ' s'); };
+    var toolRows = tsorted.map(function (t) {
+      var r = rate(t);
+      var high = r >= 0.05;
+      return { name: t.name, calls: t.calls.toLocaleString('en-US'), bar: Math.round(t.calls / maxCalls * 100), err: (r * 100).toFixed(1) + '%', errColor: high ? '#FF5555' : (r >= 0.02 ? '#FFB86C' : '#A9B2D3'), errFlag: high ? 'high' : '', avg: secs(t.avg), bg: st.tool === t.name ? '#44475A' : 'transparent', pick: function () { self.setState({ tool: t.name }); } };
+    });
+    var tcur = tools.filter(function (t) { return t.name === st.tool; })[0] || tools[0];
+    var split = shown.map(function (a, i) { return { a: a, w: [5, 3, 1.6, 1, 0.5][names.indexOf(a)] }; });
+    var wsum = split.reduce(function (s, x) { return s + x.w; }, 0);
+    var tsel = {
+      name: tcur.name, calls: tcur.calls.toLocaleString('en-US'), err: tcur.err + ' (' + (rate(tcur) * 100).toFixed(1) + '%)', errColor: rate(tcur) >= 0.05 ? '#FF5555' : '#F8F8F2', avg: secs(tcur.avg), slow: secs(tcur.slow), last: tcur.last,
+      byAgent: split.map(function (x) { return { key: x.a, label: meta[x.a].label, color: meta[x.a].color, pct: Math.round(x.w / 5 * 100), n: Math.round(tcur.calls * x.w / wsum).toLocaleString('en-US') }; }),
+      fails: tcur.fails.map(function (m, i) { return { key: 'f' + i, msg: m, who: shown[i % shown.length] + ' · ' + (tcur.name === 'send_message' ? 'cron inbox-triage' : 'session'), when: ['55 min ago', '3 h ago'][i % 2] }; }), noFails: tcur.fails.length === 0
+    };
+    var sortAttr = function (k) { return st.sortBy === k ? 'descending' : 'none'; };
+    var ranges = [['7d', 'Last 7 days'], ['14d', 'Last 14 days'], ['30d', 'Last 30 days']];
+    var isCost = st.tab === 'cost';
+    var yTicks = [0, 1, 2, 3, 4].map(function (i) { var v = top * i / 4; return { t: '$' + (v % 1 ? v.toFixed(2).replace(/0$/, '') : v) }; });
+    return Object.assign(this.sharedVals(), this.navFor('usage'), {
+      summary: isCost ? (money(totalSum) + ' over ' + N + ' days · ' + money(totalSum / N) + '/day avg · ' + money(today) + ' today') : (tools.reduce(function (s, t) { return s + t.calls; }, 0).toLocaleString('en-US') + ' tool calls · ' + tools.length + ' tools'),
+      tabs: [['cost', 'Cost'], ['tools', 'Tools']].map(function (t) { return { key: t[0], label: t[1], selected: st.tab === t[0] ? 'true' : 'false', pick: function () { self.setState({ tab: t[0] }); } }; }),
+      chips: this.agentChips(st.agent, function (a) { self.filterSave({ agent: a }); self.setState({ agent: a, day: null }); }),
+      ranges: ranges.map(function (o) { return { v: o[0], label: o[1], sel: o[0] === st.range, unsel: o[0] !== st.range }; }),
+      onRange: function (e) { self.filterSave({ range: e.target.value }); self.setState({ range: e.target.value, day: null }); },
+      isError: this.demo === 'error' && !st.retried,
+      retry: function () { self.setState({ retried: true }); self.notify({ kind: 'ok', title: 'state.db readable again', body: 'Usage totals refreshed' }); },
+      isEmpty: empty && !busy,
+      resetFilters: function () { self.filterSave({ agent: 'all', range: '30d' }); window.location.search = ''; },
+      isLoading: busy,
+      skeleton: [40, 62, 48, 75, 55, 68, 44, 80, 52, 60, 46, 70, 58, 64].map(function (h, i) { return { key: 'sk' + i, h: h }; }),
+      showCost: isCost && !busy && !empty, showTools: !isCost && !busy && !empty,
+      days: days, yTicks: yTicks,
+      gridLines: [25, 50, 75, 100].map(function (p) { return { pct: p }; }),
+      thrPct: Math.min(100, thr / top * 100), thrLabel: '$' + thr,
+      chartLabel: 'Bar chart of daily cost in US dollars for ' + N + ' days, total ' + money(totalSum),
+      overCount: overIdx.length > 0, overText: overIdx.length ? (overIdx.length + ' day' + (overIdx.length > 1 ? 's' : '') + ' above the $' + thr + ' alert: ' + overIdx.map(function (i) { return dlabel(all[i]) + ' (' + money(totals[i]) + ')'; }).join(', ') + '.') : '',
+      legend: shown.map(function (a) { return { color: meta[a].color, label: meta[a].label }; }),
+      dayTitle: dayIdx != null ? dlabel(all[dayIdx]) : 'last ' + N + ' days',
+      agentRows: rowsOut, modelRows: modelRows,
+      toolRows: toolRows, tsel: tsel,
+      sort: { calls: sortAttr('calls'), err: sortAttr('err'), ms: sortAttr('ms') },
+      sortCalls: function () { self.setState({ sortBy: 'calls' }); },
+      sortErr: function () { self.setState({ sortBy: 'err' }); },
+      sortMs: function () { self.setState({ sortBy: 'ms' }); }
+    });
+  }
+}
+</script>
+</body>
+</html>

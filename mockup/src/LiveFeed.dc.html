@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Live feed — Hermes Agent Mission Control</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;family=VT323&amp;display=swap">
+<style>
+/*@shared-css*/
+body{background:#282A36}
+.lf-box{position:relative;border:1px solid #44475A;border-radius:10px;background:#21222C;padding:18px 14px 12px;display:flex;flex-direction:column;gap:6px;font-size:11px}
+.lf-box h2{position:absolute;top:-9px;left:12px;margin:0;padding:0 6px;background:#282A36;font-size:11px;font-weight:600;color:#BD93F9}
+@media (max-width:900px){.lf-aside{display:none!important}}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="zoom: {{uiZoom}}; height: calc(100vh / {{uiZoom}}); overflow: hidden; background: #282A36; color: #F8F8F2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: {{fs}}px; line-height: 1.45; display: flex; flex-direction: column">
+<div class="mc-body">
+<!--@part sidebar-->
+<div class="mc-col">
+
+  <div style="flex: 1; min-height: 0; display: flex; gap: 24px; padding: 20px 24px 16px">
+    <main style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 14px">
+      <div style="flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px">
+        <h1 style="margin: 0; font-size: 15px; font-weight: 700; color: #F8F8F2">Live feed</h1>
+        <span style="color: #A9B2D3; font-size: 11px"><span class="dot" style="background: #50FA7B"></span> all agents · thinking, tools and replies as they happen</span>
+      </div>
+<!--@part feed-->
+    </main>
+
+    <aside class="lf-aside mc-slide" aria-label="Session detail" style="flex: 0 0 290px; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding-top: 38px">
+      <section class="lf-box">
+        <h2>session</h2>
+        <div style="color: #50FA7B; font-weight: 600">{{atlasLabel}} · telegram</div>
+        <div style="color: #A9B2D3; overflow-wrap: anywhere">20261010_204058_a1b2c3</div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 12px; padding: 6px 0; border-top: 1px dashed #44475A; border-bottom: 1px dashed #44475A">
+          <span style="color: #A9B2D3">model</span><span>claude-opus-5.5</span>
+          <span style="color: #A9B2D3">messages</span><span>14</span>
+          <span style="color: #A9B2D3">tool calls</span><span>6</span>
+          <span style="color: #A9B2D3">tokens in/out</span><span>38.2k / 4.1k</span>
+          <span style="color: #A9B2D3">reasoning</span><span>2.9k</span>
+          <span style="color: #A9B2D3">cost</span><span>$0.31</span>
+        </div>
+        <span style="color: #A9B2D3">tree</span>
+        <pre style="margin: 0; color: #F8F8F2; font: inherit; white-space: pre; overflow-x: auto">a1b2c3  {{atlasLabel}} (telegram)
+ ├─ 9f2e1d  subagent · research
+ └─ 77c0aa  subagent · summarize</pre>
+        <a href="Chat.dc.html" style="display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; margin-top: 4px"><i-con name="message" size="12"></i-con>Open chat</a>
+      </section>
+      <section class="lf-box">
+        <h2>legend</h2>
+        <div><span style="color: #F8F8F2">USER</span> <span style="color: #A9B2D3">inbound message</span></div>
+        <div><span style="color: #8BE9FD">THINK</span> <span style="color: #A9B2D3">reasoning, per step</span></div>
+        <div><span style="color: #FFB86C">TOOL</span> <span style="color: #A9B2D3">tool call and arguments</span></div>
+        <div><span style="color: #A9B2D3">RESULT</span> <span style="color: #A9B2D3">tool output, shortened</span></div>
+        <div><span style="color: #FF5555">BLOCKED</span> <span style="color: #A9B2D3">denied by Hermes approval policy</span></div>
+        <div><span style="color: #50FA7B">REPLY</span> <span style="color: #A9B2D3">agent answer</span></div>
+      </section>
+    </aside>
+  </div>
+</div>
+</div>
+<!--@shared-html-->
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = Object.assign(this.sharedState(), { feedAgentsOff: {}, feedTypesOff: {}, feedQuery: '' });
+  }
+/*@shared-js*/
+/*@part feed*/
+  componentDidMount() {
+    this.sharedMount();
+  }
+  renderVals() {
+    return Object.assign(this.sharedVals(), this.navFor('feed'), this.feedVals(), {
+      atlasLabel: this.displayName('atlas')
+    });
+  }
+}
+</script>
+</body>
+</html>

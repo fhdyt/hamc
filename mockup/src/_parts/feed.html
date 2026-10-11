@@ -1,0 +1,31 @@
+            <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px">
+              <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+                <span style="color: #8B95BD; padding-right: 2px">Agents</span>
+                <sc-for list="{{feedAgentChips}}" as="c" hint-placeholder-count="4">
+                  <button type="button" onClick="{{c.toggle}}" aria-pressed="{{c.pressed}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 9px; border: 1px {{c.borderStyle}} {{c.border}}; border-radius: 6px; background: transparent; color: {{c.fg}}; font: inherit; font-size: 11px; cursor: pointer; text-decoration: {{c.deco}}"><span class="dot" style="background: {{c.dot}}"></span>{{c.label}}</button>
+                </sc-for>
+                <span style="color: #8B95BD; padding: 0 2px 0 10px">Show</span>
+                <sc-for list="{{feedTypeChips}}" as="c" hint-placeholder-count="5">
+                  <button type="button" onClick="{{c.toggle}}" aria-pressed="{{c.pressed}}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 9px; border: 1px {{c.borderStyle}} {{c.border}}; border-radius: 6px; background: {{c.bg}}; color: {{c.fg}}; font: inherit; font-size: 11px; cursor: pointer">{{c.name}}</button>
+                </sc-for>
+                <label for="feed-q" class="vh">Search feed</label>
+                <input id="feed-q" type="search" class="fld" value="{{feedQuery}}" onChange="{{feedSearch}}" placeholder="Search" style="margin-left: auto; width: 180px">
+              </div>
+              <section aria-label="Feed" style="flex: 1; min-height: 0; overflow-y: auto; border: 1px solid #44475A; border-radius: 10px; background: #21222C">
+                <div style="display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid #343746; color: #8B95BD"><span class="mc-dots" style="color: #50FA7B"><i></i><i></i><i></i></span>{{feedTyping}} is typing</div>
+                <sc-for list="{{feedItems}}" as="it" hint-placeholder-count="10">
+                  <div data-key="{{it.key}}" class="mc-in" style="display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 7px 14px; border-bottom: 1px solid #343746">
+                    <span class="num" style="width: 60px; color: #8B95BD">{{it.t}}</span>
+                    <span style="width: 64px; color: {{it.color}}; font-weight: 600">{{it.agentLabel}}</span>
+                    <span style="width: 66px; color: #A9B2D3; font-size: 10px; padding-top: 1px">{{it.src}}</span>
+                    <div style="flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+                      <span style="font-size: 10px; letter-spacing: 1px; color: {{it.labelColor}}">{{it.label}}</span>
+                      <sc-if value="{{it.isThink}}" hint-placeholder-val="{{false}}"><p style="margin: 0; padding-left: 12px; color: #8BE9FD; font-style: italic">{{it.text}}</p></sc-if>
+                      <sc-if value="{{it.isCode}}" hint-placeholder-val="{{false}}"><code style="display: block; padding: 5px 9px; border: 1px solid #44475A; border-radius: 6px; background: #282A36; color: #F1FA8C; overflow-wrap: anywhere; font-size: 11px">{{it.text}}</code></sc-if>
+                      <sc-if value="{{it.isPlain}}" hint-placeholder-val="{{true}}"><p style="margin: 0; color: {{it.textColor}}; white-space: pre-line">{{it.text}}</p></sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+              </section>
+              <span style="flex: none; color: #8B95BD; font-size: 11px">{{feedCount}} of 1,204 events today · newest first</span>
+            </div>

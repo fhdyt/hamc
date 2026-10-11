@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Skills — Hermes Agent Mission Control</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;family=VT323&amp;display=swap">
+<style>
+/*@shared-css*/
+body{margin:0;background:#282A36}
+a{color:#50FA7B}a:hover{color:#8BE9FD}
+input:focus,button:focus-visible{outline:1px solid #50FA7B;outline-offset:1px}
+.sk-row{display:flex;flex-direction:column;gap:3px;width:100%;box-sizing:border-box;padding:7px 12px;border:0;border-bottom:1px dashed #343746;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.sk-row:hover{background:#2c2e3b}
+.sk-row[aria-selected="true"]{background:#44475A}
+.chip{display:inline-flex;align-items:center;gap:5px;min-height:22px;padding:0 8px;border:1px solid #44475A;border-radius:11px;background:transparent;color:#A9B2D3;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+.chip:hover{color:#F8F8F2;border-color:#6272A4}
+.tag{display:inline-block;padding:0 6px;border:1px solid #44475A;border-radius:3px;font-size:11px;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 11px;border:1px solid #6272A4;border-radius:6px;background:transparent;color:#F8F8F2;font:inherit;cursor:pointer;text-decoration:none}
+.btn:hover{background:#343746}
+.btn.pri{border:0;background:#50FA7B;color:#282A36;font-weight:700}
+.btn.dng{border-color:#FF5555;color:#FF5555}
+.btn[aria-pressed="true"],.btn[aria-expanded="true"]{border-color:#50FA7B;color:#50FA7B}
+.tabx{display:flex;align-items:center;gap:6px;min-height:32px;padding:0 14px;margin-bottom:-1px;border:0;border-bottom:2px solid transparent;background:transparent;color:#A9B2D3;font:inherit;cursor:pointer}
+.tabx:hover{color:#F8F8F2}
+.tabx[aria-selected="true"]{color:#F8F8F2;border-bottom-color:#50FA7B}
+.th{padding:4px 8px;font-weight:600;text-align:left;color:#A9B2D3;white-space:nowrap}
+.sk{display:block;border-radius:3px;background:#343746}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="zoom: {{uiZoom}}; height: calc(100vh / {{uiZoom}}); overflow: hidden; background: #282A36; color: #F8F8F2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: {{fs}}px; line-height: 1.45; display: flex; flex-direction: column">
+<div class="mc-body">
+<!--@part sidebar-->
+<div class="mc-col">
+
+
+  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 20px 24px 16px">
+
+    <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px">
+      <h1 style="margin: 0; font-family: 'VT323', monospace; font-size: 34px; line-height: 1; font-weight: 400; color: #50FA7B">SKILLS</h1>
+      <span style="color: #A9B2D3">{{summary}}</span>
+      <span style="margin-left: auto; color: #8B95BD">source: ~/.hermes/skills · .usage.json · read-only</span>
+    </div>
+
+    <div style="flex: none; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 14px; border-bottom: 1px solid #44475A">
+      <div role="tablist" aria-label="Skills views" style="display: flex">
+        <sc-for list="{{tabs}}" as="t">
+          <button type="button" role="tab" class="tabx" data-key="{{t.key}}" aria-selected="{{t.selected}}" onClick="{{t.pick}}">{{t.label}}</button>
+        </sc-for>
+      </div>
+      <div role="group" aria-label="Agent" style="display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 5px">
+        <sc-for list="{{chips}}" as="c" hint-placeholder-count="6">
+          <button type="button" class="chip" data-key="{{c.key}}" aria-pressed="{{c.pressed}}" onClick="{{c.pick}}" style="background: {{c.bg}}; border-color: {{c.border}}; color: {{c.fg}}">{{c.label}}</button>
+        </sc-for>
+      </div>
+      <span style="margin-left: auto; padding-bottom: 4px"><button type="button" class="btn" aria-expanded="{{installExpanded}}" onClick="{{toggleInstall}}"><i-con name="download" size="13"></i-con>Install from hub</button></span>
+    </div>
+
+    <sc-if value="{{isError}}" hint-placeholder-val="{{false}}">
+      <section role="alert" style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 14px; border: 1px solid #FF5555; background: #21222C">
+        <span style="color: #FF5555; display: flex"><i-con name="alert" size="16"></i-con></span>
+        <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px">
+          <span style="color: #F8F8F2; font-weight: 600">Can’t list skills for {{errAgent}}</span>
+          <span style="color: #A9B2D3">~/.hermes/skills is not readable as this SSH user, or this Hermes build keeps skills elsewhere (skills.create_dir). Nothing was changed.</span>
+        </div>
+        <button type="button" class="btn" onClick="{{retry}}"><i-con name="refresh" size="13"></i-con>Retry now</button>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{installOpen}}" hint-placeholder-val="{{false}}">
+      <section aria-label="Install a skill" class="mc-down" style="flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid #6272A4; background: #21222C">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+          <label for="sk-install" style="color: #A9B2D3">Skill id or source</label>
+          <input id="sk-install" type="text" class="fld" autocomplete="off" spellcheck="false" value="{{installId}}" onChange="{{onInstall}}" placeholder="official/migration/openclaw-migration" style="flex: 1 1 320px; max-width: 460px; color: #F1FA8C">
+          <label for="sk-install-for" style="color: #A9B2D3">For</label>
+          <select id="sk-install-for" class="fld" onChange="{{onInstallFor}}">
+            <sc-for list="{{installTargets}}" as="o"><sc-if value="{{o.sel}}"><option value="{{o.v}}" selected>{{o.label}}</option></sc-if><sc-if value="{{o.unsel}}"><option value="{{o.v}}">{{o.label}}</option></sc-if></sc-for>
+          </select>
+        </div>
+        <pre style="margin: 0; padding: 6px 8px; border: 1px solid #44475A; border-radius: 6px; background: #191A21; color: #F1FA8C; font: inherit; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere">$ {{installCmd1}}
+$ {{installCmd2}}</pre>
+        <span style="color: #A9B2D3; font-size: 11px">Inspect shows what the skill contains before anything is written. Install copies it into the profile’s skills folder after Hermes’ own safety scan.</span>
+        <span style="display: flex; gap: 6px; justify-content: flex-end"><button type="button" class="btn" onClick="{{toggleInstall}}">Cancel</button><button type="button" class="btn" onClick="{{doInspect}}">Inspect first</button><button type="button" class="btn pri" onClick="{{doInstall}}"><i-con name="download" size="13"></i-con>Install skill</button></span>
+      </section>
+    </sc-if>
+
+    <!-- LIBRARY -->
+    <sc-if value="{{showLibrary}}" hint-placeholder-val="{{true}}">
+      <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px">
+        <label for="sk-q" class="vh">Search skills</label>
+        <span style="position: relative; flex: 1 1 240px; max-width: 360px; display: flex; align-items: center">
+          <span style="position: absolute; left: 8px; color: #8B95BD; display: flex"><i-con name="search" size="13"></i-con></span>
+          <input id="sk-q" type="search" class="fld" autocomplete="off" spellcheck="false" value="{{q}}" onChange="{{onQ}}" placeholder="Search name, description, tag" style="width: 100%; padding-left: 28px">
+        </span>
+        <div role="group" aria-label="Filter" style="display: flex; flex-wrap: wrap; gap: 4px">
+          <sc-for list="{{kinds}}" as="k">
+            <button type="button" class="chip" data-key="{{k.key}}" aria-pressed="{{k.pressed}}" onClick="{{k.pick}}" style="background: {{k.bg}}; border-color: {{k.border}}; color: {{k.fg}}">{{k.label}}<span class="num" style="color: #8B95BD">{{k.n}}</span></button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="flex: 1; min-height: 0; display: flex; flex-wrap: wrap; gap: 22px 14px; padding-top: 12px; overflow-y: auto">
+        <section aria-label="Skill list" style="position: relative; flex: 1 1 340px; max-width: 460px; min-width: 0; min-height: 300px; display: flex; flex-direction: column; border: 1px solid #44475A; background: #21222C; padding-top: 18px">
+          <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ skills ├</h2>
+          <div role="listbox" aria-label="Skills" style="flex: 1; min-height: 0; overflow-y: auto">
+            <sc-if value="{{isLoading}}"><div aria-busy="true"><sc-for list="{{skeleton}}" as="s"><div data-key="{{s.key}}" style="display: flex; flex-direction: column; gap: 7px; padding: 12px; border-bottom: 1px dashed #343746"><span class="sk" style="height: 10px; width: {{s.w}}%"></span><span class="sk" style="height: 8px; width: 80%"></span></div></sc-for></div></sc-if>
+            <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+              <button type="button" role="option" class="sk-row" data-key="{{r.id}}" aria-selected="{{r.selected}}" onClick="{{r.pick}}">
+                <span style="display: flex; align-items: center; gap: 8px">
+                  <sc-if value="{{r.pinned}}"><span title="Pinned" style="color: #BD93F9; display: flex"><i-con name="flag" size="11"></i-con></span></sc-if>
+                  <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><span style="color: #8B95BD">{{r.category}}/</span><span style="color: #F8F8F2; font-weight: 600">{{r.name}}</span></span>
+                  <span class="tag" style="color: {{r.stateColor}}; border-color: {{r.stateColor}}">{{r.state}}</span>
+                </span>
+                <span style="color: #A9B2D3; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{r.description}}</span>
+                <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: 11px; color: #8B95BD">
+                  <span style="color: {{r.color}}; font-weight: 600">{{r.agentLabel}}</span>
+                  <span class="tag" style="color: {{r.originColor}}">{{r.origin}}</span>
+                  <span class="num">{{r.uses}} uses · {{r.last}}</span>
+                </span>
+              </button>
+            </sc-for>
+            <sc-if value="{{isEmpty}}"><div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 22px 16px"><span style="color: #F8F8F2; font-weight: 600">{{emptyTitle}}</span><span style="color: #A9B2D3">{{emptyBody}}</span><button type="button" class="btn" onClick="{{clearFilters}}">Clear filters</button></div></sc-if>
+          </div>
+        </section>
+
+        <section aria-label="Skill detail" style="position: relative; flex: 999 1 420px; min-width: 0; min-height: 360px; display: flex; flex-direction: column; border: 1px solid #44475A; background: #21222C; padding-top: 18px">
+          <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ SKILL.md ├</h2>
+          <sc-if value="{{hasSel}}" hint-placeholder-val="{{true}}">
+            <div style="flex: none; display: flex; flex-direction: column; gap: 6px; padding: 0 16px 10px; border-bottom: 1px solid #44475A">
+              <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px">
+                <h3 style="margin: 0; font-size: 14px; color: #F8F8F2"><span style="color: #8B95BD; font-weight: 400">{{sel.category}}/</span>{{sel.name}}</h3>
+                <span style="color: {{sel.color}}; font-weight: 600">{{sel.agentLabel}}</span>
+                <span class="tag" style="color: {{sel.stateColor}}; border-color: {{sel.stateColor}}">{{sel.state}}</span>
+                <span class="tag" style="color: {{sel.originColor}}">{{sel.origin}}</span>
+                <sc-if value="{{sel.pinned}}"><span class="tag" style="color: #BD93F9; border-color: #BD93F9">pinned</span></sc-if>
+              </div>
+              <span style="color: #A9B2D3">{{sel.description}}</span>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px">
+                <button type="button" class="btn" aria-pressed="{{sel.pinPressed}}" onClick="{{askPin}}"><i-con name="flag" size="13"></i-con>{{sel.pinLabel}}</button>
+                <sc-if value="{{sel.canArchive}}"><button type="button" class="btn" onClick="{{askArchive}}"><i-con name="archive" size="13"></i-con>{{sel.archiveLabel}}</button></sc-if>
+                <sc-if value="{{sel.isBundled}}"><span style="align-self: center; color: #8B95BD; font-size: 11px">Bundled skills are updated together with Hermes, so there is nothing to archive here.</span></sc-if>
+              </div>
+              <sc-if value="{{confirm}}">
+                <div class="mc-down" style="display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid {{confirmColor}}; border-radius: 8px; background: #282A36">
+                  <span style="color: #F8F8F2; font-weight: 600">{{confirmTitle}}</span>
+                  <span style="color: #A9B2D3">{{confirmBody}}</span>
+                  <pre style="margin: 0; padding: 6px 8px; border: 1px solid #44475A; border-radius: 6px; background: #191A21; color: #F1FA8C; font: inherit; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere">$ {{confirmCmd}}</pre>
+                  <span style="display: flex; gap: 6px; justify-content: flex-end"><button type="button" class="btn" onClick="{{cancelConfirm}}">Cancel</button><button type="button" class="btn pri" onClick="{{runConfirm}}">{{confirmLabel}}</button></span>
+                </div>
+              </sc-if>
+            </div>
+            <div data-key="{{sel.id}}" class="mc-fade" style="flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 12px">
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 4px 18px; font-size: 11px">
+                <sc-for list="{{facts}}" as="f"><div data-key="{{f.k}}" style="display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; border-bottom: 1px dashed #343746"><span style="color: #A9B2D3">{{f.k}}</span><span class="num" style="color: #F8F8F2; text-align: right; overflow-wrap: anywhere">{{f.v}}</span></div></sc-for>
+              </div>
+              <sc-if value="{{hasEnv}}"><div style="display: flex; gap: 8px; padding: 8px 10px; border: 1px solid #44475A; border-radius: 8px; background: #282A36; color: #A9B2D3; font-size: 11px"><span style="color: #8BE9FD; display: flex; padding-top: 1px"><i-con name="lock" size="13"></i-con></span><span>Needs environment variables: <code style="color: #F1FA8C">{{envNames}}</code>. Mission Control shows names only and never reads their values.</span></div></sc-if>
+              <div style="padding: 10px 14px 4px; border: 1px solid #44475A; border-radius: 8px; background: #282A36; font-size: 12px; line-height: 1.6"><md-view list="{{docBlocks}}"></md-view></div>
+              <span style="color: #8B95BD; font-size: 11px">{{pathNote}}</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{noSel}}"><div style="padding: 24px 18px; display: flex; flex-direction: column; gap: 6px; color: #A9B2D3"><span style="color: #F8F8F2; font-weight: 600">Pick a skill to read it</span><span>Agent-written skills are marked, so you can see what an agent taught itself.</span></div></sc-if>
+          <sc-if value="{{isLoading}}"><div aria-busy="true" style="padding: 8px 16px; display: flex; flex-direction: column; gap: 14px"><span class="sk" style="height: 14px; width: 40%"></span><span class="sk" style="height: 9px; width: 70%"></span><span class="sk" style="height: 9px; width: 60%"></span></div></sc-if>
+        </section>
+      </div>
+    </sc-if>
+
+    <!-- CHANGES -->
+    <sc-if value="{{showChanges}}" hint-placeholder-val="{{false}}">
+      <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-top: 12px">
+        <section aria-label="Curator" style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; padding: 10px 14px; border: 1px solid #44475A; background: #21222C">
+          <span style="display: inline-flex; align-items: center; gap: 8px; color: #50FA7B; font-weight: 700"><span class="dot" style="background: #50FA7B"></span>curator active</span>
+          <span style="color: #A9B2D3">last run 06:00 · reviewed 41 skills · marked 1 stale, archived 1</span>
+          <span style="color: #8B95BD; margin-left: auto; font-size: 11px">from <code style="color: #F1FA8C">hermes curator status</code> and logs/curator/</span>
+        </section>
+        <section aria-label="Skill changes" style="flex: none; position: relative; border: 1px solid #44475A; background: #21222C; padding: 22px 0 8px">
+          <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ who changed which skill ├</h2>
+          <div style="overflow-x: auto">
+            <table style="width: 100%; min-width: 680px; border-collapse: collapse; font-size: 12px">
+              <thead><tr><th class="th" style="padding-left: 14px">WHEN</th><th class="th">ACTOR</th><th class="th">ACTION</th><th class="th">SKILL</th><th class="th" style="padding-right: 14px">NOTE</th></tr></thead>
+              <tbody>
+                <sc-for list="{{changes}}" as="c">
+                  <tr data-key="{{c.key}}" style="border-top: 1px dashed #343746; vertical-align: top">
+                    <td style="padding: 7px 8px 7px 14px; color: #8B95BD; white-space: nowrap">{{c.when}}</td>
+                    <td style="padding: 7px 8px"><span class="tag" style="color: {{c.actorColor}}; border-color: {{c.actorColor}}">{{c.actor}}</span></td>
+                    <td style="padding: 7px 8px; color: #F8F8F2; white-space: nowrap">{{c.action}}</td>
+                    <td style="padding: 7px 8px"><span style="color: {{c.color}}">{{c.agent}}</span> <span style="color: #F8F8F2">{{c.skill}}</span></td>
+                    <td style="padding: 7px 14px 7px 8px; color: #A9B2D3">
+                      <div style="display: flex; flex-direction: column; gap: 4px">
+                        <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">{{c.note}}<sc-if value="{{c.hasDiff}}"><button type="button" class="chip" aria-expanded="{{c.expanded}}" onClick="{{c.toggle}}">diff<i-con name="chev-down" size="11"></i-con></button></sc-if></span>
+                        <sc-if value="{{c.open}}"><div class="mc-down" style="display: flex; flex-direction: column; gap: 2px"><sc-for list="{{c.diff}}" as="d"><div data-key="{{d.key}}" style="padding: 2px 6px; border-radius: 4px; background: {{d.bg}}; color: {{d.fg}}; font-size: 11px; overflow-wrap: anywhere">{{d.sign}} {{d.t}}</div></sc-for></div></sc-if>
+                      </div>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <p style="margin: 0; color: #8B95BD; font-size: 11px">Read from <code style="padding: 0 4px; border-radius: 3px; background: #191A21; color: #F1FA8C">.curator_ledger.jsonl</code>. “agent” means the agent changed its own skill; Hermes treats that flag as a policy marker, not proof of authorship.</p>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</div>
+<!--@shared-html-->
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    var fl = this.filterLoad();
+    this.state = { tab: 'library', agent: fl.agent, kind: 'all', q: '', sel: 'atlas/productivity/briefing', loading: true, retried: false, installOpen: false, installId: 'official/migration/openclaw-migration', installFor: 'atlas', pins: {}, archived: {}, ask: null, open: {} };
+    this.state = Object.assign(this.sharedState(), this.state);
+    this.demo = this.demoState();
+  }
+/*@shared-js*/
+  componentDidMount() {
+    var self = this;
+    this.sharedMount();
+    if (this.demo !== 'loading') { setTimeout(function () { self.setState({ loading: false }); }, 550); }
+  }
+  data() {
+    // [agent, category, name, origin, state, pinned, uses, views, patches, created, lastUsed, description, tags, env]
+    return [
+      ['atlas', 'productivity', 'briefing', 'agent', 'active', true, 41, 63, 5, 'Sep 22', '13 h ago', 'Compose the morning briefing from calendar, alerts and tasks.', 'briefing, daily', ''],
+      ['atlas', 'note-taking', 'obsidian', 'bundled', 'active', false, 212, 240, 0, 'with Hermes', '20 min ago', 'Read and write notes in the Obsidian vault and keep links intact.', 'notes, vault', ''],
+      ['atlas', 'productivity', 'dentist-reminders', 'agent', 'archived', false, 2, 3, 0, 'Oct 7', '4 d ago', 'One-time reminder flow for a dentist appointment.', 'reminder', ''],
+      ['scout', 'research', 'arxiv', 'hub', 'active', false, 88, 96, 1, 'Oct 5', '3 h ago', 'Search arXiv, read abstracts, and summarise relevant papers.', 'research, papers', ''],
+      ['scout', 'research', 'market', 'agent', 'active', false, 1204, 1310, 12, 'Aug 30', '17 min ago', 'Scan watchlist feeds and note anything that moved more than 5 percent.', 'finance, scan', ''],
+      ['scout', 'devops', 'docker-cleanup', 'agent', 'stale', false, 3, 5, 0, 'Aug 29', '41 d ago', 'Prune unused Docker images and volumes on a schedule.', 'docker, ops', ''],
+      ['scribe', 'writing', 'newsletter', 'agent', 'active', false, 18, 31, 4, 'Sep 12', '8 h ago', 'Draft the daily newsletter from vault notes tagged publish.', 'writing', ''],
+      ['scribe', 'writing', 'digest', 'agent', 'active', false, 6, 11, 2, 'Sep 14', '4 d ago', 'Write the weekly digest of agent work across profiles.', 'writing, weekly', ''],
+      ['herald', 'email', 'triage', 'agent', 'active', true, 310, 340, 9, 'Aug 20', '55 min ago', 'Label, archive newsletters, and summarise threads that need a reply.', 'email', 'HIMALAYA_ACCOUNT'],
+      ['herald', 'devops', 'uptime', 'agent', 'active', false, 152, 160, 3, 'Sep 1', '2 h ago', 'Check endpoint uptime and report only when something is degraded.', 'monitoring', ''],
+      ['herald', 'web', 'scraping-basics', 'bundled', 'active', false, 27, 40, 0, 'with Hermes', '3 d ago', 'Fetch and clean web pages without a full browser.', 'web', ''],
+      ['ledger', 'finance', 'invoices', 'agent', 'stale', false, 12, 15, 1, 'Sep 3', '3 d ago', 'Find unpaid invoices older than 14 days and list them.', 'finance', 'ACCOUNTING_API_TOKEN']
+    ].map(function (r) {
+      return { id: r[0] + '/' + r[1] + '/' + r[2], agent: r[0], category: r[1], name: r[2], origin: r[3], state: r[4], pinned: r[5], uses: r[6], views: r[7], patches: r[8], created: r[9], last: r[10], description: r[11], tags: r[12], env: r[13] };
+    });
+  }
+  doc(s) {
+    var docs = {
+      'productivity/briefing': '# Morning briefing\n\n## When to Use\n- A cron job or the user asks for the daily briefing.\n\n## Procedure\n- Read overnight alerts first.\n- Add today’s calendar only if it has entries.\n- Keep the whole briefing under **120 words**.\n\n## Pitfalls\n- Do not write “nothing scheduled”; skip the section.\n\n## Verification\n- Count the words before sending.',
+      'email/triage': '# Inbox triage\n\n## When to Use\n- The inbox-triage job runs, or the user says “check mail”.\n\n## Procedure\n- List unread messages and group them by sender type.\n- Archive newsletters with `himalaya message move`.\n- Summarise threads from people, newest first.\n\n## Pitfalls\n- Never delete mail; archive only.\n\n## Verification\n- Report how many threads were archived and how many need a reply.'
+    };
+    var key = s.category + '/' + s.name;
+    return docs[key] || ('# ' + s.name + '\n\n## When to Use\n- ' + s.description + '\n\n## Procedure\n- Read the request and check memory for earlier context.\n- Use the smallest set of tools that finishes the job.\n\n## Pitfalls\n- Ask before anything destructive.\n\n## Verification\n- Say what was done and what was left alone.');
+  }
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var meta = {};
+    this.baseAgents().forEach(function (a) { meta[a.name] = a; });
+    var busy = st.loading || this.demo === 'loading';
+    var fl = this.filterLoad();
+    var scopeAgent = st.agent;
+    var all = this.data().map(function (s) {
+      var archived = st.archived[s.id] != null ? st.archived[s.id] : s.state === 'archived';
+      var pinned = st.pins[s.id] != null ? st.pins[s.id] : s.pinned;
+      return Object.assign({}, s, { pinned: pinned, state: archived ? 'archived' : (s.state === 'archived' ? 'active' : s.state) });
+    });
+    var inAgent = all.filter(function (s) { return scopeAgent === 'all' || s.agent === scopeAgent; });
+    var count = function (k) { return inAgent.filter(function (s) { return k === 'all' ? s.state !== 'archived' : (k === 'agent' ? s.origin === 'agent' && s.state !== 'archived' : (k === 'stale' ? s.state === 'stale' : (k === 'archived' ? s.state === 'archived' : s.origin === k && s.state !== 'archived'))); }).length; };
+    var q = st.q.trim().toLowerCase();
+    var list = inAgent.filter(function (s) {
+      if (st.kind === 'all' && s.state === 'archived') { return false; }
+      if (st.kind === 'agent' && !(s.origin === 'agent' && s.state !== 'archived')) { return false; }
+      if ((st.kind === 'hub' || st.kind === 'bundled') && (s.origin !== st.kind || s.state === 'archived')) { return false; }
+      if (st.kind === 'stale' && s.state !== 'stale') { return false; }
+      if (st.kind === 'archived' && s.state !== 'archived') { return false; }
+      if (q && (s.category + '/' + s.name + ' ' + s.description + ' ' + s.tags).toLowerCase().indexOf(q) === -1) { return false; }
+      return true;
+    });
+    if (this.demo === 'empty') { list = []; }
+    var selObj = list.filter(function (s) { return s.id === st.sel; })[0] || list[0] || null;
+    var hasSel = !!selObj && !busy;
+    var stateColor = { active: '#50FA7B', stale: '#FFB86C', archived: '#8B95BD' };
+    var originColor = { agent: '#FF79C6', hub: '#8BE9FD', bundled: '#A9B2D3' };
+    var originLabel = { agent: 'agent-written', hub: 'from hub', bundled: 'bundled' };
+    var mk = function (arr, cur) { return arr.map(function (o) { return { v: o[0], label: o[1], sel: o[0] === cur, unsel: o[0] !== cur }; }); };
+    var sel = selObj ? Object.assign({}, selObj, {
+      color: meta[selObj.agent].color, agentLabel: meta[selObj.agent].label, stateColor: stateColor[selObj.state], originColor: originColor[selObj.origin], origin: originLabel[selObj.origin],
+      pinPressed: selObj.pinned ? 'true' : 'false', pinLabel: selObj.pinned ? 'Unpin' : 'Pin',
+      isBundled: selObj.origin === 'bundled', canArchive: selObj.origin !== 'bundled', archiveLabel: selObj.state === 'archived' ? 'Restore' : 'Archive'
+    }) : {};
+    var ask = st.ask;
+    var cmdFor = function (kind) { return 'hermes -p ' + selObj.agent + ' curator ' + kind + ' ' + selObj.category + '/' + selObj.name; };
+    var asks = selObj ? {
+      pin: [selObj.pinned ? 'Unpin this skill?' : 'Pin this skill?', selObj.pinned ? 'The curator may mark it stale or archive it again if it goes unused.' : 'The curator will leave it alone, even if it goes unused for a long time.', cmdFor(selObj.pinned ? 'unpin' : 'pin'), selObj.pinned ? 'Unpin' : 'Pin skill', '#6272A4'],
+      archive: [selObj.state === 'archived' ? 'Restore this skill?' : 'Archive this skill?', selObj.state === 'archived' ? 'It goes back into the active library and the agent can use it again.' : 'The agent stops loading it. The files move to skills/.archive and can be restored at any time.', cmdFor(selObj.state === 'archived' ? 'restore' : 'archive'), selObj.state === 'archived' ? 'Restore skill' : 'Archive skill', selObj.state === 'archived' ? '#6272A4' : '#FFB86C']
+    } : {};
+    var av = ask && asks[ask] ? asks[ask] : ['', '', '', '', '#44475A'];
+    var facts = selObj ? [
+      { k: 'uses', v: selObj.uses.toLocaleString('en-US') }, { k: 'views', v: selObj.views.toLocaleString('en-US') }, { k: 'patches', v: String(selObj.patches) },
+      { k: 'created', v: selObj.created }, { k: 'last used', v: selObj.last }, { k: 'created_by', v: selObj.origin === 'agent' ? 'agent' : (selObj.origin === 'hub' ? 'hub install' : 'bundled') },
+      { k: 'state', v: selObj.state }, { k: 'tags', v: selObj.tags }
+    ] : [];
+    var changes = [
+      ['today 06:00', 'curator', 'marked stale', 'scout', 'devops/docker-cleanup', 'unused for 41 days', null],
+      ['today 03:12', 'agent', 'patched', 'atlas', 'productivity/briefing', 'skip empty sections, cap at 120 words', ['−|Always list every section', '+|Skip any section that is empty', '+|Keep the whole briefing under 120 words']],
+      ['yesterday 19:40', 'agent', 'created', 'herald', 'devops/uptime', 'new skill written after a failed uptime check', null],
+      ['Oct 9 10:02', 'user', 'pinned', 'atlas', 'productivity/briefing', 'from Mission Control', null],
+      ['Oct 8 06:00', 'curator', 'archived', 'atlas', 'productivity/dentist-reminders', 'one-time job finished', null],
+      ['Oct 7 22:14', 'agent', 'patched', 'herald', 'email/triage', 'never delete mail, archive only', ['−|Delete spam after summarising', '+|Archive spam; never delete mail']],
+      ['Oct 5 09:30', 'user', 'installed', 'scout', 'research/arxiv', 'from the skills hub', null]
+    ];
+    var actorColor = { agent: '#FF79C6', curator: '#BD93F9', user: '#50FA7B' };
+    var isLib = st.tab === 'library';
+    var emptyTitle = q ? 'No skill matches “' + st.q + '”' : (this.demo === 'empty' ? 'No skills yet' : 'Nothing in this filter');
+    var emptyBody = this.demo === 'empty' ? 'Skills show up when an agent writes one or you install one from the hub.' : 'Try another filter, or clear the search.';
+    var targetOpts = this.orderedAgents(this.baseAgents()).map(function (a) { return [a.name, a.label]; });
+    return Object.assign(this.sharedVals(), this.navFor('skills'), {
+      summary: isLib ? (count('all') + ' active for ' + (scopeAgent === 'all' ? 'all agents' : meta[scopeAgent].label) + ' · ' + count('agent') + ' written by the agent') : changes.length + ' recent changes',
+      tabs: [['library', 'Library'], ['changes', 'Changes']].map(function (t) { return { key: t[0], label: t[1], selected: st.tab === t[0] ? 'true' : 'false', pick: function () { self.setState({ tab: t[0] }); } }; }),
+      chips: this.agentChips(scopeAgent, function (a) { self.filterSave({ agent: a }); self.setState({ agent: a, ask: null }); }),
+      installExpanded: st.installOpen ? 'true' : 'false', installOpen: st.installOpen,
+      toggleInstall: function () { self.setState({ installOpen: !st.installOpen }); },
+      installId: st.installId, onInstall: function (e) { self.setState({ installId: e.target.value }); },
+      installTargets: mk(targetOpts, st.installFor), onInstallFor: function (e) { self.setState({ installFor: e.target.value }); },
+      installCmd1: 'hermes -p ' + st.installFor + ' skills inspect ' + (st.installId || '<skill>'),
+      installCmd2: 'hermes -p ' + st.installFor + ' skills install ' + (st.installId || '<skill>'),
+      doInspect: function () { self.notify({ kind: 'ok', title: 'Inspecting skill', body: st.installId + ' · nothing written yet' }); },
+      doInstall: function () { self.setState({ installOpen: false }); self.notify({ kind: 'ok', title: 'Skill installed', body: st.installId + ' for ' + st.installFor }); },
+      isError: this.demo === 'error' && !st.retried, errAgent: scopeAgent === 'all' ? 'these agents' : meta[scopeAgent].label,
+      retry: function () { self.setState({ retried: true }); self.notify({ kind: 'ok', title: 'Skills readable again', body: '~/.hermes/skills' }); },
+      showLibrary: isLib, showChanges: !isLib,
+      q: st.q, onQ: function (e) { self.setState({ q: e.target.value }); },
+      kinds: [['all', 'Active'], ['agent', 'Agent-written'], ['hub', 'Hub'], ['bundled', 'Bundled'], ['stale', 'Stale'], ['archived', 'Archived']].map(function (k) {
+        var on = st.kind === k[0];
+        return { key: k[0], label: k[1], n: count(k[0]), pressed: on ? 'true' : 'false', bg: on ? '#44475A' : 'transparent', border: on ? '#6272A4' : '#44475A', fg: on ? '#F8F8F2' : '#A9B2D3', pick: function () { self.setState({ kind: k[0], ask: null }); } };
+      }),
+      isLoading: busy, skeleton: [66, 80, 58, 72, 64].map(function (w, i) { return { key: 'sk' + i, w: w }; }),
+      isEmpty: !busy && list.length === 0, emptyTitle: emptyTitle, emptyBody: emptyBody,
+      clearFilters: function () { self.setState({ q: '', kind: 'all' }); },
+      rows: busy ? [] : list.map(function (s) {
+        return { id: s.id, category: s.category, name: s.name, description: s.description, pinned: s.pinned, state: s.state, stateColor: stateColor[s.state], color: meta[s.agent].color, agentLabel: meta[s.agent].label, origin: originLabel[s.origin], originColor: originColor[s.origin], uses: s.uses.toLocaleString('en-US'), last: s.last, selected: selObj && selObj.id === s.id ? 'true' : 'false', pick: function () { self.setState({ sel: s.id, ask: null }); } };
+      }),
+      hasSel: hasSel, noSel: !hasSel && !busy, sel: sel, facts: facts,
+      hasEnv: !!(selObj && selObj.env), envNames: selObj ? selObj.env : '',
+      docBlocks: selObj ? this.md(this.doc(selObj)) : [],
+      pathNote: selObj ? 'Read from ~/.hermes' + (selObj.agent === 'atlas' ? '' : '/profiles/' + selObj.agent) + '/skills/' + selObj.category + '/' + selObj.name + '/SKILL.md. Usage numbers come from skills/.usage.json.' : '',
+      askPin: function () { self.setState({ ask: 'pin' }); }, askArchive: function () { self.setState({ ask: 'archive' }); },
+      confirm: !!ask && !!asks[ask], confirmTitle: av[0], confirmBody: av[1], confirmCmd: av[2], confirmLabel: av[3], confirmColor: av[4],
+      cancelConfirm: function () { self.setState({ ask: null }); },
+      runConfirm: function () {
+        var id = selObj.id;
+        if (ask === 'pin') { var p = Object.assign({}, st.pins); p[id] = !selObj.pinned; self.setState({ pins: p, ask: null }); } else { var a = Object.assign({}, st.archived); a[id] = selObj.state !== 'archived'; self.setState({ archived: a, ask: null, kind: 'all' }); }
+        self.notify({ kind: 'ok', title: av[3] + ' done', body: av[2] });
+      },
+      changes: changes.map(function (c, i) {
+        var key = 'c' + i;
+        var open = !!st.open[key];
+        return {
+          key: key, when: c[0], actor: c[1], actorColor: actorColor[c[1]], action: c[2], agent: meta[c[3]].label, color: meta[c[3]].color, skill: c[4], note: c[5],
+          hasDiff: !!c[6], open: open, expanded: open ? 'true' : 'false',
+          diff: (c[6] || []).map(function (d, j) { var p = d.split('|'); return { key: key + j, sign: p[0], t: p[1], bg: p[0] === '+' ? '#24382d' : '#3a2530', fg: p[0] === '+' ? '#50FA7B' : '#FF5555' }; }),
+          toggle: function () { var o = Object.assign({}, self.state.open); o[key] = !o[key]; self.setState({ open: o }); }
+        };
+      })
+    });
+  }
+}
+</script>
+</body>
+</html>

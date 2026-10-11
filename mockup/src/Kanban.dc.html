@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kanban — Hermes Agent Mission Control</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;family=VT323&amp;display=swap">
+<style>
+/*@shared-css*/
+body{background:#282A36}
+.kb-col{flex:1 0 188px;max-width:320px;min-height:0;display:flex;flex-direction:column;border:1px solid #44475A;border-radius:12px;background:#21222C}
+.kb-card{display:flex;flex-direction:column;gap:6px;width:100%;padding:8px 10px;border:1px solid #44475A;border-left:3px solid var(--pc);border-radius:8px;background:#282A36;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:border-color .15s,transform .15s,box-shadow .15s}
+.kb-card:hover{border-color:#6272A4;border-left-color:var(--pc);transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.25)}
+.kb-card:active{transform:none}
+.kb-chip{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:0 9px;border:1px solid #44475A;border-radius:6px;background:transparent;color:#A9B2D3;font:inherit;font-size:11px;cursor:pointer}
+.kb-chip[aria-pressed="true"]{border-color:#6272A4;background:#44475A;color:#F8F8F2}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="zoom: {{uiZoom}}; height: calc(100vh / {{uiZoom}}); overflow: hidden; background: #282A36; color: #F8F8F2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: {{fs}}px; line-height: 1.45; display: flex; flex-direction: column">
+<div class="mc-body">
+<!--@part sidebar-->
+<div class="mc-col">
+
+  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 20px 24px 16px">
+    <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px">
+      <h1 style="margin: 0; font-size: 15px; font-weight: 700; color: #F8F8F2">Kanban</h1>
+      <label for="kb-board" class="vh">Board</label>
+      <select id="kb-board" class="fld" onChange="{{pickBoard}}">
+        <sc-for list="{{boards}}" as="b"><sc-if value="{{b.sel}}"><option value="{{b.id}}" selected>{{b.label}}</option></sc-if><sc-if value="{{b.unsel}}"><option value="{{b.id}}">{{b.label}}</option></sc-if></sc-for>
+      </select>
+      <span style="color: #A9B2D3; font-size: 11px">{{taskCount}} tasks · <span style="color: #8BE9FD">{{runningCount}} running</span> · <span style="color: #FF5555">{{blockedCount}} blocked</span></span>
+      <span style="margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+        <span style="color: #8B95BD; font-size: 11px">Assignee</span>
+        <sc-for list="{{people}}" as="p" hint-placeholder-count="6">
+          <button type="button" class="kb-chip" onClick="{{p.pick}}" aria-pressed="{{p.pressed}}"><sc-if value="{{p.isAgent}}"><agent-avatar of="p" size="16"></agent-avatar></sc-if>{{p.label}}</button>
+        </sc-for>
+        <label for="kb-q" class="vh">Search tasks</label>
+        <input id="kb-q" type="search" class="fld" value="{{query}}" onChange="{{onQuery}}" placeholder="Search" style="width: 160px">
+      </span>
+    </div>
+
+    <div role="list" aria-label="Board columns" style="flex: 1; min-height: 0; display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px">
+      <sc-for list="{{cols}}" as="c" hint-placeholder-count="7">
+        <section role="listitem" data-key="{{c.id}}" class="kb-col mc-in" aria-label="{{c.label}}, {{c.count}} tasks" style="animation-delay: {{c.delay}}s">
+          <div style="flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #343746">
+            <span class="dot" style="background: {{c.color}}"></span>
+            <h2 style="margin: 0; font-size: 12px; font-weight: 600; color: #F8F8F2">{{c.label}}</h2>
+            <span class="num" style="margin-left: auto; padding: 0 6px; border-radius: 9px; background: #343746; color: #A9B2D3; font-size: 10px">{{c.count}}</span>
+          </div>
+          <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px">
+            <sc-for list="{{c.cards}}" as="k" hint-placeholder-count="3">
+              <button type="button" data-key="{{k.id}}" class="kb-card" onClick="{{k.open}}" aria-label="Task {{k.num}}: {{k.title}}" style="--pc: {{k.prioColor}}">
+                <span style="display: flex; align-items: center; gap: 6px; font-size: 10px; color: #8B95BD">
+                  <span class="num">{{k.num}}</span>
+                  <sc-if value="{{k.running}}"><span class="mc-dots" style="color: #8BE9FD"><i></i><i></i><i></i></span></sc-if>
+                  <span style="margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: {{k.prioColor}}"><i-con name="flag" size="10"></i-con>{{k.prio}}</span>
+                </span>
+                <span style="color: #F8F8F2; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden">{{k.title}}</span>
+                <span style="display: flex; align-items: center; gap: 6px; font-size: 10px; color: #A9B2D3">
+                  <agent-avatar of="k.who" size="18"></agent-avatar>
+                  <span style="color: {{k.who.color}}; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{k.who.label}}</span>
+                  <span style="margin-left: auto; display: inline-flex; align-items: center; gap: 4px"><i-con name="message" size="10"></i-con>{{k.comments}}</span>
+                  <span>{{k.age}}</span>
+                </span>
+              </button>
+            </sc-for>
+            <sc-if value="{{c.empty}}"><div style="padding: 14px 6px; border: 1px dashed #343746; border-radius: 8px; color: #8B95BD; font-size: 11px; text-align: center">No tasks</div></sc-if>
+          </div>
+        </section>
+      </sc-for>
+    </div>
+  </div>
+
+  <sc-if value="{{taskOpen}}" hint-placeholder-val="{{false}}">
+    <div class="mc-fade" onClick="{{closeTask}}" style="position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(25, 26, 33, .78)">
+      <article class="mc-pop" role="dialog" aria-modal="true" aria-labelledby="task-title" onClick="{{stop}}" style="width: 100%; max-width: 860px; max-height: min(760px, 100%); display: flex; flex-direction: column; overflow: hidden; border: 1px solid #6272A4; border-radius: 14px; background: #21222C; box-shadow: 0 24px 60px rgba(0, 0, 0, .55)">
+        <div style="flex: none; display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px 10px 18px; border-bottom: 1px solid #44475A">
+          <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+            <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 11px">
+              <span class="num" style="color: #8B95BD">{{task.num}}</span>
+              <span style="padding: 0 6px; border: 1px solid {{task.statusColor}}; border-radius: 4px; color: {{task.statusColor}}">{{task.status}}</span>
+              <span style="display: inline-flex; align-items: center; gap: 4px; color: {{task.prioColor}}"><i-con name="flag" size="11"></i-con>{{task.prio}}</span>
+            </span>
+            <h2 id="task-title" style="margin: 0; font-size: 15px; font-weight: 700; color: #F8F8F2">{{task.title}}</h2>
+          </div>
+          <button type="button" class="ib" onClick="{{closeTask}}" aria-label="Close task" title="Close (Esc)"><i-con name="x" size="15"></i-con></button>
+        </div>
+        <div style="flex: 1; min-height: 0; display: flex; flex-wrap: wrap; overflow-y: auto">
+          <div style="flex: 999 1 420px; min-width: 0; padding: 14px 18px; display: flex; flex-direction: column; gap: 14px; line-height: 1.6">
+            <div><md-view list="{{task.body}}"></md-view></div>
+            <section aria-label="Comments" style="display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px dashed #44475A">
+              <span style="color: #BD93F9; font-weight: 600">Comments · {{task.comments}}</span>
+              <sc-for list="{{task.thread}}" as="m" hint-placeholder-count="3">
+                <div data-key="{{m.key}}" style="display: flex; gap: 8px">
+                  <agent-avatar of="m.who" size="22"></agent-avatar>
+                  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                    <span style="font-size: 11px"><span style="color: {{m.who.color}}; font-weight: 600">{{m.who.label}}</span> <span style="color: #8B95BD">· {{m.t}}</span></span>
+                    <div style="padding: 6px 9px 1px; border: 1px solid #44475A; border-radius: 2px 10px 10px 10px; background: #282A36; font-size: 11px"><md-view list="{{m.blocks}}"></md-view></div>
+                  </div>
+                </div>
+              </sc-for>
+              <sc-if value="{{task.noComments}}"><span style="color: #8B95BD; font-size: 11px">No comments yet</span></sc-if>
+            </section>
+          </div>
+          <aside aria-label="Task details" style="flex: 1 1 220px; min-width: 0; padding: 14px 18px; border-left: 1px solid #343746; background: #282A36; display: flex; flex-direction: column; gap: 12px; font-size: 11px">
+            <div style="display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; align-items: center">
+              <span style="color: #A9B2D3">Assignee</span>
+              <span style="display: flex; align-items: center; gap: 6px; min-width: 0"><agent-avatar of="task.who" size="18"></agent-avatar><span style="color: {{task.who.color}}; font-weight: 600">{{task.who.label}}</span></span>
+              <span style="color: #A9B2D3">Created by</span>
+              <span style="display: flex; align-items: center; gap: 6px; min-width: 0"><agent-avatar of="task.by" size="18"></agent-avatar><span style="color: {{task.by.color}}">{{task.by.label}}</span></span>
+              <span style="color: #A9B2D3">Created</span><span>{{task.created}}</span>
+              <span style="color: #A9B2D3">Updated</span><span>{{task.updated}}</span>
+              <span style="color: #A9B2D3">Runs</span><span>{{task.runs}}</span>
+              <span style="color: #A9B2D3">Links</span><span style="overflow-wrap: anywhere">{{task.links}}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px dashed #44475A">
+              <span style="color: #BD93F9; font-weight: 600">Activity</span>
+              <sc-for list="{{task.events}}" as="ev" hint-placeholder-count="4">
+                <div style="display: flex; gap: 8px">
+                  <span class="dot" style="margin-top: 5px; background: {{ev.color}}"></span>
+                  <div style="display: flex; flex-direction: column"><span style="color: #F8F8F2">{{ev.text}}</span><span style="color: #8B95BD; font-size: 10px">{{ev.t}}</span></div>
+                </div>
+              </sc-for>
+            </div>
+            <a href="Chat.dc.html" style="display: inline-flex; align-items: center; gap: 6px; margin-top: auto"><i-con name="message" size="12"></i-con>Chat with {{task.who.label}}</a>
+          </aside>
+        </div>
+      </article>
+    </div>
+  </sc-if>
+</div>
+</div>
+<!--@shared-html-->
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = Object.assign(this.sharedState(), { board: 'main', who: null, query: '', task: null });
+  }
+/*@shared-js*/
+  componentDidMount() {
+    this.sharedMount();
+  }
+  tasks() {
+    // Read from ~/.hermes/kanban.db (tasks, task_links, task_runs, task_events) and kanban/boards/<slug>/kanban.db.
+    var nl = String.fromCharCode(10);
+    return {
+      main: [
+        { id: 't42', num: '#42', title: 'Draft the weekly digest from 3 arxiv notes', status: 'running', who: 'scribe', by: 'scout', prio: 'high', age: '4m', created: '2026-10-10 20:37', updated: '20:41', runs: '1 running', links: 'blocks #45',
+          body: 'Write the weekly digest for Monday.' + nl + nl + '## Inputs' + nl + '- [[Speculative Decoding]]' + nl + '- 2 more arxiv summaries in `research/`' + nl + nl + '## Done when' + nl + '- Draft posted to **#drafts**' + nl + '- Links back to every source note',
+          thread: [['scout', '20:41', 'Notes are ready: [[Speculative Decoding]] and 2 more. Handing this to you.'], ['scribe', '20:41', 'Picked it up. Drafting now, ETA ~10 min.']],
+          events: [['20:37', 'created by scout', '#A9B2D3'], ['20:41', 'assigned to scribe', '#FFB86C'], ['20:41', 'run started', '#8BE9FD']] },
+        { id: 't41', num: '#41', title: 'Find sources for the v0.22 changelog', status: 'done', who: 'scout', by: 'atlas', prio: 'medium', age: '29m', created: '2026-10-10 19:58', updated: '20:12', runs: '1 · ok', links: '—',
+          body: 'Collect primary sources for the v0.22 changelog: release notes, merged PRs and the docs diff.',
+          thread: [['scout', '20:12', '6 sources attached; summary is in the task run.']],
+          events: [['19:58', 'created by atlas', '#A9B2D3'], ['20:01', 'run started', '#8BE9FD'], ['20:12', 'done', '#50FA7B']] },
+        { id: 't43', num: '#43', title: 'Fix inbox-triage delivery: bot removed from the Telegram group', status: 'blocked', who: 'herald', by: 'atlas', prio: 'urgent', age: '55m', created: '2026-10-10 19:47', updated: '19:52', runs: '2 · failed', links: 'cron inbox-triage',
+          body: 'Cron **inbox-triage** fails with `telegram 403 Forbidden`. The bot needs to be added back to the group by a human.',
+          thread: [['herald', '19:49', 'Retried twice, still 403. I cannot re-invite myself.'], ['atlas', '19:52', 'Blocked until the operator re-adds the bot.']],
+          events: [['19:47', 'created by atlas', '#A9B2D3'], ['19:49', 'run failed', '#FF5555'], ['19:52', 'blocked', '#FF5555']] },
+        { id: 't44', num: '#44', title: 'Summarise Q3 infra report cost section', status: 'review', who: 'atlas', by: 'atlas', prio: 'medium', age: '1h', created: '2026-10-10 19:30', updated: '20:46', runs: '1 · ok', links: '—',
+          body: 'Three bullets on the cost section of `q3-infra-report.pdf`.', thread: [['atlas', '20:46', 'Draft ready for your review in the chat.']],
+          events: [['19:30', 'created', '#A9B2D3'], ['20:46', 'moved to review', '#BD93F9']] },
+        { id: 't45', num: '#45', title: 'Publish the digest to Discord #digest', status: 'todo', who: 'scribe', by: 'scout', prio: 'medium', age: '4m', created: '2026-10-10 20:41', updated: '20:41', runs: '—', links: 'blocked by #42', body: 'Post the approved digest to **#digest** on Monday 09:00.', thread: [], events: [['20:41', 'created by scout', '#A9B2D3']] },
+        { id: 't46', num: '#46', title: 'Weekly uptime summary for Acme', status: 'ready', who: 'herald', by: 'atlas', prio: 'low', age: '2h', created: '2026-10-10 18:40', updated: '18:40', runs: '—', links: '—', body: 'Compile the weekly uptime numbers for [[Client — Acme]].', thread: [], events: [['18:40', 'created by atlas', '#A9B2D3']] },
+        { id: 't47', num: '#47', title: 'Link orphan notes in research/', status: 'ready', who: 'atlas', by: 'atlas', prio: 'low', age: '3h', created: '2026-10-10 17:30', updated: '17:30', runs: '—', links: '—', body: 'Find orphan notes in `research/` and link them from the right hub notes.', thread: [], events: [['17:30', 'created', '#A9B2D3']] },
+        { id: 't48', num: '#48', title: 'Check unpaid invoices older than 14 days', status: 'triage', who: 'ledger', by: 'atlas', prio: 'medium', age: '5h', created: '2026-10-10 15:10', updated: '15:10', runs: '—', links: '—', body: 'ledger is parked; decide whether to wake it or reassign.', thread: [['atlas', '15:10', 'Parking this until ledger is back.']], events: [['15:10', 'created by atlas', '#A9B2D3']] },
+        { id: 't49', num: '#49', title: 'Research SSH multiplexing limits on OpenSSH 9.x', status: 'triage', who: 'scout', by: 'atlas', prio: 'low', age: '6h', created: '2026-10-10 14:22', updated: '14:22', runs: '—', links: '—', body: 'How many channels per connection before things degrade? See [[SSH Multiplexing]].', thread: [], events: [['14:22', 'created by atlas', '#A9B2D3']] },
+        { id: 't50', num: '#50', title: 'Morning briefing: add calendar conflicts', status: 'todo', who: 'atlas', by: 'atlas', prio: 'medium', age: '7h', created: '2026-10-10 13:05', updated: '13:05', runs: '—', links: 'cron morning-briefing', body: 'Flag overlapping meetings in the 07:00 briefing.', thread: [], events: [['13:05', 'created', '#A9B2D3']] },
+        { id: 't39', num: '#39', title: 'Newsletter draft for Oct 10', status: 'done', who: 'scribe', by: 'scribe', prio: 'medium', age: '8h', created: '2026-10-10 11:55', updated: '12:03', runs: '1 · ok', links: 'cron draft-newsletter', body: 'Daily newsletter from notes tagged `#publish`.', thread: [['scribe', '12:03', 'Posted to #drafts (742 words).']], events: [['11:55', 'created', '#A9B2D3'], ['12:03', 'done', '#50FA7B']] },
+        { id: 't38', num: '#38', title: 'Rotate the mail cache cleanup to a safe path', status: 'review', who: 'herald', by: 'herald', prio: 'high', age: '9h', created: '2026-10-10 11:20', updated: '20:41', runs: '1 · blocked by policy', links: '—', body: '`rm -rf ~/tmp/mail-cache` was denied by the approval policy. Propose a safer cleanup.', thread: [['herald', '20:41', 'Approval policy denied the command. Waiting for a human decision.']], events: [['11:20', 'created', '#A9B2D3'], ['20:41', 'command blocked', '#FF5555'], ['20:41', 'moved to review', '#BD93F9']] }
+      ],
+      content: [
+        { id: 'c7', num: '#7', title: 'Blog post: Hermes v0.21.6 highlights', status: 'running', who: 'scribe', by: 'atlas', prio: 'medium', age: '12m', created: '2026-10-10 20:30', updated: '20:44', runs: '1 running', links: '—', body: 'Short post on steadier multiplex gateways and the cron race fix.', thread: [], events: [['20:30', 'created', '#A9B2D3'], ['20:31', 'run started', '#8BE9FD']] },
+        { id: 'c6', num: '#6', title: 'Thread for the release on social', status: 'todo', who: 'scribe', by: 'atlas', prio: 'low', age: '1h', created: '2026-10-10 19:40', updated: '19:40', runs: '—', links: 'blocked by #7', body: 'Five posts, link to the blog post.', thread: [], events: [['19:40', 'created', '#A9B2D3']] }
+      ]
+    };
+  }
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var colors = { atlas: '#50FA7B', scout: '#FFB86C', scribe: '#8BE9FD', herald: '#FF79C6', ledger: '#8B95BD' };
+    var person = function (id) { return Object.assign({ label: self.displayName(id) }, self.agentLook(id, colors[id])); };
+    var prioColor = { urgent: '#FF5555', high: '#FFB86C', medium: '#BD93F9', low: '#8B95BD' };
+    var statusDefs = [['triage', 'Triage', '#8B95BD'], ['todo', 'To do', '#A9B2D3'], ['ready', 'Ready', '#F1FA8C'], ['running', 'Running', '#8BE9FD'], ['blocked', 'Blocked', '#FF5555'], ['review', 'Review', '#BD93F9'], ['done', 'Done', '#50FA7B']];
+    var statusColor = {};
+    statusDefs.forEach(function (d) { statusColor[d[0]] = d[2]; });
+    var all = this.tasks()[st.board];
+    var q = (st.query || '').toLowerCase();
+    var shown = all.filter(function (t) { return (!st.who || t.who === st.who) && (!q || t.title.toLowerCase().indexOf(q) > -1 || t.num.indexOf(q) > -1); });
+    var card = function (t) {
+      return { id: t.id, num: t.num, title: t.title, prio: t.prio, prioColor: prioColor[t.prio], running: t.status === 'running', who: person(t.who), comments: t.thread.length, age: t.age, open: function () { self.setState({ modal: 'task', task: t.id }); } };
+    };
+    var cols = statusDefs.map(function (d, i) {
+      var cards = shown.filter(function (t) { return t.status === d[0]; }).map(card);
+      return { id: d[0], label: d[1], color: d[2], count: cards.length, cards: cards, empty: cards.length === 0, delay: (i * 0.03).toFixed(2) };
+    });
+    var ids = ['atlas', 'scout', 'scribe', 'herald', 'ledger'];
+    var ordered = this.state.order.filter(function (n) { return ids.indexOf(n) > -1; });
+    var people = [{ label: 'All', isAgent: false, pressed: st.who ? 'false' : 'true', pick: function () { self.setState({ who: null }); } }].concat(ordered.map(function (id) {
+      return Object.assign(person(id), { isAgent: true, pressed: st.who === id ? 'true' : 'false', pick: function () { self.setState({ who: self.state.who === id ? null : id }); } });
+    }));
+    var t = st.modal === 'task' ? all.filter(function (x) { return x.id === st.task; })[0] : null;
+    var task = t ? {
+      num: t.num, title: t.title, status: t.status, statusColor: statusColor[t.status], prio: t.prio, prioColor: prioColor[t.prio],
+      who: person(t.who), by: person(t.by), created: t.created, updated: t.updated, runs: t.runs, links: t.links,
+      body: this.md(t.body), comments: t.thread.length, noComments: t.thread.length === 0,
+      thread: t.thread.map(function (m, i) { return { key: t.id + 'm' + i, who: person(m[0]), t: m[1], blocks: self.md(m[2]) }; }),
+      events: t.events.map(function (e) { return { t: e[0], text: e[1], color: e[2] }; })
+    } : null;
+    return Object.assign(this.sharedVals(), this.navFor('kanban'), {
+      boards: [['main', 'Main board'], ['content', 'content']].map(function (b) { return { id: b[0], label: b[1], sel: st.board === b[0], unsel: st.board !== b[0] }; }),
+      pickBoard: function (e) { self.setState({ board: e.target.value, task: null }); },
+      taskCount: all.length,
+      runningCount: all.filter(function (x) { return x.status === 'running'; }).length,
+      blockedCount: all.filter(function (x) { return x.status === 'blocked'; }).length,
+      people: people,
+      query: st.query,
+      onQuery: function (e) { self.setState({ query: e.target.value }); },
+      cols: cols,
+      taskOpen: !!task, task: task,
+      closeTask: function () { self.setState({ modal: null }); }
+    });
+  }
+}
+</script>
+</body>
+</html>

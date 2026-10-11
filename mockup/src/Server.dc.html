@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Server — Hermes Agent Mission Control</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;family=VT323&amp;display=swap">
+<style>
+/*@shared-css*/
+body{margin:0;background:#282A36}
+a{color:#50FA7B}a:hover{color:#8BE9FD}
+button:focus-visible{outline:1px solid #50FA7B;outline-offset:1px}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="zoom: {{uiZoom}}; height: calc(100vh / {{uiZoom}}); overflow: hidden; background: #282A36; color: #F8F8F2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: {{fs}}px; line-height: 1.45; display: flex; flex-direction: column">
+<div class="mc-body">
+<!--@part sidebar-->
+<div class="mc-col">
+
+
+
+  <div style="display: flex; flex-wrap: wrap; flex: 1; min-height: 0; overflow-y: auto">
+
+    <main style="flex: 999 1 560px; min-width: 0; padding: 24px 24px 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px 14px; align-content: start">
+
+      <section aria-label="CPU" style="grid-column: 1 / -1; position: relative; border: 1px solid #6272A4; background: #21222C; padding: 22px 14px 12px; display: flex; flex-wrap: wrap; gap: 16px">
+        <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #50FA7B">┤ cpu ├─ 34% ─ load 1.42 0.98 0.77 ─ up 12d 04h ─ 52°C ├</h2>
+        <div style="flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+          <div role="img" aria-label="CPU usage over the last 60 seconds" style="height: 150px; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid #44475A">
+            <sc-for list="{{cpuHist}}" as="b" hint-placeholder-count="60">
+              <div style="flex: 1; height: {{b.h}}px; background: {{b.c}}; opacity: {{b.o}}"></div>
+            </sc-for>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #8B95BD; font-size: 11px"><span>-60s</span><span>-30s</span><span>now</span></div>
+        </div>
+        <div style="flex: 1 1 240px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 16px; font-size: 12px; align-content: start">
+          <sc-for list="{{cores}}" as="c" hint-placeholder-count="8">
+            <div style="display: flex; gap: 6px; white-space: nowrap"><span style="color: #A9B2D3">{{c.n}}</span><span style="color: {{c.color}}; overflow: hidden">{{c.bar}}</span><span style="margin-left: auto">{{c.v}}</span></div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section aria-label="Memory" style="position: relative; border: 1px solid #44475A; background: #21222C; padding: 22px 14px 12px; display: flex; flex-direction: column; gap: 7px; font-size: 12px">
+        <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #50FA7B">┤ mem ├─ 16.0 GiB ├</h2>
+        <sc-for list="{{mem}}" as="m" hint-placeholder-count="5">
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <div style="display: flex; justify-content: space-between"><span style="color: #A9B2D3">{{m.label}}</span><span>{{m.value}}</span></div>
+            <div style="height: 8px; background: #44475A"><div style="height: 8px; width: {{m.pct}}%; background: {{m.color}}"></div></div>
+          </div>
+        </sc-for>
+      </section>
+
+      <section aria-label="Network" style="position: relative; border: 1px solid #44475A; background: #21222C; padding: 22px 14px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12px">
+        <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #50FA7B">┤ net ├─ eth0 ├</h2>
+        <div style="display: flex; justify-content: space-between"><span style="color: #8BE9FD">rx 1.2 MB/s</span><span style="color: #A9B2D3">total 48.3 GiB</span></div>
+        <div role="img" aria-label="Download rate, last 60 seconds" style="height: 56px; display: flex; align-items: flex-end; gap: 2px">
+          <sc-for list="{{rx}}" as="b" hint-placeholder-count="60">
+            <div style="flex: 1; height: {{b.h}}px; background: #8BE9FD; opacity: {{b.o}}"></div>
+          </sc-for>
+        </div>
+        <div role="img" aria-label="Upload rate, last 60 seconds" style="height: 56px; display: flex; align-items: flex-start; gap: 2px">
+          <sc-for list="{{tx}}" as="b" hint-placeholder-count="60">
+            <div style="flex: 1; height: {{b.h}}px; background: #FF79C6; opacity: {{b.o}}"></div>
+          </sc-for>
+        </div>
+        <div style="display: flex; justify-content: space-between"><span style="color: #FF79C6">tx 340 KB/s</span><span style="color: #A9B2D3">total 9.7 GiB</span></div>
+      </section>
+
+      <section aria-label="Disks" style="position: relative; border: 1px solid #44475A; background: #21222C; padding: 22px 14px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12px">
+        <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #50FA7B">┤ disks ├─ io r 2.1 MB/s · w 640 KB/s ├</h2>
+        <sc-for list="{{disks}}" as="d" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <div style="display: flex; justify-content: space-between; gap: 8px"><span style="color: #F8F8F2">{{d.mount}}</span><span style="color: #A9B2D3">{{d.value}}</span></div>
+            <div style="color: {{d.color}}; white-space: nowrap; overflow: hidden">{{d.bar}}</div>
+          </div>
+        </sc-for>
+      </section>
+
+      <section aria-label="Processes" style="grid-column: 1 / -1; position: relative; border: 1px solid #44475A; background: #21222C; padding: 22px 0 8px; display: flex; flex-direction: column; gap: 8px; font-size: 12px">
+        <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #50FA7B">┤ proc ├─ 214 tasks ├</h2>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px">
+          <button type="button" onClick="{{toggleHermes}}" aria-pressed="{{hermesOnlyStr}}" style="min-height: 30px; padding: 0 10px; background: {{hermesBg}}; border: 1px solid #6272A4; color: {{hermesFg}}; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-radius: 6px"><i-con name="filter" size="12"></i-con>{{hermesLabel}}</button>
+          <span style="align-self: center; color: #8B95BD">sort:</span>
+          <button type="button" onClick="{{sortCpu}}" style="min-height: 30px; padding: 0 10px; background: transparent; border: 1px solid {{cpuBorder}}; color: #F8F8F2; font: inherit; cursor: pointer">cpu%</button>
+          <button type="button" onClick="{{sortMem}}" style="min-height: 30px; padding: 0 10px; background: transparent; border: 1px solid {{memBorder}}; color: #F8F8F2; font: inherit; cursor: pointer">mem%</button>
+          <span style="margin-left: auto; align-self: center; color: #8B95BD">read-only · no kill/renice in v1</span>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; min-width: 760px; border-collapse: collapse">
+            <thead>
+              <tr style="color: #A9B2D3; text-align: left">
+                <th style="padding: 4px 14px; font-weight: 600">PID</th>
+                <th style="padding: 4px 8px; font-weight: 600">USER</th>
+                <th style="padding: 4px 8px; font-weight: 600; text-align: right">CPU%</th>
+                <th style="padding: 4px 8px; font-weight: 600; text-align: right">MEM%</th>
+                <th style="padding: 4px 8px; font-weight: 600; text-align: right">RSS</th>
+                <th style="padding: 4px 14px 4px 16px; font-weight: 600">COMMAND</th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{procs}}" as="p" hint-placeholder-count="9">
+                <tr style="background: {{p.bg}}; color: {{p.fg}}">
+                  <td style="padding: 3px 14px; color: #A9B2D3">{{p.pid}}</td>
+                  <td style="padding: 3px 8px">{{p.user}}</td>
+                  <td style="padding: 3px 8px; text-align: right; color: {{p.cpuColor}}">{{p.cpu}}</td>
+                  <td style="padding: 3px 8px; text-align: right">{{p.mem}}</td>
+                  <td style="padding: 3px 8px; text-align: right">{{p.rss}}</td>
+                  <td style="padding: 3px 14px 3px 16px; white-space: nowrap">{{p.cmd}}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</div>
+<!--@shared-html-->
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { hermesOnly: false, sort: 'cpu' };
+    this.state = Object.assign(this.sharedState(), this.state);
+  }
+/*@shared-js*/
+  componentDidMount() {
+    this.sharedMount();
+  }
+  load(p) {
+    return p < 50 ? '#50FA7B' : (p < 80 ? '#FFB86C' : '#FF5555');
+  }
+  bar(p, w) {
+    var n = Math.round(p / 100 * w);
+    return '■'.repeat(n) + '·'.repeat(w - n);
+  }
+  series(n, base, a, b, max) {
+    var out = [];
+    for (var i = 0; i < n; i++) {
+      var v = base + a * Math.sin(i / 5) + b * Math.sin(i / 2.3 + 1) + (i > 52 ? 12 : 0);
+      out.push(Math.max(3, Math.min(max, v)));
+    }
+    return out;
+  }
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var cpuHist = this.series(60, 32, 16, 9, 97).map(function (v, i) {
+      return { h: Math.round(v * 1.5), c: self.load(v), o: (0.45 + 0.55 * i / 59).toFixed(2) };
+    });
+    var rx = this.series(60, 26, 14, 10, 54).map(function (v, i) { return { h: Math.round(v), o: (0.4 + 0.6 * i / 59).toFixed(2) }; });
+    var tx = this.series(60, 12, 8, 6, 54).map(function (v, i) { return { h: Math.round(v), o: (0.4 + 0.6 * i / 59).toFixed(2) }; });
+    var cores = [41, 28, 63, 19, 35, 88, 22, 30].map(function (v, i) {
+      return { n: 'C' + i, bar: self.bar(v, 10), color: self.load(v), v: v + '%' };
+    });
+    var mem = [
+      { label: 'used', value: '6.1 GiB', pct: 38, color: '#50FA7B' },
+      { label: 'cached', value: '5.4 GiB', pct: 34, color: '#8BE9FD' },
+      { label: 'available', value: '9.9 GiB', pct: 62, color: '#A9B2D3' },
+      { label: 'free', value: '4.5 GiB', pct: 28, color: '#6272A4' },
+      { label: 'swap', value: '0.1 / 2.0 GiB', pct: 4, color: '#FFB86C' }
+    ];
+    var disks = [
+      { mount: '/', value: '77 / 160 GiB · 48%', bar: this.bar(48, 34), color: this.load(48) },
+      { mount: '/root/.hermes', value: 'state.db ×5 · 1.3 GiB', bar: this.bar(1, 34), color: '#50FA7B' },
+      { mount: '/data', value: '412 / 500 GiB · 82%', bar: this.bar(82, 34), color: this.load(82) }
+    ];
+    var raw = [
+      [1842, 'root', 22.4, 3.1, '512M', 'python -m hermes_cli.main gateway run  (multiplex · 5 profiles)', true],
+      [30211, 'root', 9.8, 1.2, '196M', 'hermes -p scout chat  (cron: arxiv-watch)', true],
+      [912, 'root', 7.5, 2.4, '390M', 'node /srv/app/server.js', false],
+      [30240, 'root', 6.9, 0.7, '120M', 'hermes -p atlas chat --oneshot --source mission-control', true],
+      [1203, 'postgres', 4.1, 5.6, '900M', 'postgres: writer', false],
+      [30188, 'root', 1.2, 0.2, '31M', 'python3 -u -  (mission-control collector · stdin)', true],
+      [30260, 'root', 3.8, 2.9, '470M', 'chromium --headless  (atlas browser tool)', true],
+      [744, 'root', 0.9, 0.6, '96M', 'dockerd', false],
+      [655, 'root', 0.4, 0.1, '12M', 'sshd: root@notty', false],
+      [501, 'www-data', 0.3, 0.2, '28M', 'nginx: worker process', false]
+    ];
+    var procs = raw.filter(function (r) { return !st.hermesOnly || r[6]; })
+      .sort(function (a, b) { return st.sort === 'cpu' ? b[2] - a[2] : b[3] - a[3]; })
+      .map(function (r) {
+        return { pid: r[0], user: r[1], cpu: r[2].toFixed(1), mem: r[3].toFixed(1), rss: r[4], cmd: r[5], bg: r[6] ? '#44475A' : 'transparent', fg: r[6] ? '#F8F8F2' : '#F8F8F2', cpuColor: self.load(r[2] * 3) };
+      });
+    return Object.assign(this.sharedVals(), this.navFor('server'), {
+      cpuHist: cpuHist, rx: rx, tx: tx, cores: cores, mem: mem, disks: disks, procs: procs,
+      hermesOnlyStr: st.hermesOnly ? 'true' : 'false',
+      hermesLabel: 'Hermes only',
+      hermesBg: st.hermesOnly ? '#50FA7B' : 'transparent',
+      hermesFg: st.hermesOnly ? '#282A36' : '#50FA7B',
+      toggleHermes: function () { self.setState({ hermesOnly: !self.state.hermesOnly }); },
+      cpuBorder: st.sort === 'cpu' ? '#50FA7B' : '#44475A',
+      memBorder: st.sort === 'mem' ? '#50FA7B' : '#44475A',
+      sortCpu: function () { self.setState({ sort: 'cpu' }); },
+      sortMem: function () { self.setState({ sort: 'mem' }); }
+    });
+  }
+}
+</script>
+</body>
+</html>

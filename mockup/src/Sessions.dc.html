@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sessions — Hermes Agent Mission Control</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;family=VT323&amp;display=swap">
+<style>
+/*@shared-css*/
+body{margin:0;background:#282A36}
+a{color:#50FA7B}a:hover{color:#8BE9FD}
+input:focus,button:focus-visible{outline:1px solid #50FA7B;outline-offset:1px}
+.ses-row{display:flex;flex-direction:column;gap:2px;width:100%;box-sizing:border-box;padding:7px 12px;border:0;border-bottom:1px dashed #343746;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ses-row:hover{background:#2c2e3b}
+.ses-row[aria-selected="true"]{background:#44475A}
+.chip{display:inline-flex;align-items:center;gap:5px;min-height:22px;padding:0 8px;border:1px solid #44475A;border-radius:11px;background:transparent;color:#A9B2D3;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+.chip:hover{color:#F8F8F2;border-color:#6272A4}
+.btn{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 11px;border:1px solid #6272A4;border-radius:6px;background:transparent;color:#F8F8F2;font:inherit;cursor:pointer;text-decoration:none}
+.btn:hover{background:#343746}
+.btn.pri{border:0;background:#50FA7B;color:#282A36;font-weight:700}
+.btn.pri:hover{background:#6dfc92}
+.sk{display:block;height:10px;border-radius:3px;background:#343746}
+mark{background:#44475A;color:#F1FA8C;border-radius:2px;padding:0 1px}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="zoom: {{uiZoom}}; height: calc(100vh / {{uiZoom}}); overflow: hidden; background: #282A36; color: #F8F8F2; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: {{fs}}px; line-height: 1.45; display: flex; flex-direction: column">
+<div class="mc-body">
+<!--@part sidebar-->
+<div class="mc-col">
+
+
+  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 20px 24px 16px">
+
+    <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px">
+      <h1 style="margin: 0; font-family: 'VT323', monospace; font-size: 34px; line-height: 1; font-weight: 400; color: #50FA7B">SESSIONS</h1>
+      <span style="color: #A9B2D3">{{summary}}</span>
+      <span style="margin-left: auto; color: #8B95BD">source: state.db · sessions, messages_fts · read-only</span>
+    </div>
+
+    <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px">
+      <label for="ses-q" class="vh">Search sessions and messages</label>
+      <span style="position: relative; flex: 1 1 260px; max-width: 420px; display: flex; align-items: center">
+        <span style="position: absolute; left: 8px; color: #8B95BD; display: flex"><i-con name="search" size="13"></i-con></span>
+        <input id="ses-q" type="search" class="fld" autocomplete="off" spellcheck="false" value="{{q}}" onChange="{{onQ}}" placeholder="Search every message" style="width: 100%; padding-left: 28px">
+      </span>
+      <div role="group" aria-label="Agent" style="display: flex; flex-wrap: wrap; gap: 4px">
+        <sc-for list="{{chips}}" as="c" hint-placeholder-count="6">
+          <button type="button" class="chip" data-key="{{c.key}}" aria-pressed="{{c.pressed}}" onClick="{{c.pick}}" style="background: {{c.bg}}; border-color: {{c.border}}; color: {{c.fg}}">{{c.label}}</button>
+        </sc-for>
+      </div>
+      <label for="ses-src" class="vh">Source</label>
+      <select id="ses-src" class="fld" onChange="{{onSource}}">
+        <sc-for list="{{sources}}" as="o"><sc-if value="{{o.sel}}"><option value="{{o.v}}" selected>{{o.label}}</option></sc-if><sc-if value="{{o.unsel}}"><option value="{{o.v}}">{{o.label}}</option></sc-if></sc-for>
+      </select>
+      <label for="ses-range" class="vh">Time range</label>
+      <select id="ses-range" class="fld" onChange="{{onRange}}">
+        <sc-for list="{{ranges}}" as="o"><sc-if value="{{o.sel}}"><option value="{{o.v}}" selected>{{o.label}}</option></sc-if><sc-if value="{{o.unsel}}"><option value="{{o.v}}">{{o.label}}</option></sc-if></sc-for>
+      </select>
+    </div>
+
+    <sc-if value="{{isError}}" hint-placeholder-val="{{false}}">
+      <section role="alert" style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 14px; border: 1px solid #FF5555; background: #21222C">
+        <span style="color: #FF5555; display: flex"><i-con name="alert" size="16"></i-con></span>
+        <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px">
+          <span style="color: #F8F8F2; font-weight: 600">Can’t read state.db right now</span>
+          <span style="color: #A9B2D3">The database is locked (a WAL checkpoint is running). The last 12 sessions below are from 20:41. Retrying in 5 s.</span>
+        </div>
+        <button type="button" class="btn" onClick="{{retry}}"><i-con name="refresh" size="13"></i-con>Retry now</button>
+      </section>
+    </sc-if>
+
+    <div style="flex: 1; min-height: 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 22px 14px; padding-top: 12px; overflow-y: auto">
+
+      <section aria-label="Session list" style="position: relative; flex: 1 1 340px; max-width: 460px; min-width: 0; min-height: 300px; display: flex; flex-direction: column; border: 1px solid #44475A; background: #21222C; padding-top: 18px">
+        <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ sessions ├</h2>
+        <div role="listbox" aria-label="Sessions" style="flex: 1; min-height: 0; overflow-y: auto">
+          <sc-if value="{{isLoading}}" hint-placeholder-val="{{false}}">
+            <div aria-busy="true" aria-label="Loading sessions">
+              <sc-for list="{{skeleton}}" as="s"><div data-key="{{s.key}}" style="display: flex; flex-direction: column; gap: 7px; padding: 12px; border-bottom: 1px dashed #343746"><span class="sk" style="width: {{s.w}}%"></span><span class="sk" style="width: 55%; height: 8px"></span></div></sc-for>
+            </div>
+          </sc-if>
+          <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+            <button type="button" role="option" class="ses-row" data-key="{{r.id}}" aria-selected="{{r.selected}}" onClick="{{r.pick}}">
+              <span style="display: flex; align-items: center; gap: 8px">
+                <sc-if value="{{r.pinned}}"><span title="Pinned" style="color: #BD93F9; display: flex"><i-con name="flag" size="11"></i-con></span></sc-if>
+                <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #F8F8F2; font-weight: 600">{{r.title}}</span>
+                <span style="flex: none; color: {{r.whenColor}}; font-size: 11px">{{r.when}}</span>
+              </span>
+              <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: 11px; color: #8B95BD">
+                <span style="color: {{r.color}}; font-weight: 600">{{r.agentLabel}}</span>
+                <span style="padding: 0 5px; border: 1px solid #44475A; border-radius: 3px; color: #A9B2D3">{{r.source}}</span>
+                <span class="num">{{r.msgs}} msgs · {{r.tools}} tools · {{r.cost}}</span>
+              </span>
+              <sc-if value="{{r.hasSnippet}}"><span style="color: #A9B2D3; font-size: 11px; overflow-wrap: anywhere"><sc-for list="{{r.snippet}}" as="sg"><sc-if value="{{sg.hit}}"><mark>{{sg.t}}</mark></sc-if><sc-if value="{{sg.plain}}">{{sg.t}}</sc-if></sc-for></span></sc-if>
+            </button>
+          </sc-for>
+          <sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 22px 16px">
+              <span style="color: #F8F8F2; font-weight: 600">{{emptyTitle}}</span>
+              <span style="color: #A9B2D3">{{emptyBody}}</span>
+              <button type="button" class="btn" onClick="{{clearFilters}}">Clear search and filters</button>
+            </div>
+          </sc-if>
+        </div>
+      </section>
+
+      <section aria-label="Transcript" style="position: relative; flex: 999 1 420px; min-width: 0; min-height: 360px; display: flex; flex-direction: column; border: 1px solid {{sel.border}}; background: #21222C; padding-top: 18px">
+        <h2 style="position: absolute; top: -10px; left: 12px; margin: 0; padding: 0 6px; background: #282A36; font-size: 12px; font-weight: 600; color: #BD93F9">┤ transcript ├</h2>
+        <sc-if value="{{hasSel}}" hint-placeholder-val="{{true}}">
+          <div style="flex: none; display: flex; flex-direction: column; gap: 6px; padding: 0 16px 10px; border-bottom: 1px solid #44475A">
+            <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px">
+              <h3 style="margin: 0; font-size: 14px; color: #F8F8F2; overflow-wrap: anywhere">{{sel.title}}</h3>
+              <span style="color: {{sel.color}}; font-weight: 600">{{sel.agentLabel}}</span>
+              <span style="padding: 0 6px; border: 1px solid {{sel.statusColor}}; border-radius: 3px; color: {{sel.statusColor}}; font-size: 11px">{{sel.statusLabel}}</span>
+            </div>
+            <div class="num" style="display: flex; flex-wrap: wrap; gap: 2px 14px; color: #A9B2D3; font-size: 11px">
+              <span>{{sel.id}}</span><span>{{sel.model}}</span><span>{{sel.source}}</span><span>{{sel.dur}}</span>
+              <span>in {{sel.tin}} · out {{sel.tout}} · cache {{sel.cache}}</span>
+              <span style="color: #F1FA8C">{{sel.cost}}</span>
+            </div>
+            <sc-if value="{{sel.hasParent}}"><div style="font-size: 11px; color: #8B95BD">continues <button type="button" class="wl" onClick="{{sel.goParent}}">{{sel.parentTitle}}</button></div></sc-if>
+            <sc-if value="{{sel.hasChildren}}"><div style="font-size: 11px; color: #8B95BD">continued in <button type="button" class="wl" onClick="{{sel.goChild}}">{{sel.childTitle}}</button></div></sc-if>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 4px">
+              <a href="Chat.dc.html" class="btn pri" title="hermes -p {{sel.agent}} chat --resume {{sel.id}}"><i-con name="message" size="13"></i-con>Continue in Chat</a>
+              <button type="button" class="btn" aria-pressed="{{sel.pinPressed}}" onClick="{{togglePin}}"><i-con name="flag" size="13"></i-con>{{sel.pinLabel}}</button>
+              <button type="button" class="btn" aria-expanded="{{renaming}}" onClick="{{startRename}}"><i-con name="edit" size="13"></i-con>Rename</button>
+              <span style="position: relative; display: inline-flex">
+                <button type="button" class="btn" aria-haspopup="menu" aria-expanded="{{exportOpen}}" onClick="{{toggleExport}}"><i-con name="download" size="13"></i-con>Export<i-con name="chev-down" size="12"></i-con></button>
+                <sc-if value="{{exportShown}}" hint-placeholder-val="{{false}}">
+                  <div role="menu" class="mc-pop" style="position: absolute; top: 32px; left: 0; z-index: 20; min-width: 190px; padding: 4px 0; border: 1px solid #44475A; border-radius: 8px; background: #21222C; box-shadow: 0 12px 28px rgba(0, 0, 0, .45)">
+                    <sc-for list="{{exportFormats}}" as="f"><button type="button" role="menuitem" class="pal-row" data-key="{{f.key}}" onClick="{{f.run}}"><span style="flex: 1">{{f.label}}</span><span style="color: #8B95BD; font-size: 11px">{{f.ext}}</span></button></sc-for>
+                  </div>
+                </sc-if>
+              </span>
+            </div>
+            <sc-if value="{{renaming}}" hint-placeholder-val="{{false}}">
+              <div class="mc-down" style="display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid #6272A4; border-radius: 8px; background: #282A36">
+                <label for="ses-rename" style="color: #A9B2D3">New title</label>
+                <input id="ses-rename" type="text" class="fld" maxlength="80" value="{{renameDraft}}" onChange="{{onRenameDraft}}">
+                <pre style="margin: 0; padding: 6px 8px; border: 1px solid #44475A; border-radius: 6px; background: #191A21; color: #F1FA8C; font: inherit; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere">$ hermes -p {{sel.agent}} sessions rename {{sel.id}} "{{renameDraft}}"</pre>
+                <span style="display: flex; gap: 6px; justify-content: flex-end"><button type="button" class="btn" onClick="{{cancelRename}}">Cancel</button><button type="button" class="btn pri" onClick="{{confirmRename}}"><i-con name="check" size="13"></i-con>Rename session</button></span>
+              </div>
+            </sc-if>
+          </div>
+
+          <div data-key="{{sel.id}}" class="mc-fade" style="flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; line-height: 1.55">
+            <sc-for list="{{messages}}" as="m" hint-placeholder-count="5">
+              <div data-key="{{m.key}}" style="display: flex; flex-direction: column">
+                <sc-if value="{{m.isUser}}">
+                  <div style="align-self: flex-end; max-width: 82%; padding: 7px 11px; border: 1px solid #44475A; border-radius: 10px 10px 2px 10px; background: #44475A; overflow-wrap: anywhere"><span style="display: block; color: #A9B2D3; font-size: 10px">{{m.who}}</span>{{m.text}}</div>
+                </sc-if>
+                <sc-if value="{{m.isThink}}">
+                  <div style="max-width: 92%">
+                    <button type="button" class="chip" aria-expanded="{{m.expanded}}" onClick="{{m.toggle}}" style="color: #8BE9FD; border-color: #3b5864"><i-con name="activity" size="11"></i-con>thinking · {{m.count}} steps<i-con name="chev-down" size="11"></i-con></button>
+                    <sc-if value="{{m.open}}"><div class="mc-down" style="margin-top: 4px; padding: 6px 10px; border: 1px dashed #3b5864; border-radius: 8px; color: #8BE9FD; font-size: 11px"><sc-for list="{{m.steps}}" as="st"><div style="padding: 2px 0; overflow-wrap: anywhere">{{st.t}}</div></sc-for></div></sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{m.isTool}}">
+                  <div style="max-width: 92%">
+                    <button type="button" class="chip" aria-expanded="{{m.expanded}}" onClick="{{m.toggle}}" style="color: {{m.color}}; border-color: {{m.border}}"><i-con name="tool" size="11"></i-con>{{m.name}}<span style="color: #8B95BD">{{m.brief}}</span><span class="num" style="color: #8B95BD">≈{{m.ms}}</span><i-con name="chev-down" size="11"></i-con></button>
+                    <sc-if value="{{m.open}}"><div class="mc-down" style="margin-top: 4px; display: flex; flex-direction: column; gap: 4px"><pre style="margin: 0; padding: 6px 8px; border: 1px solid #44475A; border-radius: 6px; background: #191A21; color: #F1FA8C; font: inherit; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere">{{m.input}}</pre><pre style="margin: 0; padding: 6px 8px; border: 1px solid {{m.border}}; border-radius: 6px; background: #191A21; color: {{m.outColor}}; font: inherit; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere">{{m.output}}</pre></div></sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{m.isAsst}}">
+                  <div style="max-width: 92%; padding: 8px 12px; border: 1px solid #44475A; border-radius: 10px 10px 10px 2px; background: #282A36; font-size: 12px"><span style="display: block; color: {{sel.color}}; font-size: 10px">{{sel.agentLabel}}</span><md-view list="{{m.blocks}}"></md-view></div>
+                </sc-if>
+              </div>
+            </sc-for>
+            <div style="color: #8B95BD; font-size: 11px; padding-top: 4px">Tool durations are the gap between a call and its result row, so they are approximate. Messages are shown as stored; nothing is sent to the agent.</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{busy}}" hint-placeholder-val="{{false}}">
+          <div aria-busy="true" aria-label="Loading transcript" style="padding: 8px 16px; display: flex; flex-direction: column; gap: 14px">
+            <span class="sk" style="width: 45%; height: 14px"></span><span class="sk" style="width: 70%"></span><span class="sk" style="width: 62%"></span><span class="sk" style="width: 80%"></span><span class="sk" style="width: 38%"></span>
+          </div>
+        </sc-if>
+        <sc-if value="{{noSel}}" hint-placeholder-val="{{false}}">
+          <div style="padding: 24px 18px; display: flex; flex-direction: column; gap: 6px; color: #A9B2D3">
+            <span style="color: #F8F8F2; font-weight: 600">Pick a session to read it</span>
+            <span>The transcript includes thinking steps and tool calls. Search above looks inside every message, not just titles.</span>
+          </div>
+        </sc-if>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+<!--@shared-html-->
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    var f = { agent: 'all', range: '7d' };
+    this.state = { sel: '20261011_182204_a91f', q: '', agent: f.agent, source: 'all', range: f.range, loading: true, open: {}, pinned: {}, titles: {}, renaming: false, renameDraft: '', exportOpen: false, retried: false };
+    this.state = Object.assign(this.sharedState(), this.state);
+    var fl = this.filterLoad();
+    this.state.agent = fl.agent;
+    this.state.range = fl.range;
+    this.demo = this.demoState();
+  }
+/*@shared-js*/
+  componentDidMount() {
+    var self = this;
+    this.sharedMount();
+    if (this.demo !== 'loading') { setTimeout(function () { self.setState({ loading: false }); }, 650); }
+  }
+  data() {
+    var A = { atlas: 'atlas', scout: 'scout', scribe: 'scribe', herald: 'herald', ledger: 'ledger' };
+    return [
+      { id: '20261011_182204_a91f', title: 'Refactor the morning briefing prompt', agent: 'atlas', source: 'cli', model: 'claude-opus-5.5', when: '2h ago', hrs: 2, dur: '14m 08s', msgs: 42, tools: 18, tin: 128400, tout: 9420, cache: 96200, cost: 1.82, cs: 'actual', end: 'user_exit', pinned: true, snippet: 'tighten the calendar section so the briefing stays under 120 words', tk: 'brief' },
+      { id: '20261011_195502_7c20', title: 'inbox-triage', agent: 'herald', source: 'cron', model: 'claude-haiku-5.5', when: '55m ago', hrs: 1, dur: '48s', msgs: 31, tools: 14, tin: 38200, tout: 2100, cache: 21000, cost: 0.04, cs: 'estimated', end: 'error', snippet: '6 threads need a reply, summary could not be delivered to telegram', tk: 'triage' },
+      { id: '20261011_203011_0be4', title: 'arxiv-watch', agent: 'scout', source: 'cron', model: 'claude-sonnet-5.5', when: 'running now', hrs: 0, dur: '3m 12s', msgs: 19, tools: 11, tin: 71900, tout: 4300, cache: 40100, cost: 0.31, cs: 'estimated', end: 'running', snippet: 'two relevant papers in cs.CL, writing vault notes with backlinks' },
+      { id: '20261010_120004_5d3a', title: 'Draft: newsletter #18', agent: 'scribe', source: 'discord', model: 'hermes-4-405b', when: 'yesterday', hrs: 30, dur: '9m 40s', msgs: 26, tools: 7, tin: 52000, tout: 6100, cache: 12000, cost: 0.58, cs: 'estimated', end: 'user_exit', snippet: 'headline options for the newsletter, tone stays dry and specific' },
+      { id: '20261010_091944_e711', title: 'Why is the vault graph missing notes? (continued)', agent: 'atlas', source: 'mission-control', model: 'claude-opus-5.5', when: 'yesterday', hrs: 33, dur: '6m 02s', msgs: 12, tools: 5, tin: 44100, tout: 2700, cache: 30200, cost: 0.74, cs: 'actual', end: 'user_exit', parent: '20261010_091510_e710', snippet: 'orphan notes without a title heading are skipped by the parser' },
+      { id: '20261010_091510_e710', title: 'Why is the vault graph missing notes?', agent: 'atlas', source: 'mission-control', model: 'claude-opus-5.5', when: 'yesterday', hrs: 33, dur: '11m 20s', msgs: 24, tools: 9, tin: 88200, tout: 5300, cache: 61000, cost: 1.12, cs: 'actual', end: 'compressed', child: '20261010_091944_e711', snippet: 'compared the vault folder against the graph node list' },
+      { id: '20261009_070004_2f9c', title: 'morning-briefing', agent: 'atlas', source: 'cron', model: 'claude-opus-5.5', when: '2d ago', hrs: 52, dur: '1m 05s', msgs: 14, tools: 6, tin: 21100, tout: 1500, cache: 9000, cost: 0.19, cs: 'estimated', end: 'cron_complete', snippet: 'three overnight alerts, calendar empty, top three tasks for today' },
+      { id: '20261009_183011_b04d', title: 'Unpaid invoices over 14 days', agent: 'ledger', source: 'mission-control', model: 'claude-sonnet-5.5', when: '3d ago', hrs: 76, dur: '4m 31s', msgs: 16, tools: 8, tin: 33400, tout: 2200, cache: 15500, cost: 0.22, cs: 'estimated', end: 'user_exit', snippet: 'four invoices older than 14 days, two over 30 days' },
+      { id: '20261008_101200_44aa', title: 'market-scan', agent: 'scout', source: 'cron', model: 'claude-sonnet-5.5', when: '3d ago', hrs: 80, dur: '1m 52s', msgs: 12, tools: 9, tin: 26800, tout: 1900, cache: 14200, cost: 0.12, cs: 'estimated', end: 'cron_complete', snippet: 'three movers above 5 percent since the last run' },
+      { id: '20261007_221030_9c01', title: 'Remind me about the dentist on Friday', agent: 'atlas', source: 'telegram', model: 'claude-opus-5.5', when: '4d ago', hrs: 100, dur: '40s', msgs: 6, tools: 2, tin: 9200, tout: 400, cache: 3000, cost: 0.06, cs: 'actual', end: 'user_exit', snippet: 'created a one-time cron job for Friday 09:00' },
+      { id: '20261003_141500_c8e2', title: 'Compare three vector stores for the vault', agent: 'scout', source: 'cli', model: 'claude-sonnet-5.5', when: '8d ago', hrs: 190, dur: '22m 14s', msgs: 58, tools: 31, tin: 211000, tout: 14100, cache: 150000, cost: 2.64, cs: 'actual', end: 'user_exit', snippet: 'sqlite-vec fits the zero-install constraint best' },
+      { id: '20260929_160200_0d77', title: 'Rotate the staging API keys', agent: 'herald', source: 'cli', model: 'claude-haiku-5.5', when: '12d ago', hrs: 290, dur: '3m 10s', msgs: 11, tools: 6, tin: 18000, tout: 1300, cache: 5000, cost: 0.05, cs: 'estimated', end: 'error', snippet: 'asked before touching .env, stopped when approval was denied' }
+    ];
+  }
+  transcript(s) {
+    var T = {
+      brief: [
+        { u: 'Tighten the morning briefing prompt. It rambles when the calendar is empty.' },
+        { th: ['The cron job morning-briefing uses a four-paragraph prompt that always lists every section.', 'When the calendar is empty the model writes "nothing scheduled", which is filler. Better to drop the section.', 'Keep the output under 120 words so Telegram shows it without truncation.'] },
+        { tool: 'skill_view', brief: 'productivity/briefing', input: '{"name": "productivity/briefing"}', out: 'SKILL.md · 1,204 characters · loaded', ms: '180 ms' },
+        { tool: 'read_file', brief: 'cron/jobs.json', input: '{"path": "~/.hermes/cron/jobs.json"}', out: '9 jobs · morning-briefing prompt is 612 characters', ms: '95 ms' },
+        { tool: 'cronjob_manage', brief: 'edit morning-briefing', input: '{"action": "edit", "job": "morning-briefing", "prompt": "Send me a short briefing…"}', out: 'updated · next run in 10h 18m', ms: '310 ms' },
+        { a: 'I rewrote the prompt:\n\n- Skip any section that has nothing in it\n- Hard cap of **120 words**\n- Lead with overnight alerts\n\n```\nSend me a short morning briefing. Skip empty sections. Max 120 words. Start with overnight alerts.\n```\n\nWant a dry run?' },
+        { u: 'Yes, run it once.' },
+        { tool: 'cronjob_manage', brief: 'run morning-briefing', input: '{"action": "run", "job": "morning-briefing"}', out: 'queued for the next scheduler tick', ms: '120 ms' },
+        { a: 'Queued. It will land in Telegram within a minute, and the output is saved in `cron/output/`.' }
+      ],
+      triage: [
+        { u: 'Triage the inbox: label, archive newsletters, and summarise anything that needs a reply.', who: 'cron prompt' },
+        { th: ['Fetch the unread threads, then group them by sender type.', 'Six threads look like real conversations; the rest are newsletters.'] },
+        { tool: 'terminal', brief: 'himalaya list --unread', input: '{"command": "himalaya envelope list --folder INBOX --query unseen"}', out: '41 unread · 6 from people · 35 bulk', ms: '1.4 s' },
+        { tool: 'terminal', brief: 'archive 35 newsletters', input: '{"command": "himalaya message move --folder INBOX Archive <35 ids>"}', out: '35 moved', ms: '2.1 s' },
+        { tool: 'send_message', brief: 'telegram:-1002…', input: '{"target": "telegram:-1002…", "text": "Inbox: 6 threads need a reply…"}', out: '403 Forbidden: bot was kicked from the group chat', ms: '260 ms', err: true },
+        { a: 'I triaged the inbox and archived **35** newsletters. Six threads need a reply, but I **could not deliver** the summary: the Telegram bot was removed from the group. Re-add the bot, or point this job at a different `deliver` target.' }
+      ]
+    };
+    var plan = T[s.tk];
+    if (!plan) {
+      plan = [
+        { u: s.title, who: s.source === 'cron' ? 'cron prompt' : 'you' },
+        { th: ['Work out what is being asked and which tools are needed.', 'Check what is already in memory before searching again.'] },
+        { tool: 'session_search', brief: 'earlier context', input: '{"query": "' + s.title.toLowerCase() + '"}', out: '3 earlier sessions matched', ms: '240 ms' },
+        { tool: s.agent === 'scout' ? 'web_search' : 'read_file', brief: s.agent === 'scout' ? 'sources' : 'notes', input: '{"query": "…"}', out: s.tools + ' tool calls in total in this session', ms: '830 ms' },
+        { a: 'Done: ' + s.snippet + '.' }
+      ];
+    }
+    var self = this;
+    return plan.map(function (p, i) {
+      var key = s.id + '-' + i;
+      var open = !!self.state.open[key];
+      var toggle = function () { var o = Object.assign({}, self.state.open); o[key] = !o[key]; self.setState({ open: o }); };
+      if (p.u) { return { key: key, isUser: true, text: p.u, who: p.who || 'you' }; }
+      if (p.th) { return { key: key, isThink: true, count: p.th.length, steps: p.th.map(function (t) { return { t: t }; }), open: open, expanded: open ? 'true' : 'false', toggle: toggle }; }
+      if (p.tool) { return { key: key, isTool: true, name: p.tool, brief: p.brief, ms: p.ms, input: p.input, output: p.out, open: open, expanded: open ? 'true' : 'false', toggle: toggle, color: p.err ? '#FF5555' : '#FFB86C', border: p.err ? '#FF5555' : '#5c4a31', outColor: p.err ? '#FF5555' : '#F8F8F2' }; }
+      return { key: key, isAsst: true, blocks: self.md(p.a) };
+    });
+  }
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var agents = {};
+    this.baseAgents().forEach(function (a) { agents[a.name] = a; });
+    var fmt = function (n) { return n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n); };
+    var money = function (s) { return '$' + s.cost.toFixed(2) + (s.cs === 'estimated' ? ' est.' : ''); };
+    var all = this.data().map(function (s) { return Object.assign({}, s, { title: st.titles[s.id] || s.title }); });
+    var q = st.q.trim().toLowerCase();
+    var maxHrs = { today: 24, '7d': 168, '30d': 720, all: 1e9 }[st.range];
+    var list = all.filter(function (s) {
+      if (st.agent !== 'all' && s.agent !== st.agent) { return false; }
+      if (st.source !== 'all' && s.source !== st.source) { return false; }
+      if (s.hrs > maxHrs) { return false; }
+      if (q && (s.title + ' ' + s.snippet + ' ' + s.agent + ' ' + s.id).toLowerCase().indexOf(q) === -1) { return false; }
+      return true;
+    });
+    if (this.demo === 'empty') { list = []; }
+    var snip = function (s) {
+      if (!q) { return []; }
+      var t = s.snippet;
+      var i = t.toLowerCase().indexOf(q);
+      if (i < 0) { return [{ t: t, plain: true }]; }
+      return [{ t: '…' + t.slice(0, i), plain: true }, { t: t.slice(i, i + q.length), hit: true }, { t: t.slice(i + q.length) + '…', plain: true }];
+    };
+    var selObj = list.filter(function (s) { return s.id === st.sel; })[0] || list[0] || null;
+    var busy = st.loading || this.demo === 'loading';
+    var hasSel = !!selObj && !busy;
+    var statusMap = { user_exit: ['ended', '#A9B2D3'], cron_complete: ['cron finished', '#50FA7B'], running: ['running', '#8BE9FD'], error: ['failed', '#FF5555'], compressed: ['compressed', '#BD93F9'] };
+    var sel = selObj ? Object.assign({}, selObj, {
+      color: agents[selObj.agent].color, agentLabel: agents[selObj.agent].label,
+      statusLabel: statusMap[selObj.end][0], statusColor: statusMap[selObj.end][1], border: selObj.end === 'error' ? '#FF5555' : '#44475A',
+      tin: fmt(selObj.tin), tout: fmt(selObj.tout), cache: fmt(selObj.cache), cost: money(selObj),
+      hasParent: !!selObj.parent, hasChildren: !!selObj.child,
+      parentTitle: selObj.parent ? (all.filter(function (s) { return s.id === selObj.parent; })[0] || {}).title : '',
+      childTitle: selObj.child ? (all.filter(function (s) { return s.id === selObj.child; })[0] || {}).title : '',
+      goParent: function () { self.setState({ sel: selObj.parent, open: {} }); },
+      goChild: function () { self.setState({ sel: selObj.child, open: {} }); },
+      pinPressed: (st.pinned[selObj.id] != null ? st.pinned[selObj.id] : selObj.pinned) ? 'true' : 'false',
+      pinLabel: (st.pinned[selObj.id] != null ? st.pinned[selObj.id] : selObj.pinned) ? 'Unpin' : 'Pin'
+    }) : { border: '#44475A' };
+    var fmts = [['jsonl', 'JSON lines', '.jsonl'], ['md', 'Markdown', '.md'], ['html', 'HTML page', '.html']];
+    var sources = [['all', 'All sources'], ['cli', 'cli'], ['telegram', 'telegram'], ['discord', 'discord'], ['cron', 'cron'], ['mission-control', 'mission-control']];
+    var ranges = [['today', 'Today'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days'], ['all', 'All time']];
+    var mk = function (arr, cur) { return arr.map(function (o) { return { v: o[0], label: o[1], sel: o[0] === cur, unsel: o[0] !== cur }; }); };
+    var emptyTitle = q ? 'No message matches “' + st.q + '”' : (this.demo === 'empty' ? 'No sessions yet' : 'No sessions in this range');
+    var emptyBody = q ? 'Search covers titles and every stored message for the selected agent and range. Try fewer words or widen the range.' : (this.demo === 'empty' ? 'Sessions appear here as soon as an agent runs. Start one from Chat.' : 'Widen the time range or pick another agent.');
+    return Object.assign(this.sharedVals(), this.navFor('sess'), {
+      summary: list.length + ' of 1,284 shown · newest first',
+      q: st.q,
+      onQ: function (e) { self.setState({ q: e.target.value }); },
+      chips: this.agentChips(st.agent, function (a) { self.filterSave({ agent: a }); self.setState({ agent: a }); }),
+      sources: mk(sources, st.source),
+      ranges: mk(ranges, st.range),
+      onSource: function (e) { self.setState({ source: e.target.value }); },
+      onRange: function (e) { self.filterSave({ range: e.target.value }); self.setState({ range: e.target.value }); },
+      isError: this.demo === 'error' && !st.retried,
+      retry: function () { self.setState({ retried: true }); self.notify({ kind: 'ok', title: 'state.db readable again', body: 'Session list refreshed' }); },
+      isLoading: busy,
+      skeleton: [78, 64, 85, 58, 72, 66].map(function (w, i) { return { key: 'sk' + i, w: w }; }),
+      isEmpty: !st.loading && this.demo !== 'loading' && list.length === 0,
+      emptyTitle: emptyTitle, emptyBody: emptyBody,
+      clearFilters: function () { self.filterSave({ agent: 'all', range: 'all' }); self.setState({ q: '', agent: 'all', source: 'all', range: 'all' }); },
+      rows: (st.loading || this.demo === 'loading') ? [] : list.map(function (s) {
+        var pinned = st.pinned[s.id] != null ? st.pinned[s.id] : s.pinned;
+        return {
+          id: s.id, title: s.title, pinned: !!pinned, color: agents[s.agent].color, agentLabel: agents[s.agent].label, source: s.source, msgs: s.msgs, tools: s.tools, cost: money(s),
+          when: s.when, whenColor: s.end === 'running' ? '#8BE9FD' : (s.end === 'error' ? '#FF5555' : '#8B95BD'),
+          selected: hasSel && selObj.id === s.id ? 'true' : 'false', hasSnippet: !!q, snippet: snip(s),
+          pick: function () { self.setState({ sel: s.id, open: {}, renaming: false, exportOpen: false }); }
+        };
+      }),
+      hasSel: hasSel, noSel: !hasSel && !busy, busy: busy,
+      sel: sel,
+      messages: hasSel ? this.transcript(selObj) : [],
+      togglePin: function () { var p = Object.assign({}, st.pinned); var cur = p[selObj.id] != null ? p[selObj.id] : selObj.pinned; p[selObj.id] = !cur; self.setState({ pinned: p }); self.notify({ kind: 'ok', title: cur ? 'Session unpinned' : 'Session pinned', body: '$ hermes -p ' + selObj.agent + ' sessions ' + (cur ? 'unpin ' : 'pin ') + selObj.id }); },
+      renaming: st.renaming, renameDraft: st.renameDraft,
+      startRename: function () { self.setState({ renaming: !st.renaming, renameDraft: selObj.title, exportOpen: false }); },
+      onRenameDraft: function (e) { self.setState({ renameDraft: e.target.value }); },
+      cancelRename: function () { self.setState({ renaming: false }); },
+      confirmRename: function () { var t = Object.assign({}, st.titles); t[selObj.id] = st.renameDraft || selObj.title; self.setState({ titles: t, renaming: false }); self.notify({ kind: 'ok', title: 'Session renamed', body: st.renameDraft }); },
+      exportOpen: st.exportOpen ? 'true' : 'false', exportShown: st.exportOpen,
+      toggleExport: function () { self.setState({ exportOpen: !st.exportOpen, renaming: false }); },
+      exportFormats: fmts.map(function (f) { return { key: f[0], label: f[1], ext: f[2], run: function () { self.setState({ exportOpen: false }); self.notify({ kind: 'ok', title: 'Export saved', body: '~/Documents/hermes-exports/' + selObj.id + f[2] + ' · built on this computer, nothing written on the VPS' }); } }; })
+    });
+  }
+}
+</script>
+</body>
+</html>
