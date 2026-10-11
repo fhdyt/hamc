@@ -126,7 +126,7 @@ body {
 .cron-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 0 6px; background: transparent; border: 0; border-radius: 6px; color: #f8f8f2; font: inherit; text-align: left; cursor: pointer; }
 .cron-row:hover { background: #282a36; }
 .cron-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cron-row .cd { flex: none; color: #a9b2d3; font-size: 11px; }
+.cron-row .cd { flex: none; min-width: 78px; text-align: right; color: #a9b2d3; font-size: 11px; }
 .cron-row.more { color: #8b95bd; justify-content: center; }
 .badge { display: inline-block; padding: 0 6px; border: 1px solid #44475a; border-radius: 4px; font-size: 10px; letter-spacing: 0.3px; white-space: nowrap; }
 .cron-card { position: relative; box-sizing: border-box; min-width: 0; border: 1px solid #44475a; border-radius: 10px; background: #21222c; padding: 18px 14px 12px; }

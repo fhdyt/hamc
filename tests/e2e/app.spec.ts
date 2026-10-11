@@ -65,7 +65,8 @@ test('server screen streams CPU, memory, disks and processes', async () => {
   await expect(page.getByRole('region', { name: 'Memory' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Disks' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Processes' })).toBeVisible()
-  await expect(page.getByRole('cell', { name: /hermes_cli\.main gateway run/ })).toBeVisible()
+  // one gateway per profile: default and scout each run one
+  await expect(page.getByRole('cell', { name: /hermes_cli\.main gateway run/ })).toHaveCount(2)
   await page.getByRole('button', { name: /Hermes only/ }).click()
   await expect(page.getByRole('columnheader', { name: /CPU%/ })).toHaveAttribute('aria-sort', 'descending')
   await page.screenshot({ path: 'tests/e2e/shots/server.png' })

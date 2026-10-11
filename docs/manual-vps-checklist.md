@@ -30,6 +30,17 @@ Berkas `/tmp/mc-start.txt` itu ulah Anda sendiri untuk pengukuran. Hapus setelah
 11. Setelah semua langkah, jalankan lagi perintah `find ... -newermt` dengan waktu mulai. Hanya data normal Hermes (log, `state.db`) yang boleh berubah. Tidak boleh ada skrip atau berkas Mission Control di VPS.
 12. Selama aplikasi terbuka, jalankan `ps aux | grep "python.* -u -"` di VPS: ada satu proses collector. Setelah aplikasi ditutup, proses itu hilang dalam ≤ 2 detik.
 
+## Tambahan M2: status agent dan Cron
+
+13. **Status agent per gateway.** Untuk setiap profile yang gateway-nya Anda jalankan sendiri, statusnya IDLE atau WORKING. Profile yang gateway-nya mati atau tidak punya gateway tampil OFFLINE. Cocokkan dengan `hermes -p <profile> gateway status` (atau `ps`). Ini koreksi dari M1: profile `default` tidak boleh OFFLINE bila gateway-nya hidup.
+14. **Jumlah job.** Header panel Cron di Dashboard ("N jobs") sama dengan jumlah baris `hermes cron list` dijumlahkan untuk semua profile. Bandingkan juga nama dan jadwalnya.
+15. **Job gagal.** Job yang `last_status`-nya error berlabel `ERROR`, menampilkan "Failed N runs in a row" sesuai `failure_streak`, dan teks error terakhir. Panel Dashboard menampilkan `k error` berwarna merah.
+16. **Output.** Pilih sebuah job di modal Cron: "Last output" sama dengan isi berkas terbaru di `~/.hermes/**/cron/output/<id>/`. Job yang hanya punya berkas lepas `<id>_*.txt` juga tampil. Job yang belum pernah jalan menyatakan belum ada output.
+17. **Timeline 24 jam.** Titik di timeline jatuh pada jam yang sama dengan jadwal job (bandingkan dengan `next_run_at`). Jadwal yang tidak dikenal hanya menggambar satu titik.
+18. **Zona waktu.** Waktu di detail tampil dalam zona waktu komputer Anda; baris "server time" menunjukkan offset VPS (mis. `UTC+07:00`).
+19. **Notifikasi.** Biarkan jendela tidak fokus (atau diminimalkan), lalu biarkan satu job gagal pada jadwalnya (atau buat job uji lewat chat dengan agent yang pasti gagal). Notifikasi OS muncul **sekali**, mengklik notifikasi membuka modal Cron pada job itu. Tidak ada notifikasi untuk job yang sudah gagal sebelum aplikasi dibuka, dan tidak ada saat jendela sedang fokus.
+20. **Hanya baca.** Tidak ada tombol Pause, Resume, Run now, atau Edit di modal Cron, dan langkah 11 (tidak ada berkas baru di VPS) tetap berlaku setelah Anda membuka modal dan output job.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.
