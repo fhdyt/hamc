@@ -97,6 +97,17 @@ export function formatOffset(min: number | null): string {
   return `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`
 }
 
+export function statusColor(j: Pick<CronJob, 'lastStatus' | 'state'>): string {
+  if (j.state === 'running') return '#8BE9FD'
+  if (isFailure(j.lastStatus)) return '#FF5555'
+  if (j.lastStatus === 'ok') return '#50FA7B'
+  return '#8B95BD'
+}
+
+export function stateColor(state: CronState): string {
+  return state === 'paused' ? '#8B95BD' : state === 'running' ? '#8BE9FD' : '#A9B2D3'
+}
+
 /** Agent label for a profile: the display name when the agent list has one. */
 export function agentLabel(profile: string, names: Record<string, string>): string {
   return names[profile] ?? profile

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { ComingSoon } from './screens/ComingSoon'
+import { CronModal } from './screens/cron/CronModal'
 import { Connect } from './screens/Connect'
 import { Dashboard } from './screens/Dashboard'
 import { Launch } from './screens/Launch'
@@ -28,6 +29,7 @@ export function App() {
   return (
     <>
       <Shell>{route === 'dashboard' ? <Dashboard /> : route === 'server' ? <Server /> : <ComingSoon route={route} />}</Shell>
+      <CronModal />
       <SettingsModal />
     </>
   )

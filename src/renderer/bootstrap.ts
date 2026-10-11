@@ -1,6 +1,7 @@
 import { ensurePins } from './actions'
 import { useAgents } from './stores/agents'
 import { useConn } from './stores/conn'
+import { useCron } from './stores/cron'
 import { useMetrics } from './stores/metrics'
 import { useUi } from './stores/ui'
 
@@ -11,13 +12,20 @@ export async function bootstrap(): Promise<void> {
     else if (ev.type === 'agents') {
       useAgents.getState().applyAgents(ev.data)
       void ensurePins()
-    }
+    } else if (ev.type === 'cron') useCron.getState().applyCron(ev.data)
   })
   mc.onStatus((status) => useConn.setState({ status }))
   mc.onStartup((startup) => useConn.setState({ startup }))
   mc.onPreflight((preflight) => useConn.setState({ preflight }))
   mc.onCapabilities((capabilities) => useConn.setState({ capabilities }))
   mc.onModels((models) => useAgents.getState().setModels(models))
+  mc.onOpenCron(({ profile, jobId }) => {
+    const route = useUi.getState().route
+    if (route !== 'connect' && route !== 'launch') {
+      useUi.getState().navigate('dashboard')
+      useCron.getState().openModal(`${profile}/${jobId}`)
+    }
+  })
 
   const [settings, saved, secret] = await Promise.all([mc.settings.all(), mc.connection.saved(), mc.connection.secretStatus()])
   useConn.setState({ saved, savedLoaded: true, secret })

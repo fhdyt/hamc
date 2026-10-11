@@ -121,3 +121,20 @@ body {
 /* status bar */
 .statusbar { position: relative; z-index: 30; flex: none; height: 26px; display: flex; align-items: stretch; border-top: 1px solid #44475a; background: #191a21; font-size: 11px; }
 .statusbar .sp { flex: 1; }
+
+/* cron */
+.cron-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 0 6px; background: transparent; border: 0; border-radius: 6px; color: #f8f8f2; font: inherit; text-align: left; cursor: pointer; }
+.cron-row:hover { background: #282a36; }
+.cron-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cron-row .cd { flex: none; color: #a9b2d3; font-size: 11px; }
+.cron-row.more { color: #8b95bd; justify-content: center; }
+.badge { display: inline-block; padding: 0 6px; border: 1px solid #44475a; border-radius: 4px; font-size: 10px; letter-spacing: 0.3px; white-space: nowrap; }
+.cron-card { position: relative; box-sizing: border-box; min-width: 0; border: 1px solid #44475a; border-radius: 10px; background: #21222c; padding: 18px 14px 12px; }
+.cron-card-title { position: absolute; top: -9px; left: 12px; margin: 0; padding: 0 6px; background: #282a36; font-size: 11px; font-weight: 600; color: #bd93f9; }
+.cron-table td { padding: 7px 8px; }
+.cron-table tr.sel { background: #44475a; }
+.cron-name { padding: 0; border: 0; background: transparent; color: #f8f8f2; font: inherit; text-align: left; cursor: pointer; }
+.cron-pre { margin: 0; padding: 8px 10px; border: 1px solid #44475a; border-radius: 6px; background: #282a36; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; }
+.cron-pre.cron-out { max-height: 260px; color: #f8f8f2; }
+.tl-track { position: relative; flex: 1; height: 20px; border: 1px solid #343746; border-radius: 4px; background: #282a36; }
+.tl-mark { position: absolute; top: 4px; width: 6px; height: 10px; margin-left: -1px; border: 1px solid; border-radius: 2px; }

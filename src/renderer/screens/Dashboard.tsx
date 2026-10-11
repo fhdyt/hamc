@@ -3,6 +3,7 @@ import { UnsupportedState } from '../components/States'
 import { useUi } from '../stores/ui'
 import { AgentsPanel } from './dashboard/AgentsPanel'
 import { ServerStrip } from './dashboard/ServerStrip'
+import { CronPanel } from './dashboard/CronPanel'
 import { StatusBlock } from './dashboard/StatusBlock'
 
 export function Dashboard() {
@@ -11,9 +12,7 @@ export function Dashboard() {
     <div className={`dash ${collapsed ? 'agents-rail' : ''}`}>
       <div className="col">
         <StatusBlock />
-        <Panel variant="card" title="cron jobs">
-          <UnsupportedState why="Schedules and run history arrive in a later release." />
-        </Panel>
+        <CronPanel />
         <Panel variant="card" title="activity" className="grow">
           <UnsupportedState why="The live feed of agent interactions arrives in a later release." />
         </Panel>

@@ -4,6 +4,7 @@ import { defaultPins, reorderPins, togglePin } from './lib/roster'
 import { stepZoom } from './lib/zoom'
 import { useAgents } from './stores/agents'
 import { IDLE_STATUS, useConn } from './stores/conn'
+import { useCron } from './stores/cron'
 import { useMetrics } from './stores/metrics'
 import { useUi } from './stores/ui'
 
@@ -37,6 +38,7 @@ export async function forgetConnection(): Promise<void> {
   await window.mc.connection.forget()
   useAgents.getState().reset()
   useMetrics.getState().reset()
+  useCron.getState().reset()
   useConn.setState({
     saved: null, status: IDLE_STATUS, startup: null, preflight: null, capabilities: null, hostKey: null, connectError: null, lastRequest: null
   })
