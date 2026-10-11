@@ -57,6 +57,7 @@ test('pinning survives a restart', async () => {
 
 test('selecting an agent shows its details and the rail keeps the selection', async () => {
   await page.getByRole('button', { name: /^Scout, / }).click()
+  await page.getByRole('button', { name: 'Show agent details' }).click()
   await expect(page.getByRole('group', { name: /Scout details/ }).or(page.getByLabel('Scout details'))).toBeVisible()
   await expect(page.getByText(/openrouter · anthropic\/claude-sonnet/)).toBeVisible({ timeout: 20_000 })
   await page.getByRole('button', { name: 'Collapse agents panel' }).click()

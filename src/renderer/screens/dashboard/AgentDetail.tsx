@@ -18,7 +18,7 @@ export function AgentDetail() {
   const now = useNow()
 
   if (!agent) {
-    return <EmptyState title="Select an agent" why="Pick an agent above to see its status, model and files. Chat arrives in a later release." />
+    return <EmptyState title="Select an agent" why="Pick an agent above to chat with it and see its status, model and files." />
   }
   const age = agent.lastActivityTs ? formatAge(Math.max(0, now / 1000 - agent.lastActivityTs)) : 'no activity yet'
   const modelText = model === undefined ? 'reading…' : model === null ? 'unavailable' : [model.provider, model.model].filter(Boolean).join(' · ') || 'unavailable'

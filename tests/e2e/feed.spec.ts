@@ -124,6 +124,7 @@ test('the whole session opens from an item, with its sub-sessions', async () => 
 test('an agent card shows today’s numbers and opens the feed filtered to that agent', async () => {
   await mainNav().getByRole('button', { name: /^Dashboard/ }).click()
   await page.getByRole('button', { name: /^Scout, / }).click()
+  await page.getByRole('button', { name: 'Show agent details' }).click()
   const detail = page.getByLabel('Scout details')
   await expect(detail).toContainText('today')
   await expect(detail.getByLabel("Today's activity")).toContainText(/\d+ sessions?/)
