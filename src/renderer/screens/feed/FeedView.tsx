@@ -112,13 +112,15 @@ export function FeedView() {
               <i />
               <i />
             </span>
-            {working.map((a, i) => (
-              <span key={a.profile}>
-                {i > 0 && ', '}
-                <span style={{ color: agentColor(a.profile) }}>{a.displayName}</span>
-              </span>
-            ))}{' '}
-            {working.length === 1 ? 'is' : 'are'} working
+            <span>
+              {working.map((a, i) => (
+                <span key={a.profile}>
+                  {i > 0 && ', '}
+                  <span style={{ color: agentColor(a.profile) }}>{a.displayName}</span>
+                </span>
+              ))}{' '}
+              {working.length === 1 ? 'is' : 'are'} working
+            </span>
           </div>
         )}
         <div ref={scrollRef} className="fscroll" onScroll={onScroll} tabIndex={0} aria-label="Feed items, newest first">

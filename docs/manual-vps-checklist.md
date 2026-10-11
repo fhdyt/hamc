@@ -41,6 +41,18 @@ Berkas `/tmp/mc-start.txt` itu ulah Anda sendiri untuk pengukuran. Hapus setelah
 19. **Notifikasi.** Biarkan jendela tidak fokus (atau diminimalkan), lalu biarkan satu job gagal pada jadwalnya (atau buat job uji lewat chat dengan agent yang pasti gagal). Notifikasi OS muncul **sekali**, mengklik notifikasi membuka modal Cron pada job itu. Tidak ada notifikasi untuk job yang sudah gagal sebelum aplikasi dibuka, dan tidak ada saat jendela sedang fokus.
 20. **Hanya baca.** Tidak ada tombol Pause, Resume, Run now, atau Edit di modal Cron, dan langkah 11 (tidak ada berkas baru di VPS) tetap berlaku setelah Anda membuka modal dan output job.
 
+## Tambahan M3: Live feed
+
+21. **Riwayat.** Buka layar Live feed: item terbaru ada di atas, tiap item berwarna sesuai agent dan menyebut sumber sesinya (telegram, cli, cron, subagent). Cocokkan beberapa pesan terakhir dengan isi `hermes sessions` atau obrolan Anda sendiri.
+22. **Pesan baru ≤ 2 detik.** Kirim satu pesan ke agent. Pesan Anda, lalu thinking, tool call, tool result dan balasan, muncul di atas dalam beberapa detik tanpa menutup atau membuka ulang layar.
+23. **Thinking dan teks panjang.** Blok thinking tampil miring dan terpotong dua baris, **Expand thinking** membukanya. Teks panjang punya **Show more**; teks yang dipotong collector (di atas 4.000 karakter) punya **Show full** yang mengambil teks utuh dari VPS.
+24. **Filter.** Matikan satu agent, satu jenis item (mis. Tool result) dan satu sumber: daftar menyesuaikan. **Reset filters** mengembalikan semuanya. Pencarian menemukan kata di isi pesan dan nama tool.
+25. **Gulir.** Gulir ke bawah beberapa layar: riwayat lebih lama termuat sendiri sampai muncul "Start of history". Saat Anda menggulir menjauh dari atas dan ada pesan baru, tombol **N new · Jump to latest** muncul dan posisi baca tidak melompat.
+26. **Sesi lengkap.** Arahkan kursor ke sebuah item lalu klik ikon riwayat: dialog sesi menampilkan seluruh percakapan sesi itu beserta sub-session (subagent) yang bisa dibuka satu per satu.
+27. **Dashboard.** Panel Activity memuat item terbaru; klik membuka feed di dialog dengan isi yang sama. Kartu agent menampilkan angka hari ini (sesi, pesan, tool call, token, biaya) dan tombol **Open feed** yang menyaring feed ke agent itu. Bandingkan jumlah sesi dan token dengan tabel `sessions` di `state.db`.
+28. **Sambung ulang.** Putuskan jaringan 20 detik lalu nyalakan lagi saat agent sedang bekerja: item yang masuk selama putus muncul setelah pulih, tanpa duplikat dan tanpa celah.
+29. **Hanya baca.** Langkah 11 dan 12 tetap berlaku setelah memakai feed, termasuk **Show full** dan dialog sesi: tidak ada berkas baru di VPS, dan `state.db` hanya dibuka `mode=ro`.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.
