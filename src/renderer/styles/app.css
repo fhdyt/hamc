@@ -259,7 +259,7 @@ body {
 
 /* dashboard (mockup Main) */
 .dash2 { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 12px; overflow: hidden; background: #191a21; }
-.d-left { flex: 0 1 240px; min-width: 200px; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.d-right { flex: 0 1 240px; min-width: 200px; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .d-mid { flex: 1 1 560px; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .d-count { flex: none; display: flex; align-items: center; gap: 6px; padding: 2px 4px; color: #a9b2d3; font-size: 11px; }
 .d-panel { min-height: 0; padding: 4px 6px 6px 12px; gap: 4px; }
@@ -315,7 +315,7 @@ body {
 .rz-v > span { width: 2px; }
 .rz-h { flex: none; height: 8px; margin: -3px 0; display: flex; align-items: center; justify-content: center; cursor: row-resize; z-index: 3; }
 .rz-h > span { width: 40px; height: 2px; }
-@media (max-width: 900px) { .dash2 { flex-direction: column; overflow-y: auto; } .d-left, .d-mid { flex: none; } .rz-v { display: none; } .d-agents { flex: none !important; min-height: 420px; } }
+@media (max-width: 900px) { .dash2 { flex-direction: column; overflow-y: auto; } .d-right, .d-mid { flex: none; } .rz-v { display: none; } .d-agents { flex: none !important; min-height: 420px; } }
 
 /* neuron graph */
 .bc-tip { position: absolute; z-index: 6; transform: translateX(-50%); display: flex; flex-direction: column; gap: 1px; padding: 5px 9px; border: 1px solid #6272a4; border-radius: 6px; background: rgba(11, 13, 23, 0.9); pointer-events: none; white-space: nowrap; max-width: 320px; }

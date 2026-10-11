@@ -59,22 +59,22 @@ test('the activity panel shows items, not an endless spinner, and has an alerts 
 test('the agents and chat panel can be widened by dragging its divider, and with the keyboard', async () => {
   const w0 = (await agents().boundingBox())!.width
   expect(await value('Resize chat panel')).toBe(320)
-  await drag('Resize chat panel', -100, 0)
+  await drag('Resize chat panel', 100, 0)
   expect(await value('Resize chat panel')).toBe(420)
   expect((await agents().boundingBox())!.width).toBeGreaterThan(w0 + 90)
   await sep('Resize chat panel').focus()
-  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.press('ArrowRight')
   expect(await value('Resize chat panel')).toBe(444)
-  await page.keyboard.press('ArrowRight')
-  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.press('ArrowLeft')
   expect(await value('Resize chat panel')).toBe(396)
-  await drag('Resize chat panel', 1000, 0) // cannot go below the minimum
+  await drag('Resize chat panel', -1000, 0) // cannot go below the minimum
   expect(await value('Resize chat panel')).toBe(260)
-  await drag('Resize chat panel', -2000, 0) // nor above the maximum
+  await drag('Resize chat panel', 2000, 0) // nor above the maximum
   expect(await value('Resize chat panel')).toBe(640)
-  await drag('Resize chat panel', 320, 0)
+  await drag('Resize chat panel', -320, 0)
   expect(await value('Resize chat panel')).toBe(320)
-  await drag('Resize chat panel', -60, 0)
+  await drag('Resize chat panel', 60, 0)
 })
 
 test('cron and activity share the column through a horizontal divider that goes away when one is hidden', async () => {
