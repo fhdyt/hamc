@@ -163,7 +163,8 @@ describe('a chat turn', () => {
     const { session, chat, ended, text, chatCommands } = await setup({ chatHelp: 'usage: hermes chat [-q QUERY] [-Q] [--resume ID]\n' })
     await session.chatSend({ profile: 'default', text: 'plain question', attachmentIds: [] })
     await waitFor(() => ended(), { label: 'end', timeout: 20_000 })
-    expect(chat[0]).toMatchObject({ kind: 'start', mode: 'plain', note: expect.stringContaining('plain text') })
+    expect(chat[0]).toMatchObject({ kind: 'start', mode: 'plain' })
+    expect(chat[0]).not.toHaveProperty('note')
     expect(text()).toContain('Here is **what I found**')
     expect(chat.some((e) => e.kind === 'tool')).toBe(false)
     const cmd = chatCommands()[0]!

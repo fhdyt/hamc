@@ -4,7 +4,7 @@ import type { ChatEvent, ChatSendResult } from '@shared/ipc'
 import { LineSplitter } from '../collector/lines'
 import type { Execer } from '../connection/manager'
 import { backendCmd, chatHelpCmd, chatPlainCmd, chatQuietFileCmd, chatStreamCmd, runSafe } from '../connection/remote'
-import { ASSUMED_FLAGS, canStream, limitedReason, parseChatHelp, type ChatFlags } from './flags'
+import { ASSUMED_FLAGS, canStream, parseChatHelp, type ChatFlags } from './flags'
 import { ChatLineParser } from './parser'
 
 export interface UploadedFile {
@@ -154,7 +154,7 @@ export class ChatService {
         profile,
         kind: 'start',
         mode: stream ? 'stream-json' : 'plain',
-        ...(stream ? (flags.assumed ? { note: 'The chat options of this Hermes could not be checked.' } : {}) : { note: limitedReason(flags) })
+        ...(stream && flags.assumed ? { note: 'The chat options of this Hermes could not be checked.' } : {})
       })
       return { ok: true, turn }
     } finally {
