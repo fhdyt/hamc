@@ -37,7 +37,7 @@ export class QueryRunner {
     let stdout: string
     try {
       const r = await this.conn.exec(queryCmd(t.python, t.home, command, JSON.stringify(args)), { stdin: this.script, timeoutMs: QUERY_TIMEOUT_MS })
-      if (r.code !== 0) return this.fail(command, 'invalid-response', `exit ${r.code}${r.stderr ? `: ${short(r.stderr)}` : ''}`)
+      if (r.code !== 0) return this.fail(command, 'invalid-response', `exit ${r.code} running ${t.python}${r.stderr ? `: ${short(r.stderr)}` : ''}`)
       stdout = r.stdout
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
