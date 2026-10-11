@@ -1,0 +1,20 @@
+export const IPC = {
+  connect: 'mc:connection:connect',
+  trustHostKey: 'mc:connection:trust-hostkey',
+  disconnect: 'mc:connection:disconnect',
+  forget: 'mc:connection:forget',
+  saved: 'mc:connection:saved',
+  secretStatus: 'mc:connection:secret-status',
+  settingsAll: 'mc:settings:all',
+  settingsSet: 'mc:settings:set',
+  pinsGet: 'mc:agents:pins-get',
+  pinsSet: 'mc:agents:pins-set',
+  setZoom: 'mc:app:set-zoom',
+  appInfo: 'mc:app:info',
+  evEvent: 'mc:ev:event',
+  evStatus: 'mc:ev:status',
+  evStartup: 'mc:ev:startup',
+  evPreflight: 'mc:ev:preflight',
+  evCapabilities: 'mc:ev:capabilities',
+  evModels: 'mc:ev:models'
+} as const
