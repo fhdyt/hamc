@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from 'ssh2'
@@ -7,6 +7,7 @@ import { buildCommand } from '../../src/main/connection/quote'
 import { parseEventLine } from '@shared/events'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
 import { buildFixture, type FixtureDirs } from '../helpers/fixture'
+import { removeDir } from '../helpers/wait'
 
 let dir: string
 let fx: FixtureDirs
@@ -19,7 +20,7 @@ beforeAll(async () => {
 })
 afterAll(async () => {
   await srv.close()
-  rmSync(dir, { recursive: true, force: true })
+  removeDir(dir)
 })
 
 function run(argv: string[], stdin?: string): Promise<{ code: number; out: string; err: string }> {

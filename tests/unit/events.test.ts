@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { FeedHistory, FeedMessageText, SessionDetail, parseEventLine } from '@shared/events'
-import { sampleAgents, sampleCron, sampleFeed, sampleItem, sampleJob, sampleMetrics } from '../helpers/samples'
+import { BrowseResult, FeedHistory, FeedMessageText, NoteText, SessionDetail, VaultCheck, parseEventLine } from '@shared/events'
+import { sampleAgents, sampleBrain, sampleCron, sampleFeed, sampleItem, sampleJob, sampleMetrics, sampleNote } from '../helpers/samples'
 
 const line = (o: unknown): string => JSON.stringify(o)
 
@@ -119,5 +119,32 @@ describe('query result schemas', () => {
     }
     expect(SessionDetail.safeParse(ok).success).toBe(true)
     expect(SessionDetail.safeParse({ ...ok, children: [{ source: 'x' }] }).success).toBe(false)
+  })
+})
+
+describe('brain events', () => {
+  it('parse a snapshot chunk and a delta', () => {
+    expect(parseEventLine(line({ type: 'brain', ts: 1, profile: null, data: sampleBrain() })).ok).toBe(true)
+    const delta = sampleBrain({ mode: 'delta', first: false, notes: [sampleNote()], removed: ['Gone.md'] })
+    expect(parseEventLine(line({ type: 'brain', ts: 1, profile: null, data: delta })).ok).toBe(true)
+  })
+
+  it('reject a bad mode, a missing list and a note without links', () => {
+    expect(parseEventLine(line({ type: 'brain', ts: 1, profile: null, data: { ...sampleBrain(), mode: 'full' } })).ok).toBe(false)
+    const { removed: _r, ...noRemoved } = sampleBrain()
+    expect(parseEventLine(line({ type: 'brain', ts: 1, profile: null, data: noRemoved })).ok).toBe(false)
+    const { links: _l, ...noLinks } = sampleNote()
+    expect(parseEventLine(line({ type: 'brain', ts: 1, profile: null, data: sampleBrain({ notes: [noLinks as never] }) })).ok).toBe(false)
+  })
+})
+
+describe('vault query schemas', () => {
+  it('parse a check, a folder listing and a note', () => {
+    expect(VaultCheck.safeParse({ path: '/v', exists: true, readable: true, notes: 3, truncated: false }).success).toBe(true)
+    expect(VaultCheck.safeParse({ path: '/v', exists: true, readable: true, notes: -1, truncated: false }).success).toBe(false)
+    expect(BrowseResult.safeParse({ path: '/v', parent: null, dirs: [{ name: 'a', notes: 2 }], truncated: false }).success).toBe(true)
+    expect(BrowseResult.safeParse({ path: '/v', parent: '/', dirs: [{ name: 'a' }], truncated: false }).success).toBe(false)
+    expect(NoteText.safeParse({ id: 'a.md', text: 'x', truncated: false, mtime: 1 }).success).toBe(true)
+    expect(NoteText.safeParse({ id: 'a.md', text: 5, truncated: false, mtime: 1 }).success).toBe(false)
   })
 })

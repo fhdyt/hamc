@@ -6,9 +6,9 @@ import { queryCmd } from './connection/remote'
 export const QUERY_TIMEOUT_MS = 15_000
 export const QUERY_MAX_OUTPUT = 1024 * 1024
 
-const KNOWN_ERRORS: ReadonlySet<string> = new Set<QueryError>(['bad_args', 'not_found', 'unsupported_schema', 'db_unreadable', 'unknown_command'])
+const KNOWN_ERRORS: ReadonlySet<string> = new Set<QueryError>(['bad_args', 'not_found', 'unsupported_schema', 'db_unreadable', 'unreadable', 'unknown_command'])
 
-export type QueryCommand = 'message' | 'history' | 'session'
+export type QueryCommand = 'message' | 'history' | 'session' | 'vault_check' | 'browse' | 'note'
 
 /**
  * Runs the read-only query mode of the collector script: the script goes over stdin, the command and its JSON

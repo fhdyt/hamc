@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -7,7 +7,7 @@ import { CollectorChannel, loadCollectorScript } from '../../src/main/collector/
 import { ConnectionManager } from '../../src/main/connection/manager'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
 import { buildFixture, type FixtureDirs } from '../helpers/fixture'
-import { waitFor } from '../helpers/wait'
+import { waitFor, removeDir } from '../helpers/wait'
 
 let dir: string
 let fx: FixtureDirs
@@ -24,7 +24,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await m.disconnect()
   await srv.close()
-  rmSync(dir, { recursive: true, force: true })
+  removeDir(dir)
 })
 
 describe('CollectorChannel', () => {

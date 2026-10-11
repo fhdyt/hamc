@@ -144,6 +144,20 @@ def test_chunks_are_marked_first_and_done():
     assert delta[0]["removed"] == ["x.md"] and delta[1]["removed"] == []
 
 
+def test_chunks_also_respect_a_byte_budget():
+    fat = [{"id": f"{i}.md", "links": ["x" * 200] * 400} for i in range(20)]
+    chunks = list(c.vault_chunks(fat, "snapshot", [], 20, False))
+    assert len(chunks) > 1
+    assert all(len(json.dumps(x)) < 600000 for x in chunks)
+    assert sum(len(x["notes"]) for x in chunks) == 20
+
+
+def test_a_note_with_thousands_of_links_is_capped(tmp_path):
+    vault(tmp_path, {**{f"t{i}.md": "" for i in range(2500)}, "hub.md": " ".join(f"[[t{i}]]" for i in range(2500))})
+    hub = {n["id"]: n for n in c.VaultState(str(tmp_path)).snapshot()}["hub.md"]
+    assert len(hub["links"]) == c.VAULT_MAX_LINKS
+
+
 def test_delta_reports_add_edit_remove_and_resolved_ghosts(tmp_path):
     vault(tmp_path, {"a.md": "[[b]]", "c.md": "plain"})
     st = c.VaultState(str(tmp_path))

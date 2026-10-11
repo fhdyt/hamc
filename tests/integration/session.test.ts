@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -11,7 +11,7 @@ import { MissionSession } from '../../src/main/session'
 import { SettingsStore } from '../../src/main/store/settingsStore'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
 import { buildFixture, snapshotTree, type FixtureDirs } from '../helpers/fixture'
-import { waitFor } from '../helpers/wait'
+import { waitFor, removeDir } from '../helpers/wait'
 
 const secrets = {
   status: () => ({ available: true, reason: null }),
@@ -33,7 +33,7 @@ afterEach(async () => {
   await Promise.all(live.splice(0).map((s) => s.disconnect()))
   await srv?.close()
 })
-afterAll(() => rmSync(dir, { recursive: true, force: true }))
+afterAll(() => removeDir(dir))
 
 function makeSession(store = new SettingsStore(':memory:')) {
   const sent: { channel: string; payload: unknown }[] = []

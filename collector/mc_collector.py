@@ -1047,6 +1047,8 @@ def q_session(home, a):
 
 VAULT_MAX_NOTES = 20000
 VAULT_CHUNK = 300
+VAULT_CHUNK_BYTES = 400000
+VAULT_MAX_LINKS = 2000
 VAULT_PARSE_BYTES = 524288
 VAULT_BIG_FILE = 2097152
 VAULT_POLL_S = 3.0
@@ -1247,11 +1249,11 @@ def build_records(raw):
             "title": nid[:-3].rsplit("/", 1)[-1],
             "mtime": r["mtime"],
             "size": r["size"],
-            "tags": p["tags"],
-            "aliases": p["aliases"],
-            "links": sorted(linked),
-            "ghosts": sorted(ghosts.values(), key=str.lower),
-            "attachments": sorted(attach.values(), key=str.lower),
+            "tags": p["tags"][:200],
+            "aliases": p["aliases"][:50],
+            "links": sorted(linked)[:VAULT_MAX_LINKS],
+            "ghosts": sorted(ghosts.values(), key=str.lower)[:500],
+            "attachments": sorted(attach.values(), key=str.lower)[:200],
         }
     return out
 
@@ -1297,15 +1299,24 @@ class VaultState:
 
 
 def vault_chunks(notes, mode, removed, total, truncated):
-    n = max(1, (len(notes) + VAULT_CHUNK - 1) // VAULT_CHUNK)
-    for i in range(n):
+    """Split notes into events of at most VAULT_CHUNK notes and about VAULT_CHUNK_BYTES of JSON each."""
+    groups, cur, size = [], [], 0
+    for note in notes:
+        n = len(json.dumps(note, separators=(",", ":")))
+        if cur and (len(cur) >= VAULT_CHUNK or size + n > VAULT_CHUNK_BYTES):
+            groups.append(cur)
+            cur, size = [], 0
+        cur.append(note)
+        size += n
+    groups.append(cur)
+    for i, group in enumerate(groups):
         yield {
             "mode": mode,
             "first": i == 0,
-            "done": i == n - 1,
+            "done": i == len(groups) - 1,
             "total": total,
             "truncated": truncated,
-            "notes": notes[i * VAULT_CHUNK:(i + 1) * VAULT_CHUNK],
+            "notes": group,
             "removed": removed if i == 0 else [],
         }
 

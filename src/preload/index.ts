@@ -37,6 +37,13 @@ const api: MissionApi = {
     history: (before, limit) => ipcRenderer.invoke(IPC.feedHistory, { before, limit }),
     session: (profile, sessionId) => ipcRenderer.invoke(IPC.feedSession, { profile, sessionId })
   },
+  brain: {
+    get: () => ipcRenderer.invoke(IPC.brainGet),
+    setVault: (path) => ipcRenderer.invoke(IPC.brainSetVault, path),
+    validate: (path) => ipcRenderer.invoke(IPC.brainValidate, path),
+    browse: (path) => ipcRenderer.invoke(IPC.brainBrowse, path),
+    note: (id) => ipcRenderer.invoke(IPC.brainNote, id)
+  },
   onEvent: (cb) => on(IPC.evEvent, cb),
   onStatus: (cb) => on(IPC.evStatus, cb),
   onStartup: (cb) => on(IPC.evStartup, cb),

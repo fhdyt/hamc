@@ -151,6 +151,7 @@ export class SettingsStore {
     this.db.transaction(() => {
       this.db.prepare('DELETE FROM agent_pins WHERE connection_id = ?').run(r.id)
       this.db.prepare('DELETE FROM settings WHERE key = ?').run(`pins.initialized.${r.id}`)
+      this.db.prepare('DELETE FROM settings WHERE key = ?').run(`brain.vault.${r.id}`)
       this.db.prepare('DELETE FROM known_hosts WHERE host = ? AND port = ?').run(r.host, r.port)
       this.db.prepare('DELETE FROM connections WHERE id = ?').run(r.id)
     })()
@@ -188,6 +189,23 @@ export class SettingsStore {
         .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
         .run(`pins.initialized.${connectionId}`, 'true')
     })()
+  }
+
+  getVault(connectionId: number): string | null {
+    const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get(`brain.vault.${connectionId}`) as { value: string } | undefined
+    if (!row) return null
+    try {
+      const v: unknown = JSON.parse(row.value)
+      return typeof v === 'string' && v.length > 0 ? v : null
+    } catch {
+      return null
+    }
+  }
+
+  setVault(connectionId: number, path: string | null): void {
+    const key = `brain.vault.${connectionId}`
+    if (path === null) this.db.prepare('DELETE FROM settings WHERE key = ?').run(key)
+    else this.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, JSON.stringify(path))
   }
 
   pinsInitialized(connectionId: number): boolean {
