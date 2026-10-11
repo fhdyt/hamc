@@ -36,7 +36,8 @@ export const pythonVersionCmd = (python: string): string[] => [python, '--versio
 export const probeCmd = (hermes: string, sub: string[]): string[] => [hermes, ...sub, '--help']
 export const modelCmd = (hermes: string, profile: string): string[] =>
   profile === 'default' ? [hermes, 'config', 'get', 'model', '--json'] : [hermes, '-p', profile, 'config', 'get', 'model', '--json']
-export const collectorCmd = (python: string, home: string): string[] => [python, '-u', '-', home]
+export const collectorCmd = (python: string, home: string, extra: readonly string[] = []): string[] => [python, '-u', '-', home, ...extra]
+export const queryCmd = (python: string, home: string, command: string, json: string): string[] => [python, '-u', '-', home, '--query', command, json]
 
 export async function runSafe(conn: Execer, argv: string[], timeoutMs = 15_000): Promise<ExecResult> {
   try {

@@ -13,6 +13,8 @@ export interface CollectorOptions {
   python: string
   home: string
   script: string
+  /** Extra collector arguments, e.g. ['--cursors', '{"default":12}']. Each one is quoted individually. */
+  extraArgs?: readonly string[]
   log?: (msg: string) => void
 }
 
@@ -32,7 +34,7 @@ export class CollectorChannel extends EventEmitter {
 
   async start(): Promise<void> {
     const log = this.opts.log ?? ((): void => {})
-    const ch = await this.conn.openStream(collectorCmd(this.opts.python, this.opts.home), this.opts.script)
+    const ch = await this.conn.openStream(collectorCmd(this.opts.python, this.opts.home, this.opts.extraArgs ?? []), this.opts.script)
     this.ch = ch
     const splitter = new LineSplitter()
     const router = new EventRouter(log)

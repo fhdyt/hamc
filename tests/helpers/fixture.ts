@@ -26,6 +26,12 @@ export function addProfile(home: string, name: string): void {
   execFileSync(pythonExe, [script, 'add-profile', home, name])
 }
 
+/** Appends a row to a fixture state.db, like Hermes would, and returns its id. */
+export function addMessage(dbPath: string, sessionId: string, role: string, content: string, ts: number): number {
+  const out = execFileSync(pythonExe, [script, 'add-message', dbPath, sessionId, role, content, String(ts)], { encoding: 'utf8' })
+  return Number(out.trim())
+}
+
 export function snapshotTree(dir: string): Record<string, string> {
   const out: Record<string, string> = {}
   const walk = (d: string): void => {

@@ -3,6 +3,17 @@ import { z } from 'zod'
 export const AgentStatus = z.enum(['working', 'idle', 'offline', 'parked'])
 export type AgentStatus = z.infer<typeof AgentStatus>
 
+export const AgentStats = z.object({
+  sessions: z.number().int().nonnegative(),
+  messages: z.number().int().nonnegative(),
+  toolCalls: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  reasoningTokens: z.number().int().nonnegative(),
+  costUsd: z.number().nonnegative()
+})
+export type AgentStats = z.infer<typeof AgentStats>
+
 export const AgentInfo = z.object({
   profile: z.string(),
   displayName: z.string(),
@@ -12,7 +23,8 @@ export const AgentInfo = z.object({
   configMtime: z.number().nullable(),
   hasSoul: z.boolean(),
   hasMemory: z.boolean(),
-  hasUser: z.boolean()
+  hasUser: z.boolean(),
+  stats: AgentStats.nullable().optional()
 })
 export type AgentInfo = z.infer<typeof AgentInfo>
 
@@ -105,12 +117,65 @@ export const CronData = z.object({
 })
 export type CronData = z.infer<typeof CronData>
 
+export const FeedKind = z.enum(['user', 'thinking', 'tool', 'result', 'reply'])
+export type FeedKind = z.infer<typeof FeedKind>
+
+export const FeedItem = z.object({
+  id: z.string(),
+  profile: z.string(),
+  messageId: z.number().int(),
+  sessionId: z.string(),
+  source: z.string().nullable(),
+  parentSessionId: z.string().nullable(),
+  ts: z.number(),
+  kind: FeedKind,
+  text: z.string(),
+  truncated: z.boolean(),
+  fullLen: z.number().int().nonnegative(),
+  toolName: z.string().nullable()
+})
+export type FeedItem = z.infer<typeof FeedItem>
+
+export const FeedData = z.object({
+  items: z.array(FeedItem),
+  cursors: z.record(z.string(), z.number().int()),
+  history: z.boolean()
+})
+export type FeedData = z.infer<typeof FeedData>
+
+export const FeedMessageText = z.object({ text: z.string(), truncated: z.boolean(), fullLen: z.number().int().nonnegative() })
+export type FeedMessageText = z.infer<typeof FeedMessageText>
+
+export const FeedHistory = z.object({
+  items: z.array(FeedItem),
+  oldest: z.record(z.string(), z.number().int().nullable()),
+  exhausted: z.record(z.string(), z.boolean())
+})
+export type FeedHistory = z.infer<typeof FeedHistory>
+
+export const SessionDetail = z.object({
+  session: z.object({
+    id: z.string(),
+    source: z.string().nullable(),
+    model: z.string().nullable(),
+    parentSessionId: z.string().nullable(),
+    startedAt: z.number().nullable(),
+    endedAt: z.number().nullable(),
+    title: z.string().nullable()
+  }),
+  children: z.array(z.object({ id: z.string(), source: z.string().nullable() })),
+  items: z.array(FeedItem),
+  more: z.boolean()
+})
+export type SessionDetail = z.infer<typeof SessionDetail>
+
 const envelope = { ts: z.number(), profile: z.string().nullable() }
 
 export const CollectorEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('metrics'), ...envelope, data: MetricsData }),
   z.object({ type: z.literal('agents'), ...envelope, data: AgentsData }),
   z.object({ type: z.literal('cron'), ...envelope, data: CronData }),
+  z.object({ type: z.literal('feed'), ...envelope, data: FeedData }),
   z.object({ type: z.literal('error'), ...envelope, data: ErrorData })
 ])
 export type CollectorEvent = z.infer<typeof CollectorEvent>

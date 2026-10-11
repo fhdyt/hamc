@@ -7,6 +7,19 @@ import { isTrustedSender, type AppTarget } from './security'
 import type { MissionSession } from './session'
 import type { SettingsStore } from './store/settingsStore'
 
+const ProfileName = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
+const FeedMessageArgs = z.object({
+  profile: ProfileName,
+  messageId: z.number().int().min(0),
+  field: z.enum(['content', 'reasoning', 'tool_calls']),
+  index: z.number().int().min(0).optional()
+})
+const FeedHistoryArgs = z.object({
+  before: z.record(ProfileName, z.number().int().min(0)).refine((m) => Object.keys(m).length >= 1 && Object.keys(m).length <= 50),
+  limit: z.number().int().min(1).max(100)
+})
+const FeedSessionArgs = z.object({ profile: ProfileName, sessionId: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/) })
+
 export interface IpcDeps {
   session: MissionSession
   store: SettingsStore
@@ -57,5 +70,8 @@ export function registerIpc(d: IpcDeps): void {
     const { profile, jobId } = CronOutputArgs.parse(a)
     return d.session.cronOutput(profile, jobId)
   })
-  handle(IPC.appInfo,(): AppInfo => ({ version: app.getVersion(), electron: process.versions.electron ?? '', platform: process.platform }))
+  handle(IPC.feedMessage, (a) => d.session.feedMessage(FeedMessageArgs.parse(a)))
+  handle(IPC.feedHistory, (a) => d.session.feedHistory(FeedHistoryArgs.parse(a)))
+  handle(IPC.feedSession, (a) => d.session.feedSession(FeedSessionArgs.parse(a)))
+  handle(IPC.appInfo, (): AppInfo => ({ version: app.getVersion(), electron: process.versions.electron ?? '', platform: process.platform }))
 }

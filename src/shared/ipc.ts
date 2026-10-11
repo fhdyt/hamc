@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { CollectorEvent } from './events'
+import type { CollectorEvent, FeedHistory, FeedMessageText, SessionDetail } from './events'
 import type { SettingsMap } from './settings'
 
 export { IPC } from './channels'
@@ -108,6 +108,18 @@ export type CronOutputResult =
   | { ok: true; text: string; truncated: boolean; name: string; mtime: number }
   | { ok: false; reason: 'no-output' | 'not-found' | 'unreadable' | 'not-connected' }
 
+export type QueryError =
+  | 'bad_args'
+  | 'not_found'
+  | 'unsupported_schema'
+  | 'db_unreadable'
+  | 'unknown_command'
+  | 'timeout'
+  | 'not-connected'
+  | 'invalid-response'
+
+export type QueryResult<T> = { ok: true; data: T } | { ok: false; error: QueryError }
+
 export interface OpenCronTarget {
   profile: string
   jobId: string
@@ -138,6 +150,11 @@ export interface MissionApi {
   }
   cron: {
     output(profile: string, jobId: string): Promise<CronOutputResult>
+  }
+  feed: {
+    message(profile: string, messageId: number, field: 'content' | 'reasoning' | 'tool_calls', index?: number): Promise<QueryResult<FeedMessageText>>
+    history(before: Record<string, number>, limit: number): Promise<QueryResult<FeedHistory>>
+    session(profile: string, sessionId: string): Promise<QueryResult<SessionDetail>>
   }
   onEvent(cb: (e: CollectorEvent) => void): Unsub
   onStatus(cb: (s: ConnStatus) => void): Unsub

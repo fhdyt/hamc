@@ -323,6 +323,8 @@ if __name__ == "__main__":
         print(json.dumps({"root": str(f.root), "proc": str(f.proc), "sysfs": str(f.sysfs), "home": str(f.home)}))
     elif cmd == "add-profile":
         add_profile(Path(sys.argv[2]), sys.argv[3])
+    elif cmd == "add-message":
+        print(add_message(Path(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5], float(sys.argv[6])))
     elif cmd == "advance":
         advance(load(Path(sys.argv[2])), int(sys.argv[3]))
     else:
