@@ -53,4 +53,6 @@ Measured on Windows 11 with the Playwright-driven Electron app (`MC_PERF=1 npx p
 | 1,000 | 3,981 | 15.7 | 1.9 s | 53.6 | 12 s |
 | 5,000 | 19,979 | 20.7 | 10.5 s | 32.8 | 57 s |
 
+After the Obsidian-like layout (clustered synthetic vault with 12% unlinked notes, about 3.4 links per linked note; see the layout notes below) the 5,000-note run gave 59.5 fps while zooming, 23 layout ticks per second, a settle time of 14.7 s and no overlapping nodes among 12.5 million pairs. The layout keeps linked notes in clusters that repel each other, holds unlinked notes in a loose band just outside the connected core (a radial force whose radius follows the 90th percentile of the linked notes), and keeps every node apart with a collision force. Benchmark knobs: `MC_PERF_NOTES`, `MC_PERF_LINKS`.
+
 F-BRAIN-9 (at least 30 fps for 5,000 notes and 20,000 links) is met on this machine, with a thin margin. The 57 s is the first parse of 5,000 freshly written files on Windows (Defender scans each new file); the same vault parses in about 2 s once the files are warm, and Linux is faster still. A later change that makes the margin thicker is to draw edges only when their endpoints are on screen. macOS and Linux have not been measured yet: run the command above on each and add a row.

@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type Simulation, type SimulationLinkDatum, type SimulationNodeDatum } from 'd3-force'
+import { forceCollide, forceLink, forceManyBody, forceRadial, forceSimulation, forceX, forceY, type Simulation, type SimulationLinkDatum, type SimulationNodeDatum } from 'd3-force'
 import { forceValues, type Forces, type FromWorker, type ToWorker } from './layoutTypes'
 
 interface N extends SimulationNodeDatum {
@@ -12,6 +12,11 @@ const BUDGET_MS = 24
 let nodes: N[] = []
 let links: SimulationLinkDatum<N>[] = []
 let degree: Int32Array = new Int32Array(0)
+let ringRadius = 200
+/** A fixed random factor per node, so the unlinked notes form a band rather than a single line. */
+let band: Float32Array = new Float32Array(0)
+let ring: ReturnType<typeof forceRadial<N>> | null = null
+let ticks = 0
 let radii: Float32Array = new Float32Array(0)
 let sim: Simulation<N, SimulationLinkDatum<N>> | null = null
 let timer: ReturnType<typeof setInterval> | null = null
@@ -22,10 +27,12 @@ const post = (m: FromWorker, transfer?: Transferable[]): void => (self as unknow
 function applyForces(): void {
   if (!sim) return
   const v = forceValues(forces)
-  // notes without any link are pulled in harder, so they settle in a ring close around the connected core
-  const pull = (n: N): number => (degree[n.index] === 0 ? Math.min(0.5, v.gravity * 2.5) : v.gravity)
-  sim.force('x', forceX<N>(0).strength(pull))
-  sim.force('y', forceY<N>(0).strength(pull))
+  // linked notes drift to the centre; notes without any link are held on a ring just outside the connected core
+  const linked = (n: N): number => (degree[n.index] === 0 ? 0 : v.gravity)
+  sim.force('x', forceX<N>(0).strength(linked))
+  sim.force('y', forceY<N>(0).strength(linked))
+  ring = forceRadial<N>((n) => ringRadius * (band[n.index] ?? 1), 0, 0).strength((n) => (degree[n.index] === 0 ? 1 : 0))
+  sim.force('ring', ring)
   sim.force('collide', forceCollide<N>((n) => (radii[n.index] ?? 2) + 1.5).strength(0.9).iterations(1))
   sim.force('charge', forceManyBody<N>().strength(v.charge).theta(0.9))
   sim.force(
@@ -50,11 +57,24 @@ function snapshot(): Float32Array {
   return out
 }
 
+/** The ring sits at about 1.15 times the radius that holds nearly all linked notes. */
+function measureRing(): void {
+  const radii: number[] = []
+  for (const n of nodes) if (degree[n.index]! > 0 && n.x !== undefined && n.y !== undefined) radii.push(Math.hypot(n.x, n.y))
+  if (radii.length < 3) return
+  radii.sort((a, b) => a - b)
+  const r90 = radii[Math.floor(radii.length * 0.9)]!
+  ringRadius = r90 * 1.0 + 12
+  ring?.radius((n) => ringRadius * (band[n.index] ?? 1)) // d3 reads the radius when the force is set up, so set it again
+}
+
 function loop(): void {
   if (!sim) return
   const start = performance.now()
-  do sim.tick()
-  while (sim.alpha() >= sim.alphaMin() && performance.now() - start < BUDGET_MS)
+  do {
+    sim.tick()
+    if (++ticks % 10 === 0) measureRing()
+  } while (sim.alpha() >= sim.alphaMin() && performance.now() - start < BUDGET_MS)
   const pos = snapshot()
   post({ type: 'tick', pos, alpha: sim.alpha() }, [pos.buffer])
   if (sim.alpha() < sim.alphaMin() && sim.alphaTarget() === 0) {
@@ -86,7 +106,10 @@ function setGraph(m: Extract<ToWorker, { type: 'set' }>): void {
   }
   forces = m.forces
   radii = m.radii
-  sim = forceSimulation<N>(nodes).alpha(m.alpha).alphaDecay(0.03).velocityDecay(0.45).stop()
+  ticks = 0
+  ringRadius = Math.sqrt(n) * 12 + 60
+  band = Float32Array.from({ length: n }, (_, i) => 0.95 + ((Math.sin(i * 12.9898) * 43758.5453) % 1 + 1) % 1 * 0.3)
+  sim = forceSimulation<N>(nodes).alpha(m.alpha).alphaDecay(0.02).velocityDecay(0.45).stop()
   applyForces()
   wake()
 }

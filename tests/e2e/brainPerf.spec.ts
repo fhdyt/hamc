@@ -11,11 +11,12 @@ test.skip(!process.env['MC_PERF'], 'set MC_PERF=1 to run the graph benchmark')
 test.setTimeout(10 * 60_000)
 
 const N = Number(process.env['MC_PERF_NOTES'] ?? 5000)
+const LINKS = Number(process.env['MC_PERF_LINKS'] ?? 4)
 
 test(`the graph of ${N} notes stays smooth`, async () => {
   const fx = buildFixture(join(tmp('mc-perf-fx-'), 'fx'))
   const bench = join(fx.root, 'home', 'bench')
-  makeSyntheticVault(bench, N, 4)
+  makeSyntheticVault(bench, N, LINKS)
   const srv = await startFakeSsh({ fixture: fx })
   const { app, page } = await launchApp(tmp('mc-perf-ud-'))
   try {
@@ -52,6 +53,17 @@ test(`the graph of ${N} notes stays smooth`, async () => {
       return { bad, pairs: (nodes.length * (nodes.length - 1)) / 2 }
     })
     console.log('BRAIN OVERLAP', JSON.stringify(overlap))
+    // where do the unlinked notes sit compared with the linked ones? (the smallest dots are the unlinked ones)
+    const ring = await page.evaluate(() => {
+      const nodes = window.__mcBrainNodes!()
+      const minR = Math.min(...nodes.map((n) => n.wr))
+      const dist = (n: { wx: number; wy: number }): number => Math.hypot(n.wx, n.wy)
+      const lone = nodes.filter((n) => n.wr <= minR + 1e-6).map(dist).sort((a, b) => a - b)
+      const rest = nodes.filter((n) => n.wr > minR + 1e-6).map(dist).sort((a, b) => a - b)
+      const q = (a: number[], f: number): number => Math.round(a[Math.floor((a.length - 1) * f)] ?? 0)
+      return { lone: lone.length, loneP10: q(lone, 0.1), loneP50: q(lone, 0.5), loneP90: q(lone, 0.9), linkedP50: q(rest, 0.5), linkedP95: q(rest, 0.95), linkedMax: q(rest, 1) }
+    })
+    console.log('BRAIN RING', JSON.stringify(ring))
     expect(overlap.bad / Math.max(1, overlap.pairs)).toBeLessThan(0.00005)
     await page.getByRole('button', { name: 'Fit all nodes' }).click()
     await page.waitForTimeout(500)

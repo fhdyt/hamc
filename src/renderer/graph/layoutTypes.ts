@@ -28,8 +28,8 @@ export type ToWorker =
 export type FromWorker = { type: 'tick'; pos: Float32Array; alpha: number } | { type: 'settled' }
 
 export const forceValues = (f: Forces): { gravity: number; charge: number; strength: number; distance: number } => ({
-  gravity: 0.005 + f.center * 0.12,
-  charge: -(10 + f.repel * 140),
-  strength: 0.2 + f.link * 1.6,
-  distance: 15 + f.distance * 100
+  gravity: 0.004 + f.center * 0.1,
+  charge: -(12 + f.repel * 190),
+  strength: 0.3 + f.link * 2.4,
+  distance: 12 + f.distance * 110
 })

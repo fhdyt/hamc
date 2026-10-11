@@ -264,10 +264,16 @@ def make_synthetic_vault(root: Path, n: int, links_per_note: int = 4, seed: int 
     folders = max(1, int(n ** 0.5) // 2)
     names = [f"f{i % folders}/Note {i}" for i in range(n)]
     linked = n - n // 8  # the last eighth are orphans: they link nowhere and nothing links to them
+    communities = max(4, n // 120)  # notes link mostly inside their own community, with a few links across
+    members = [[i for i in range(linked) if i % communities == c] for c in range(communities)]
     for i, name in enumerate(names):
         out = []
         for _ in range(links_per_note if i < linked else 0):
-            j = int(linked * rnd.random() ** 2) % linked
+            if rnd.random() < 0.97:
+                pool = members[i % communities]
+                j = pool[int(len(pool) * rnd.random() ** 2)]  # a few hubs per community
+            else:
+                j = int(linked * rnd.random())
             if j != i:
                 out.append(f"[[{names[j].split('/')[1]}]]")
         w(Path(root) / f"{name}.md", f"#t{i % 40} " + " ".join(out) + "\n")

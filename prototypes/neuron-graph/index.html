@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Second brain: contoh tampilan neuron</title>
+<style>
+:root{--bg:#0b0d17;--fg:#e6e8f5;--mut:#A9B2D3;--line:#2a2f4a;--acc:#BD93F9}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:13px/1.45 "JetBrains Mono",ui-monospace,Consolas,monospace}
+body{display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
+h1{font-size:13px;margin:0;color:var(--acc);letter-spacing:.04em;font-weight:600}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+nav button,#fire{font:inherit;color:var(--fg);background:#141830;border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+nav button[aria-selected="true"]{border-color:var(--acc);background:#1d2142;color:#fff}
+nav button:hover,#fire:hover{border-color:#5a628f}
+nav button:focus-visible,#fire:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+#info{color:var(--mut);flex:1 1 320px;min-width:240px}
+#legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--mut);font-size:12px}
+#legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+main{position:relative;flex:1;min-height:0}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas.drag{cursor:grabbing}
+#hint{position:absolute;left:16px;bottom:12px;color:#8B95BD;font-size:12px;pointer-events:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>SECOND BRAIN · CONTOH GRAPH</h1>
+  <nav role="tablist" aria-label="Pilihan tampilan" id="tabs"></nav>
+  <button id="fire" type="button">Picu sinyal</button>
+  <div id="info" aria-live="polite"></div>
+  <div id="legend"></div>
+</header>
+<main>
+  <canvas id="cv" aria-label="Contoh graph second brain"></canvas>
+  <div id="hint">klik neuron = picu sinyal · seret = geser/putar · scroll = zoom · tombol 1–4 = ganti tampilan · data contoh, bukan vault asli</div>
+</main>
+<script>
+(() => {
+'use strict';
+
+/* ---------- utilities ---------- */
+const rng = (seed) => () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+const hexA = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  const r = cv.getBoundingClientRect();
+  W = Math.max(1, r.width); H = Math.max(1, r.height);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+}
+
+const sprites = {};
+function sprite(color) {
+  if (sprites[color]) return sprites[color];
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.16, hexA(color, 0.95));
+  gr.addColorStop(0.4, hexA(color, 0.3));
+  gr.addColorStop(1, hexA(color, 0));
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  return (sprites[color] = c);
+}
+
+/* ---------- sample vault (fake, seeded) ---------- */
+const FOLDERS = [
+  { name: 'projects', color: '#BD93F9', n: 30, region: 'Frontal' },
+  { name: 'research', color: '#8BE9FD', n: 26, region: 'Parietal' },
+  { name: 'daily',    color: '#50FA7B', n: 24, region: 'Temporal' },
+  { name: 'people',   color: '#FF79C6', n: 20, region: 'Occipital' },
+  { name: 'ops',      color: '#FFB86C', n: 18, region: 'Cerebellum' },
+  { name: 'archive',  color: '#F1FA8C', n: 10, region: 'Brainstem' },
+];
+
+function makeData(seed) {
+  const r = rng(seed), nodes = [], edges = [], seen = new Set();
+  FOLDERS.forEach((f, fi) => { for (let i = 0; i < f.n; i++) nodes.push({
+    id: nodes.length, f: fi, k: i, label: `${f.name}/note-${String(i + 1).padStart(2, '0')}`,
+    deg: 0, adj: [], fire: 0, recent: r() < 0.09, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, tx: 0, ty: 0, tz: 0, fx: null,
+  }); });
+  const orphans = new Set([nodes.length - 1, nodes.length - 2, nodes.length - 13, nodes.length - 20]);
+  const add = (a, b) => {
+    if (a === b || orphans.has(a) || orphans.has(b)) return;
+    const key = a < b ? a + ':' + b : b + ':' + a;
+    if (seen.has(key)) return; seen.add(key);
+    const idx = edges.length;
+    edges.push({ a, b, c: (r() - 0.5) * 0.5 });
+    nodes[a].deg++; nodes[b].deg++; nodes[a].adj.push(idx); nodes[b].adj.push(idx);
+  };
+  const pick = (pool) => {
+    let tot = 0; for (const i of pool) tot += nodes[i].deg + 1;
+    let x = r() * tot; for (const i of pool) { x -= nodes[i].deg + 1; if (x <= 0) return i; }
+    return pool[pool.length - 1];
+  };
+  FOLDERS.forEach((f, fi) => {
+    const pool = nodes.filter((n) => n.f === fi && !orphans.has(n.id)).map((n) => n.id);
+    pool.forEach((id, k) => {
+      if (k === 0) return;
+      const m = 1 + (r() < 0.5) + (r() < 0.2);
+      for (let q = 0; q < m; q++) add(id, pick(pool.slice(0, k)));
+    });
+  });
+  const all = nodes.filter((n) => !orphans.has(n.id)).map((n) => n.id);
+  for (let q = 0; q < 46; q++) { const a = pick(all), b = pick(all); if (nodes[a].f !== nodes[b].f) add(a, b); }
+  return { nodes, edges, signals: [], timer: 0.6, t: 0 };
+}
+
+/* ---------- force simulation (2D or 3D) ---------- */
+function simStep(d, P, alpha, constrain) {
+  const { nodes, edges } = d, n = nodes.length, D3 = P.dim === 3;
+  for (let i = 0; i < n; i++) {
+    const a = nodes[i];
+    for (let j = i + 1; j < n; j++) {
+      const b = nodes[j];
+      let dx = a.x - b.x, dy = a.y - b.y, dz = D3 ? a.z - b.z : 0;
+      let d2 = dx * dx + dy * dy + dz * dz + 0.01;
+      if (d2 > P.cut2) continue;
+      const dist = Math.sqrt(d2);
+      let f = (P.charge / d2) * alpha;
+      const min = a.cr + b.cr;
+      if (dist < min) f += (min - dist) * 0.25;
+      const ux = dx / dist * f, uy = dy / dist * f, uz = dz / dist * f;
+      a.vx += ux; a.vy += uy; a.vz += uz; b.vx -= ux; b.vy -= uy; b.vz -= uz;
+    }
+  }
+  for (const e of edges) {
+    const a = nodes[e.a], b = nodes[e.b];
+    const dx = b.x - a.x, dy = b.y - a.y, dz = D3 ? b.z - a.z : 0;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    const f = (dist - (P.L + (a.cr + b.cr) * (P.Lr || 0))) * P.k * alpha / dist;
+    a.vx += dx * f; a.vy += dy * f; a.vz += dz * f; b.vx -= dx * f; b.vy -= dy * f; b.vz -= dz * f;
+  }
+  for (const a of nodes) {
+    a.vx += (a.tx - a.x) * P.g * alpha; a.vy += (a.ty - a.y) * P.g * alpha; if (D3) a.vz += (a.tz - a.z) * P.g * alpha;
+    a.vx *= P.damp; a.vy *= P.damp; a.vz *= P.damp;
+    if (a.fx != null) { a.x = a.fx; a.y = a.fy; a.vx = a.vy = 0; continue; }
+    a.x += a.vx; a.y += a.vy; if (D3) a.z += a.vz;
+  }
+  if (constrain) constrain(nodes);
+}
+
+/* ---------- signals (shared) ---------- */
+function fire(d, id, hops = 3) {
+  const n = d.nodes[id]; n.fire = 1;
+  const es = n.adj.slice().sort(() => Math.random() - 0.5).slice(0, 4);
+  for (const e of es) if (d.signals.length < 260) d.signals.push({ e, from: id, t: 0, sp: 0.55 + Math.random() * 0.4, hops: hops - 1 });
+}
+function updateSignals(d, dt) {
+  d.t += dt;
+  for (const n of d.nodes) n.fire = Math.max(0, n.fire - dt * 1.0);
+  const S = d.signals;
+  for (let i = S.length - 1; i >= 0; i--) {
+    const s = S[i]; s.t += s.sp * dt;
+    if (s.t < 1) continue;
+    const e = d.edges[s.e], to = e.a === s.from ? e.b : e.a;
+    d.nodes[to].fire = 1;
+    if (s.hops > 0 && Math.random() < 0.8) {
+      const nx = d.nodes[to].adj.filter((x) => x !== s.e).sort(() => Math.random() - 0.5).slice(0, 2);
+      for (const x of nx) if (S.length < 260) S.push({ e: x, from: to, t: 0, sp: 0.55 + Math.random() * 0.4, hops: s.hops - 1 });
+    }
+    S[i] = S[S.length - 1]; S.pop();
+  }
+  d.timer -= dt;
+  if (d.timer <= 0) {
+    d.timer = 0.5 + Math.random() * 0.7;
+    const rec = d.nodes.filter((n) => n.recent), pool = rec.length && Math.random() < 0.6 ? rec : d.nodes;
+    const n = pool[Math.floor(Math.random() * pool.length)];
+    if (n.deg) fire(d, n.id, 4);
+  }
+}
+const sigT = (s, e) => (e.a === s.from ? s.t : 1 - s.t);
+const quad = (g, t) => {
+  const u = 1 - t;
+  return [u * u * g.ax + 2 * u * t * g.cx + t * t * g.bx, u * u * g.ay + 2 * u * t * g.cy + t * t * g.by];
+};
+
+/* ---------- shared 2D scene (modes 1, 3, 4) ---------- */
+const CUM = (f) => FOLDERS[f].color;
+
+// side-view brain silhouette (face to the left), unit coordinates
+const BRAIN = [[-0.95,0.05],[-0.92,-0.2],[-0.78,-0.42],[-0.55,-0.58],[-0.25,-0.67],[0.1,-0.7],[0.45,-0.64],[0.75,-0.5],[0.93,-0.28],[0.98,-0.02],[0.93,0.2],[0.82,0.3],[0.75,0.38],[0.65,0.5],[0.5,0.58],[0.38,0.5],[0.3,0.38],[0.2,0.42],[0.12,0.62],[0.05,0.8],[-0.05,0.8],[-0.08,0.55],[-0.1,0.4],[-0.2,0.4],[-0.4,0.42],[-0.6,0.36],[-0.75,0.28],[-0.88,0.2]];
+const ANCHOR = [[-0.55,-0.22],[0.05,-0.42],[-0.4,0.2],[0.72,-0.12],[0.56,0.42],[0.03,0.55]];
+const BS = 380;
+function brainPoly() {
+  const pts = [], n = BRAIN.length;
+  for (let i = 0; i < n; i++) {
+    const p0 = BRAIN[(i + n - 1) % n], p1 = BRAIN[i], p2 = BRAIN[(i + 1) % n], p3 = BRAIN[(i + 2) % n];
+    for (let s = 0; s < 10; s++) {
+      const t = s / 10, t2 = t * t, t3 = t2 * t;
+      const f = (a, b, c, d) => 0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+      pts.push([f(p0[0], p1[0], p2[0], p3[0]) * BS, f(p0[1], p1[1], p2[1], p3[1]) * BS]);
+    }
+  }
+  return pts;
+}
+function inPoly(poly, x, y) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+
+function makeArbor(n, r) {
+  const levels = [[], [], [], [], []];
+  const L0 = 13 + 6.5 * Math.sqrt(n.deg + 1), nprim = 4 + Math.floor(r() * 3), dmax = n.deg > 8 ? 4 : 3;
+  const grow = (x, y, a, len, d) => {
+    const bend = (r() - 0.5) * 0.35;
+    const x2 = x + Math.cos(a + bend) * len, y2 = y + Math.sin(a + bend) * len;
+    levels[d].push([x, y, x2, y2]);
+    if (d >= dmax) return;
+    for (let k = 0; k < 2; k++) grow(x2, y2, a + (k ? 1 : -1) * (0.35 + r() * 0.55), len * (0.66 + r() * 0.13), d + 1);
+  };
+  for (let i = 0; i < nprim; i++) {
+    const a = (i / nprim) * Math.PI * 2 + r() * 0.6;
+    grow(Math.cos(a) * n.rs, Math.sin(a) * n.rs, a, L0, 0);
+  }
+  n.reach = L0 * (dmax === 4 ? 2.0 : 1.75);
+  return levels;
+}
+
+function scene2D(kind) {
+  const d = makeData(7), { nodes, edges } = d, r = rng(100 + kind);
+  const P = kind === 4 ? { dim: 2, charge: 2200, k: 0.05, L: 60, Lr: 0.55, g: 0.012, damp: 0.55, cut2: 700 * 700 }
+          : kind === 3 ? { dim: 2, charge: 900, k: 0.05, L: 34, g: 0.02, damp: 0.55, cut2: 320 * 320 }
+          : { dim: 2, charge: 1500, k: 0.07, L: 55, g: 0.018, damp: 0.55, cut2: 520 * 520 };
+  const poly = kind === 3 ? brainPoly() : null;
+  nodes.forEach((n) => {
+    n.rs = (kind === 4 ? 5 : 2.4) + Math.sqrt(n.deg) * (kind === 4 ? 1.5 : 1.7);
+    if (kind === 4) n.arbor = makeArbor(n, r);
+    n.cr = kind === 4 ? n.reach * 0.62 : n.rs + (kind === 3 ? 3 : 6);
+    if (kind === 3) { n.tx = ANCHOR[n.f][0] * BS; n.ty = ANCHOR[n.f][1] * BS; }
+    else { const a = (n.f / FOLDERS.length) * 6.283; const R = kind === 4 ? 200 : 120; n.tx = Math.cos(a) * R; n.ty = Math.sin(a) * R; }
+    const ang = r() * 6.283, rad = Math.sqrt(r()) * (kind === 4 ? 420 : kind === 3 ? 60 : 240);
+    n.x = n.tx + Math.cos(ang) * rad; n.y = n.ty + Math.sin(ang) * rad;
+  });
+  const constrain = kind === 3 ? (ns) => { for (const n of ns) if (!inPoly(poly, n.x, n.y)) { n.x += (n.tx - n.x) * 0.3; n.y += (n.ty - n.y) * 0.3; } } : null;
+  let alpha = 1;
+  for (let i = 0; i < 380; i++) { simStep(d, P, alpha, constrain); alpha = Math.max(0.03, alpha * 0.985); }
+  const cam = { x: 0, y: 0, k: 1 };
+  const fit = () => {
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    const m = kind === 4 ? 0 : 14;
+    for (const n of nodes) { const pad = (kind === 4 ? n.reach : 0) + m; x0 = Math.min(x0, n.x - pad); x1 = Math.max(x1, n.x + pad); y0 = Math.min(y0, n.y - pad); y1 = Math.max(y1, n.y + pad); }
+    if (poly) for (const p of poly) { x0 = Math.min(x0, p[0] - 30); x1 = Math.max(x1, p[0] + 30); y0 = Math.min(y0, p[1] - 30); y1 = Math.max(y1, p[1] + 30); }
+    cam.x = (x0 + x1) / 2; cam.y = (y0 + y1) / 2; cam.k = Math.min(W / (x1 - x0), H / (y1 - y0)) * 0.92;
+  };
+  let hov = -1, nb = new Set(), drag = null, tNow = 0, fitted = false;
+
+  const toWorld = (sx, sy) => [(sx - W / 2) / cam.k + cam.x, (sy - H / 2) / cam.k + cam.y];
+  const pick = (sx, sy) => {
+    const [wx, wy] = toWorld(sx, sy); let best = -1, bd = 1e9;
+    for (const n of nodes) { const dd = Math.hypot(n.rx - wx, n.ry - wy), rr = n.rs + 5 / cam.k; if (dd < rr && dd < bd) { bd = dd; best = n.id; } }
+    return best;
+  };
+  const setHover = (id) => { hov = id; nb = new Set(); if (id >= 0) for (const e of nodes[id].adj) { nb.add(edges[e].a); nb.add(edges[e].b); } };
+
+  function geom() {
+    for (const e of edges) {
+      const a = nodes[e.a], b = nodes[e.b];
+      let ax = a.rx, ay = a.ry, bx = b.rx, by = b.ry;
+      if (kind === 4) {
+        const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1;
+        ax += dx / L * a.rs; ay += dy / L * a.rs; bx -= dx / L * (b.rs + 2); by -= dy / L * (b.rs + 2);
+      }
+      const c = e.c * (kind === 3 ? 0.55 : 1);
+      e.g = { ax, ay, bx, by, cx: (ax + bx) / 2 - (by - ay) * c, cy: (ay + by) / 2 + (bx - ax) * c };
+    }
+  }
+
+  function backdrop() {
+    if (kind === 3) {
+      ctx.beginPath(); poly.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath();
+      ctx.fillStyle = 'rgba(189,147,249,0.045)'; ctx.fill();
+      ctx.save(); ctx.shadowColor = 'rgba(189,147,249,0.7)'; ctx.shadowBlur = 24;
+      ctx.strokeStyle = 'rgba(189,147,249,0.5)'; ctx.lineWidth = 1.6 / cam.k; ctx.stroke(); ctx.restore();
+      // sulci (decorative folds)
+      ctx.save(); ctx.clip(); ctx.strokeStyle = 'rgba(189,147,249,0.14)'; ctx.lineWidth = 1.2 / cam.k;
+      const folds = [[-0.8,-0.1,-0.5,-0.35,-0.2,-0.5],[-0.1,0.3,0.1,0.05,0.35,-0.1],[0.4,-0.55,0.55,-0.3,0.85,-0.2],[-0.55,0.3,-0.2,0.15,0.05,0.25],[0.0,-0.65,-0.05,-0.4,0.15,-0.25],[0.6,0.05,0.75,0.2,0.9,0.1]];
+      for (const f of folds) { ctx.beginPath(); ctx.moveTo(f[0] * BS, f[1] * BS); ctx.quadraticCurveTo(f[2] * BS, f[3] * BS, f[4] * BS, f[5] * BS); ctx.stroke(); }
+      ctx.restore();
+      ctx.textAlign = 'center';
+      FOLDERS.forEach((f, i) => {
+        const lx = ANCHOR[i][0] * BS, ly = ANCHOR[i][1] * BS - 0.2 * BS;
+        ctx.font = `600 ${11 / cam.k}px "JetBrains Mono",monospace`; ctx.fillStyle = hexA(f.color, 0.8); ctx.fillText(f.region.toUpperCase(), lx, ly);
+        ctx.font = `${10 / cam.k}px "JetBrains Mono",monospace`; ctx.fillStyle = 'rgba(169,178,211,0.7)'; ctx.fillText('/' + f.name, lx, ly + 12 / cam.k);
+      });
+      ctx.textAlign = 'left';
+    }
+  }
+
+  function drawLinks() {
+    ctx.globalCompositeOperation = kind === 4 ? 'source-over' : 'lighter';
+    for (const e of edges) {
+      const g = e.g, a = nodes[e.a], b = nodes[e.b];
+      const em = hov < 0 ? 1 : e.a === hov || e.b === hov ? 2.4 : 0.14;
+      const base = kind === 4 ? 0.5 : 0.24;
+      const gr = ctx.createLinearGradient(g.ax, g.ay, g.bx, g.by);
+      gr.addColorStop(0, hexA(CUM(a.f), clamp(base * em, 0, 1))); gr.addColorStop(1, hexA(CUM(b.f), clamp(base * em, 0, 1)));
+      ctx.strokeStyle = gr; ctx.lineWidth = (kind === 4 ? 1.1 : 1) * (em > 1 ? 1.7 : 1) / (kind === 4 ? 1 : cam.k);
+      ctx.beginPath(); ctx.moveTo(g.ax, g.ay); ctx.quadraticCurveTo(g.cx, g.cy, g.bx, g.by); ctx.stroke();
+      if (kind === 4) {
+        ctx.fillStyle = hexA(CUM(b.f), clamp(0.8 * em, 0, 1));
+        ctx.beginPath(); ctx.arc(g.bx, g.by, 2.3, 0, 6.283); ctx.fill();
+        for (const tt of [0.9, 0.95]) { const p = quad(g, tt); ctx.beginPath(); ctx.arc(p[0], p[1], 1.1, 0, 6.283); ctx.fill(); }
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function drawSignals() {
+    ctx.globalCompositeOperation = 'lighter';
+    for (const s of d.signals) {
+      const e = edges[s.e], col = CUM(nodes[s.from].f), t = sigT(s, e);
+      for (let q = 0; q < 4; q++) {
+        const tt = t - (e.a === s.from ? 1 : -1) * q * 0.018; if (tt < 0 || tt > 1) continue;
+        const p = quad(e.g, tt), sz = (kind === 4 ? 14 : 16) * (1 - q * 0.2);
+        ctx.globalAlpha = 1 - q * 0.25;
+        ctx.drawImage(sprite(col), p[0] - sz / 2, p[1] - sz / 2, sz, sz);
+      }
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function drawNodes() {
+    for (const n of nodes) {
+      const dim = hov < 0 ? 1 : n.id === hov || nb.has(n.id) ? 1 : 0.22, col = CUM(n.f), f = n.fire;
+      if (kind === 4) {
+        ctx.globalAlpha = dim; ctx.lineCap = 'round';
+        const w = [2.2, 1.6, 1.15, 0.8, 0.6];
+        n.arbor.forEach((segs, lv) => {
+          if (!segs.length) return;
+          ctx.strokeStyle = hexA(col, clamp((0.62 - lv * 0.08) + f * 0.4, 0, 1));
+          ctx.lineWidth = w[lv] * (1 + f * 0.5);
+          ctx.beginPath(); for (const s of segs) { ctx.moveTo(n.rx + s[0], n.ry + s[1]); ctx.lineTo(n.rx + s[2], n.ry + s[3]); } ctx.stroke();
+        });
+        ctx.globalCompositeOperation = 'lighter';
+        const sz = n.rs * (6 + f * 5); ctx.drawImage(sprite(col), n.rx - sz / 2, n.ry - sz / 2, sz, sz);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = hexA(col, 1); ctx.beginPath(); ctx.arc(n.rx, n.ry, n.rs * (1 + f * 0.25), 0, 6.283); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.5 + f * 0.5) + ')'; ctx.beginPath(); ctx.arc(n.rx, n.ry, n.rs * 0.42, 0, 6.283); ctx.fill();
+        ctx.globalAlpha = 1;
+      } else {
+        const rr = n.rs * (1 + f * 0.9), sz = rr * 8;
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = dim * (0.8 + f * 0.2);
+        ctx.drawImage(sprite(col), n.rx - sz / 2, n.ry - sz / 2, sz, sz);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(255,255,255,' + clamp(0.55 + f * 0.45, 0, 1) + ')'; ctx.beginPath(); ctx.arc(n.rx, n.ry, rr * 0.5, 0, 6.283); ctx.fill();
+        if (n.recent) { ctx.strokeStyle = hexA(col, 0.55 * dim); ctx.lineWidth = 1 / cam.k; ctx.beginPath(); ctx.arc(n.rx, n.ry, rr * (1.9 + 0.5 * Math.sin(tNow * 2.2 + n.id)), 0, 6.283); ctx.stroke(); }
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  return {
+    d, nodes, edges,
+    tick(dt) {
+      tNow += dt;
+      if (!fitted) { for (const n of nodes) { n.rx = n.x; n.ry = n.y; } fit(); fitted = true; }
+      alpha = Math.max(0.03, alpha * 0.99);
+      simStep(d, P, alpha, constrain);
+      updateSignals(d, dt);
+      for (const n of nodes) { n.rx = n.x + Math.sin(tNow * 0.7 + n.id * 1.7) * 1.3; n.ry = n.y + Math.cos(tNow * 0.6 + n.id * 2.3) * 1.3; }
+    },
+    render() {
+      geom();
+      ctx.setTransform(DPR * cam.k, 0, 0, DPR * cam.k, DPR * (W / 2 - cam.x * cam.k), DPR * (H / 2 - cam.y * cam.k));
+      backdrop(); drawLinks(); drawSignals(); drawNodes();
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      const labelHubs = cam.k > 1.5;
+      for (const n of nodes) if (n.id === hov || (labelHubs && n.deg >= 8)) label(n, (n.rx - cam.x) * cam.k + W / 2, (n.ry - cam.y) * cam.k + H / 2 - n.rs * cam.k - 8);
+    },
+    pdown(sx, sy) {
+      const id = pick(sx, sy);
+      drag = { sx, sy, id, moved: false, cx: cam.x, cy: cam.y };
+      if (id >= 0) { const n = nodes[id]; n.fx = n.x; n.fy = n.y; alpha = Math.max(alpha, 0.35); }
+      cv.classList.add('drag');
+    },
+    pmove(sx, sy) {
+      if (!drag) { const id = pick(sx, sy); if (id !== hov) setHover(id); cv.style.cursor = id >= 0 ? 'pointer' : 'grab'; return; }
+      if (Math.hypot(sx - drag.sx, sy - drag.sy) > 4) drag.moved = true;
+      if (drag.id >= 0) { const [wx, wy] = toWorld(sx, sy), n = nodes[drag.id]; n.fx = wx; n.fy = wy; alpha = Math.max(alpha, 0.3); }
+      else { cam.x = drag.cx - (sx - drag.sx) / cam.k; cam.y = drag.cy - (sy - drag.sy) / cam.k; }
+    },
+    pup() {
+      if (!drag) return;
+      if (drag.id >= 0) { const n = nodes[drag.id]; n.fx = null; if (!drag.moved) fire(d, drag.id, 5); }
+      drag = null; cv.classList.remove('drag');
+    },
+    leave() { setHover(-1); },
+    refit() { fitted = false; },
+    wheel(dy, sx, sy) {
+      const [wx, wy] = toWorld(sx, sy), z = Math.exp(-dy * 0.0012);
+      cam.k = clamp(cam.k * z, 0.15, 8);
+      cam.x = wx - (sx - W / 2) / cam.k; cam.y = wy - (sy - H / 2) / cam.k;
+    },
+    fire() { const pool = nodes.filter((n) => n.deg > 5); fire(d, pool[Math.floor(Math.random() * pool.length)].id, 5); },
+    stat: () => `${nodes.length} notes · ${edges.length} links`,
+  };
+}
+
+/* ---------- mode 2: 3D brain ---------- */
+function scene3D() {
+  const d = makeData(7), { nodes, edges } = d, r = rng(205);
+  const ANCH = [[70,-20,150],[60,-95,-10],[120,45,10],[60,-10,-175],[70,78,-150],[0,115,-60]];
+  const EL = { a: 190, b: 150, c: 235 };
+  const P = { dim: 3, charge: 700, k: 0.05, L: 36, g: 0.04, damp: 0.55, cut2: 240 * 240 };
+  nodes.forEach((n) => {
+    n.side = r() < 0.5 ? -1 : 1; const a = ANCH[n.f];
+    n.tx = a[0] * n.side; n.ty = a[1]; n.tz = a[2];
+    n.x = n.tx + (r() - 0.5) * 80; n.y = n.ty + (r() - 0.5) * 80; n.z = n.tz + (r() - 0.5) * 80;
+    n.rs = 2.4 + Math.sqrt(n.deg) * 1.6; n.cr = n.rs + 3;
+  });
+  const constrain = (ns) => {
+    for (const n of ns) {
+      const q = (n.x / EL.a) ** 2 + (n.y / EL.b) ** 2 + (n.z / EL.c) ** 2;
+      if (q > 0.72) { const s = Math.sqrt(0.72 / q); n.x *= s; n.y *= s; n.z *= s; }
+      if (n.f < 4 && Math.abs(n.x) < 16) n.x = (n.x < 0 || (n.x === 0 && n.side < 0) ? -1 : 1) * 16;
+    }
+  };
+  let alpha = 1;
+  for (let i = 0; i < 380; i++) { simStep(d, P, alpha, constrain); alpha = Math.max(0.03, alpha * 0.985); }
+  let yaw = 0.6, pitch = -0.25, zoom = 1, hov = -1, nb = new Set(), drag = null, auto = true, tNow = 0;
+  const F = 900;
+  const zoom0 = () => Math.min(W, H) * 0.44 / 235;
+  const project = (x, y, z) => {
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const x1 = x * cy + z * sy, z1 = -x * sy + z * cy, y1 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
+    const s = F / (F + z2) * zoom0() * zoom;
+    return [W / 2 + x1 * s, H / 2 + y1 * s, s, z2];
+  };
+  const setHover = (id) => { hov = id; nb = new Set(); if (id >= 0) for (const e of nodes[id].adj) { nb.add(edges[e].a); nb.add(edges[e].b); } };
+  const pick = (sx, sy) => {
+    let best = -1, bz = 1e9;
+    for (const n of nodes) { const dd = Math.hypot(n.px - sx, n.py - sy); if (dd < Math.max(6, n.rs * n.ps * 1.4) && n.pz < bz) { bz = n.pz; best = n.id; } }
+    return best;
+  };
+  const depthK = (z2) => clamp(0.5 - z2 / 520, 0, 1);
+
+  function wire() {
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(189,147,249,0.07)';
+    const ring = (fn, n) => { ctx.beginPath(); for (let i = 0; i <= n; i++) { const p = fn(i / n); const q = project(p[0], p[1], p[2]); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); } ctx.stroke(); };
+    for (let ph = -60; ph <= 60; ph += 30) { const p = ph * Math.PI / 180; ring((t) => [EL.a * Math.cos(p) * Math.cos(t * 6.283), EL.b * Math.sin(p), EL.c * Math.cos(p) * Math.sin(t * 6.283)], 64); }
+    for (let th = 0; th < 6; th++) { const a = th * Math.PI / 6; ring((t) => { const p = (t - 0.5) * Math.PI * 2; return [EL.a * Math.cos(p) * Math.cos(a), EL.b * Math.sin(p), EL.c * Math.cos(p) * Math.sin(a)]; }, 64); }
+    // central fissure
+    ctx.strokeStyle = 'rgba(189,147,249,0.22)';
+    ring((t) => { const p = (t - 0.5) * Math.PI * 2; return [0, EL.b * Math.sin(p), EL.c * Math.cos(p)]; }, 64);
+  }
+
+  return {
+    d, nodes, edges,
+    tick(dt) {
+      tNow += dt;
+      if (auto) yaw += dt * 0.16;
+      alpha = Math.max(0.03, alpha * 0.99);
+      simStep(d, P, alpha, constrain);
+      updateSignals(d, dt);
+      for (const n of nodes) { const p = project(n.x, n.y, n.z); n.px = p[0]; n.py = p[1]; n.ps = p[2]; n.pz = p[3]; }
+    },
+    render() {
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      wire();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const e of edges) {
+        const a = nodes[e.a], b = nodes[e.b], k = depthK((a.pz + b.pz) / 2);
+        const em = hov < 0 ? 1 : e.a === hov || e.b === hov ? 2.6 : 0.12;
+        const gr = ctx.createLinearGradient(a.px, a.py, b.px, b.py);
+        const al = clamp((0.07 + 0.3 * k) * em, 0, 1);
+        gr.addColorStop(0, hexA(CUM(a.f), al)); gr.addColorStop(1, hexA(CUM(b.f), al));
+        ctx.strokeStyle = gr; ctx.lineWidth = (0.6 + k * 0.9) * (em > 1 ? 1.6 : 1);
+        ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
+      }
+      for (const s of d.signals) {
+        const e = edges[s.e], a = nodes[e.a], b = nodes[e.b], col = CUM(nodes[s.from].f), t = sigT(s, e);
+        for (let q = 0; q < 4; q++) {
+          const tt = t - (e.a === s.from ? 1 : -1) * q * 0.02; if (tt < 0 || tt > 1) continue;
+          const p = project(a.x + (b.x - a.x) * tt, a.y + (b.y - a.y) * tt, a.z + (b.z - a.z) * tt);
+          const sz = 22 * p[2] * (1 - q * 0.2) * (0.6 + depthK(p[3]));
+          ctx.globalAlpha = 1 - q * 0.25; ctx.drawImage(sprite(col), p[0] - sz / 2, p[1] - sz / 2, sz, sz);
+        }
+      }
+      ctx.globalAlpha = 1;
+      const order = nodes.slice().sort((p, q) => q.pz - p.pz);
+      for (const n of order) {
+        const k = depthK(n.pz), dim = hov < 0 ? 1 : n.id === hov || nb.has(n.id) ? 1 : 0.2, f = n.fire;
+        const rr = n.rs * n.ps * (1 + f * 0.9), sz = rr * 8, col = CUM(n.f);
+        ctx.globalAlpha = dim * (0.4 + 0.6 * k) * (0.85 + 0.15 * f);
+        ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(sprite(col), n.px - sz / 2, n.py - sz / 2, sz, sz);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'rgba(255,255,255,' + clamp(0.5 + f * 0.5, 0, 1) + ')'; ctx.beginPath(); ctx.arc(n.px, n.py, Math.max(0.8, rr * 0.5), 0, 6.283); ctx.fill();
+        if (n.recent) { ctx.strokeStyle = hexA(col, 0.5 * dim); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(n.px, n.py, rr * (1.9 + 0.5 * Math.sin(tNow * 2.2 + n.id)), 0, 6.283); ctx.stroke(); }
+      }
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      for (const n of nodes) if (n.id === hov) label(n, n.px, n.py - n.rs * n.ps - 8);
+    },
+    pdown(sx, sy) { drag = { sx, sy, yaw, pitch, moved: false, id: pick(sx, sy) }; auto = false; cv.classList.add('drag'); },
+    pmove(sx, sy) {
+      if (!drag) { const id = pick(sx, sy); if (id !== hov) setHover(id); cv.style.cursor = id >= 0 ? 'pointer' : 'grab'; return; }
+      if (Math.hypot(sx - drag.sx, sy - drag.sy) > 4) drag.moved = true;
+      if (drag.moved) { yaw = drag.yaw + (sx - drag.sx) * 0.006; pitch = clamp(drag.pitch + (sy - drag.sy) * 0.006, -1.3, 1.3); }
+    },
+    pup() { if (!drag) return; if (!drag.moved && drag.id >= 0) fire(d, drag.id, 5); drag = null; cv.classList.remove('drag'); setTimeout(() => { if (!drag) auto = true; }, 2500); },
+    leave() { setHover(-1); },
+    wheel(dy) { zoom = clamp(zoom * Math.exp(-dy * 0.0012), 0.4, 4); },
+    fire() { const pool = nodes.filter((n) => n.deg > 5); fire(d, pool[Math.floor(Math.random() * pool.length)].id, 5); },
+    stat: () => `${nodes.length} notes · ${edges.length} links · 2 hemisfer`,
+  };
+}
+
+/* ---------- label / tooltip ---------- */
+function label(n, sx, sy) {
+  const t = n.label, sub = `${FOLDERS[n.f].region} · ${n.deg} link${n.recent ? ' · baru diubah' : ''}`;
+  ctx.font = '12px "JetBrains Mono",monospace';
+  const w = Math.max(ctx.measureText(t).width, ctx.measureText(sub).width) + 14;
+  const x = clamp(sx - w / 2, 4, W - w - 4), y = clamp(sy - 34, 4, H - 40);
+  ctx.fillStyle = 'rgba(11,13,23,0.88)'; ctx.strokeStyle = hexA(FOLDERS[n.f].color, 0.6); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(x, y, w, 34, 5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#e6e8f5'; ctx.textAlign = 'left'; ctx.fillText(t, x + 7, y + 14);
+  ctx.fillStyle = '#A9B2D3'; ctx.font = '11px "JetBrains Mono",monospace'; ctx.fillText(sub, x + 7, y + 28);
+}
+
+/* ---------- app shell ---------- */
+const MODES = [
+  { key: 1, name: '1 · Neuron 2D', info: 'Soma bersinar, serabut melengkung, sinyal merambat di sepanjang link. Cincin berdenyut = note yang baru diubah.', make: () => scene2D(1) },
+  { key: 2, name: '2 · Otak 3D', info: 'Dua belahan otak dengan celah di tengah. Putar dengan menyeret, zoom dengan scroll. Berputar sendiri saat didiamkan.', make: () => scene3D() },
+  { key: 3, name: '3 · Siluet otak', info: 'Neuron dikurung dalam siluet otak. Tiap folder menjadi satu area: frontal, parietal, temporal, oksipital, serebelum, batang otak.', make: () => scene2D(3) },
+  { key: 4, name: '4 · Neuron anatomis', info: 'Tiap note punya badan sel dengan dendrit bercabang. Hub punya cabang lebih lebat. Akson berakhir di sinapsis pada neuron tujuan.', make: () => scene2D(4) },
+];
+const cache = {};
+let cur = null, curIdx = 0;
+const tabs = document.getElementById('tabs'), info = document.getElementById('info');
+MODES.forEach((m, i) => {
+  const b = document.createElement('button'); b.type = 'button'; b.role = 'tab'; b.textContent = m.name; b.id = 'tab' + i;
+  b.addEventListener('click', () => setMode(i)); tabs.appendChild(b);
+});
+document.getElementById('legend').innerHTML = FOLDERS.map((f) => `<span><i style="background:${f.color}"></i>${f.name}</span>`).join('');
+function setMode(i) {
+  curIdx = i; if (!cache[i]) cache[i] = MODES[i].make(); cur = cache[i];
+  [...tabs.children].forEach((b, j) => b.setAttribute('aria-selected', String(j === i)));
+  info.textContent = MODES[i].info + '  [' + cur.stat() + ']';
+  try { history.replaceState(null, '', '#' + (i + 1)); } catch (e) { /* file: urls may refuse */ }
+}
+document.getElementById('fire').addEventListener('click', () => cur && cur.fire());
+window.addEventListener('keydown', (e) => {
+  if (e.key >= '1' && e.key <= '4') setMode(Number(e.key) - 1);
+  else if (e.key === ' ' && document.activeElement === document.body) { e.preventDefault(); cur && cur.fire(); }
+});
+const rel = (e) => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); cur.pdown(...rel(e)); });
+cv.addEventListener('pointermove', (e) => cur.pmove(...rel(e)));
+cv.addEventListener('pointerup', () => cur.pup());
+cv.addEventListener('pointercancel', () => cur.pup());
+cv.addEventListener('pointerleave', () => cur.leave());
+cv.addEventListener('wheel', (e) => { e.preventDefault(); cur.wheel(e.deltaY, ...rel(e)); }, { passive: false });
+const onResize = () => { resize(); for (const k in cache) if (cache[k].refit) cache[k].refit(); };
+window.addEventListener('resize', onResize);
+if (window.ResizeObserver) new ResizeObserver(onResize).observe(cv);
+
+resize();
+const start = Number((location.hash || '#1').slice(1)) - 1;
+setMode(start >= 0 && start < 4 ? start : 0);
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#0b0d17'; ctx.fillRect(0, 0, W, H);
+  const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.2, W / 2, H / 2, Math.max(W, H) * 0.7);
+  v.addColorStop(0, 'rgba(40,36,80,0.35)'); v.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  cur.tick(dt); cur.render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
