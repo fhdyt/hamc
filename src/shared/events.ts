@@ -169,6 +169,50 @@ export const SessionDetail = z.object({
 })
 export type SessionDetail = z.infer<typeof SessionDetail>
 
+export const BrainNote = z.object({
+  id: z.string(),
+  title: z.string(),
+  mtime: z.number(),
+  size: z.number(),
+  tags: z.array(z.string()),
+  aliases: z.array(z.string()),
+  links: z.array(z.string()),
+  ghosts: z.array(z.string()),
+  attachments: z.array(z.string())
+})
+export type BrainNote = z.infer<typeof BrainNote>
+
+export const BrainData = z.object({
+  mode: z.enum(['snapshot', 'delta']),
+  first: z.boolean(),
+  done: z.boolean(),
+  total: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  notes: z.array(BrainNote),
+  removed: z.array(z.string())
+})
+export type BrainData = z.infer<typeof BrainData>
+
+export const VaultCheck = z.object({
+  path: z.string(),
+  exists: z.boolean(),
+  readable: z.boolean(),
+  notes: z.number().int().nonnegative(),
+  truncated: z.boolean()
+})
+export type VaultCheck = z.infer<typeof VaultCheck>
+
+export const BrowseResult = z.object({
+  path: z.string(),
+  parent: z.string().nullable(),
+  dirs: z.array(z.object({ name: z.string(), notes: z.number().int().nonnegative() })),
+  truncated: z.boolean()
+})
+export type BrowseResult = z.infer<typeof BrowseResult>
+
+export const NoteText = z.object({ id: z.string(), text: z.string(), truncated: z.boolean(), mtime: z.number() })
+export type NoteText = z.infer<typeof NoteText>
+
 const envelope = { ts: z.number(), profile: z.string().nullable() }
 
 export const CollectorEvent = z.discriminatedUnion('type', [
@@ -176,6 +220,7 @@ export const CollectorEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('agents'), ...envelope, data: AgentsData }),
   z.object({ type: z.literal('cron'), ...envelope, data: CronData }),
   z.object({ type: z.literal('feed'), ...envelope, data: FeedData }),
+  z.object({ type: z.literal('brain'), ...envelope, data: BrainData }),
   z.object({ type: z.literal('error'), ...envelope, data: ErrorData })
 ])
 export type CollectorEvent = z.infer<typeof CollectorEvent>

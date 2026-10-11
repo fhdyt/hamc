@@ -1,9 +1,10 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
-import { FeedHistory, FeedMessageText, SessionDetail } from '@shared/events'
+import { BrowseResult, FeedHistory, FeedMessageText, NoteText, SessionDetail, VaultCheck } from '@shared/events'
 import type {
   ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, QueryResult, SavedConnection
 } from '@shared/ipc'
+import { BrainService } from './brain/service'
 import { FeedCursors } from './feed/cursors'
 import { QueryRunner } from './query'
 import { CollectorChannel } from './collector/channel'
@@ -76,9 +77,16 @@ export class MissionSession {
   private lastTarget: string | null = null
   private readonly feedCursors = new FeedCursors()
   private readonly queries: QueryRunner
+  private readonly brain: BrainService
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
+    this.brain = new BrainService({
+      conn: d.manager,
+      script: d.collectorScript,
+      onEvent: (ev) => d.send(IPC.evEvent, ev),
+      log: (m) => d.log?.(m)
+    })
     this.queries = new QueryRunner(d.manager, d.collectorScript, () => (this.hermes && d.manager.isConnected() ? { python: this.hermes.python, home: this.hermes.home } : null))
   }
 
@@ -243,6 +251,7 @@ export class MissionSession {
       return fail('unknown', 'The monitoring collector could not be started.')
     }
     startup.done('collector', '0 files written')
+    this.startBrain()
 
     this.everConnected = true
     this.startLatency()
@@ -290,6 +299,12 @@ export class MissionSession {
     await ch.start()
   }
 
+  private startBrain(): void {
+    const h = this.hermes
+    const id = this.d.store.getConnection()?.id
+    if (h && id !== undefined) this.brain.attach({ python: h.python, home: h.home }, this.d.store.getVault(id))
+  }
+
   private startLatency(): void {
     this.stopLatency()
     const every = this.d.latencyIntervalMs ?? 5000
@@ -318,6 +333,7 @@ export class MissionSession {
     if (!this.params) return
     this.stopLatency()
     this.stopCollector()
+    this.brain.detach()
     this.scheduleRetry(0)
   }
 
@@ -354,6 +370,7 @@ export class MissionSession {
     this.retryTimer = null
     this.stopLatency()
     this.stopCollector()
+    this.brain.detach()
     this.models = null
     this.hermes = null
     await this.d.manager.disconnect()
@@ -387,6 +404,33 @@ export class MissionSession {
 
   feedSession(args: { profile: string; sessionId: string }): Promise<QueryResult<SessionDetail>> {
     return this.queries.run('session', args, SessionDetail)
+  }
+
+  brainGet(): { vault: string | null } {
+    const id = this.d.store.getConnection()?.id
+    return { vault: id === undefined ? null : this.d.store.getVault(id) }
+  }
+
+  brainSetVault(path: string | null): void {
+    const id = this.d.store.getConnection()?.id
+    if (id === undefined) return
+    this.d.store.setVault(id, path)
+    this.brain.setVault(path)
+  }
+
+  brainValidate(path: string): Promise<QueryResult<VaultCheck>> {
+    return this.queries.run('vault_check', { path }, VaultCheck)
+  }
+
+  brainBrowse(path: string): Promise<QueryResult<BrowseResult>> {
+    return this.queries.run('browse', { path }, BrowseResult)
+  }
+
+  /** The vault root always comes from the saved setting, never from the renderer. */
+  brainNote(id: string): Promise<QueryResult<NoteText>> {
+    const root = this.brainGet().vault
+    if (!root) return Promise.resolve({ ok: false, error: 'not_found' })
+    return this.queries.run('note', { root, id }, NoteText)
   }
 
   async cronOutput(profile: string, jobId: string): Promise<CronOutputResult> {

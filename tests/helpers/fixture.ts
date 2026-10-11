@@ -32,6 +32,20 @@ export function addMessage(dbPath: string, sessionId: string, role: string, cont
   return Number(out.trim())
 }
 
+/** Writes (or overwrites) a note in a fixture vault, like an agent would. */
+export function addNote(vault: string, rel: string, text: string): void {
+  execFileSync(pythonExe, [script, 'add-note', vault, rel, text])
+}
+
+export function removeNote(vault: string, rel: string): void {
+  execFileSync(pythonExe, [script, 'rm-note', vault, rel])
+}
+
+/** Creates a synthetic vault of n notes with about `links` links each (used by the graph benchmark). */
+export function makeSyntheticVault(dir: string, n: number, links = 4): void {
+  execFileSync(pythonExe, [script, 'synthetic-vault', dir, String(n), String(links)])
+}
+
 export function snapshotTree(dir: string): Record<string, string> {
   const out: Record<string, string> = {}
   const walk = (d: string): void => {

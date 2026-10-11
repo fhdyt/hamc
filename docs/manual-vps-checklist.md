@@ -53,6 +53,18 @@ Berkas `/tmp/mc-start.txt` itu ulah Anda sendiri untuk pengukuran. Hapus setelah
 28. **Sambung ulang.** Putuskan jaringan 20 detik lalu nyalakan lagi saat agent sedang bekerja: item yang masuk selama putus muncul setelah pulih, tanpa duplikat dan tanpa celah.
 29. **Hanya baca.** Langkah 11 dan 12 tetap berlaku setelah memakai feed, termasuk **Show full** dan dialog sesi: tidak ada berkas baru di VPS, dan `state.db` hanya dibuka `mode=ro`.
 
+## Tambahan M4a: Second brain
+
+30. **Pilih vault.** Buka Second brain. Ketik path vault di VPS (atau pakai **Browse**, yang hanya membaca daftar folder). Jumlah catatan yang ditampilkan ("Found N notes") sama dengan `find <vault> -name '*.md' -not -path '*/.*' | wc -l`. Path yang salah menampilkan alasan, dan tombol **Use this vault** mati.
+31. **Graph.** Setiap catatan menjadi node, setiap `[[wikilink]]` menjadi garis; node yang banyak terhubung lebih besar. Zoom (roda mouse), geser (seret latar), seret sebuah node. Label memudar saat zoom keluar.
+32. **Aturan link.** Cocokkan beberapa catatan dengan Obsidian Anda: `[[a|alias]]`, `[[catatan#heading]]`, `![[embed]]`, link markdown `[x](catatan.md)`, alias di frontmatter, dan tag bertingkat `#a/b`. Link ke catatan yang tidak ada tampil sebagai node abu-abu ("Missing note"). Link dan tag di dalam blok kode tidak dihitung. Folder `.obsidian`, `.git`, `.trash` dan folder berawalan titik diabaikan.
+33. **Hover dan klik.** Hover menyorot node dan tetangganya dan meredupkan sisanya. Klik membuka pratinjau markdown dengan Backlinks dan Outgoing links; klik link di dalam teks pindah ke catatan itu. **Local graph** 1, 2 atau 3 membatasi graph ke sekitar catatan itu.
+34. **Realtime.** Minta agent (atau Anda sendiri) membuat catatan baru di vault. Node baru muncul dengan denyut hijau dalam ±3 detik tanpa mengacak letak node lain. Mengubah isi atau menghapus catatan juga tercermin.
+35. **Kontrol.** Filters (cari, `tag:#x`, `path:folder`, Tags, Attachments, Existing files only, Orphans), Groups (warna per query), Display dan Forces mengubah graph seketika. Tutup lalu buka lagi aplikasi: semua pengaturan masih sama.
+36. **Dashboard.** Panel "second brain" memuat graph kecil; klik sebuah node membuka dialog pembaca catatan. Tombol di kanan atas panel membuka layar penuh.
+37. **Vault besar.** Bila vault berisi lebih dari 20.000 catatan, header menyebut hanya sebagian yang ditampilkan. Dengan ±5.000 catatan graph tetap lancar (≥ 30 fps).
+38. **Hanya baca.** Langkah 11 dan 12 tetap berlaku: tidak ada berkas baru di VPS, dan di `ps aux` ada satu proses collector tambahan (`python -u - ... --vault`) selama vault aktif yang hilang saat aplikasi ditutup.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.

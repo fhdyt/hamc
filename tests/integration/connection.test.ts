@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -6,7 +6,7 @@ import { ConnectionManager } from '../../src/main/connection/manager'
 import { ConnectError, HostKeyError } from '../../src/main/connection/errors'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
 import { buildFixture, type FixtureDirs } from '../helpers/fixture'
-import { waitFor } from '../helpers/wait'
+import { waitFor, removeDir } from '../helpers/wait'
 
 let dir: string
 let fx: FixtureDirs
@@ -23,7 +23,7 @@ afterEach(async () => {
 })
 afterAll(async () => {
   await srv.close()
-  rmSync(dir, { recursive: true, force: true })
+  removeDir(dir)
 })
 
 const creds = (over = {}) => ({ host: '127.0.0.1', port: srv.port, username: 'tester', password: 'test-pass-123', ...over })

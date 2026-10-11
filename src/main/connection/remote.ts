@@ -37,6 +37,7 @@ export const probeCmd = (hermes: string, sub: string[]): string[] => [hermes, ..
 export const modelCmd = (hermes: string, profile: string): string[] =>
   profile === 'default' ? [hermes, 'config', 'get', 'model', '--json'] : [hermes, '-p', profile, 'config', 'get', 'model', '--json']
 export const collectorCmd = (python: string, home: string, extra: readonly string[] = []): string[] => [python, '-u', '-', home, ...extra]
+export const vaultCmd = (python: string, home: string, vault: string): string[] => collectorCmd(python, home, ['--vault', vault])
 export const queryCmd = (python: string, home: string, command: string, json: string): string[] => [python, '-u', '-', home, '--query', command, json]
 
 export async function runSafe(conn: Execer, argv: string[], timeoutMs = 15_000): Promise<ExecResult> {

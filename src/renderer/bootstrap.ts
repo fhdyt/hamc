@@ -1,5 +1,6 @@
-import { ensurePins } from './actions'
+import { ensurePins, refreshVault } from './actions'
 import { useAgents } from './stores/agents'
+import { useBrain } from './stores/brain'
 import { useConn } from './stores/conn'
 import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
@@ -15,8 +16,14 @@ export async function bootstrap(): Promise<void> {
       void ensurePins()
     } else if (ev.type === 'cron') useCron.getState().applyCron(ev.data)
     else if (ev.type === 'feed') useFeed.getState().applyFeed(ev.data)
+    else if (ev.type === 'brain') useBrain.getState().applyBrain(ev.data)
+    else if (ev.type === 'error' && ev.data.code.startsWith('vault_')) useBrain.getState().setError(ev.data.message)
   })
-  mc.onStatus((status) => useConn.setState({ status }))
+  mc.onStatus((status) => {
+    const was = useConn.getState().status.state
+    useConn.setState({ status })
+    if (status.state === 'connected' && was !== 'connected') void refreshVault()
+  })
   mc.onStartup((startup) => useConn.setState({ startup }))
   mc.onPreflight((preflight) => useConn.setState({ preflight }))
   mc.onCapabilities((capabilities) => useConn.setState({ capabilities }))

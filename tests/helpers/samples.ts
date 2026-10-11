@@ -1,4 +1,4 @@
-import type { AgentsData, CronData, CronJob, FeedData, FeedItem, MetricsData } from '@shared/events'
+import type { AgentsData, BrainData, BrainNote, CronData, CronJob, FeedData, FeedItem, MetricsData } from '@shared/events'
 
 export function sampleMetrics(over: Partial<MetricsData> = {}): MetricsData {
   return {
@@ -93,5 +93,26 @@ export function sampleFeed(): FeedData {
     ],
     cursors: { default: 4, scout: 5 },
     history: true
+  }
+}
+
+export function sampleNote(over: Partial<BrainNote> = {}): BrainNote {
+  return { id: 'Index.md', title: 'Index', mtime: 1_759_996_000, size: 120, tags: ['home'], aliases: [], links: [], ghosts: [], attachments: [], ...over }
+}
+
+export function sampleBrain(over: Partial<BrainData> = {}): BrainData {
+  return {
+    mode: 'snapshot',
+    first: true,
+    done: true,
+    total: 3,
+    truncated: false,
+    notes: [
+      sampleNote({ links: ['Alpha.md', 'folder/Gamma.md'], ghosts: ['Missing'], attachments: ['pic.png'] }),
+      sampleNote({ id: 'Alpha.md', title: 'Alpha', tags: ['alpha', 'work'], aliases: ['A'], links: ['Index.md'] }),
+      sampleNote({ id: 'folder/Gamma.md', title: 'Gamma', tags: [], links: ['Index.md'] })
+    ],
+    removed: [],
+    ...over
   }
 }

@@ -104,6 +104,22 @@ describe('pins', () => {
   })
 })
 
+describe('vault path', () => {
+  it('is saved per connection, can be cleared and goes away with the connection', () => {
+    const id = store.upsertConnection(conn)
+    expect(store.getVault(id)).toBeNull()
+    store.setVault(id, '/home/u/vault')
+    expect(store.getVault(id)).toBe('/home/u/vault')
+    store.setVault(id, '~/other')
+    expect(store.getVault(id)).toBe('~/other')
+    store.setVault(id, null)
+    expect(store.getVault(id)).toBeNull()
+    store.setVault(id, '/again')
+    store.forgetConnection()
+    expect(store.getVault(id)).toBeNull()
+  })
+})
+
 describe('migrations', () => {
   it('is idempotent across reopen', () => {
     const dir = mkdtempSync(join(tmpdir(), 'mc-db-'))

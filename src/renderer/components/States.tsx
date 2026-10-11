@@ -32,7 +32,7 @@ export function UnsupportedState({ title = 'Coming in a later release', why }: {
   )
 }
 
-export function ErrorState({ title, why, onRetry }: { title: string; why?: string; onRetry?: () => void }) {
+export function ErrorState({ title, why, onRetry, children }: { title: string; why?: string; onRetry?: () => void; children?: ReactNode }) {
   return (
     <div className="state" role="alert">
       <strong style={{ color: '#FF5555' }}>{title}</strong>
@@ -42,6 +42,7 @@ export function ErrorState({ title, why, onRetry }: { title: string; why?: strin
           <Icon name="refresh" size={12} /> Retry
         </button>
       )}
+      {children}
     </div>
   )
 }

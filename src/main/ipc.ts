@@ -20,6 +20,10 @@ const FeedHistoryArgs = z.object({
 })
 const FeedSessionArgs = z.object({ profile: ProfileName, sessionId: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/) })
 
+const VaultPath = z.string().min(1).max(4096).refine((s) => !s.includes('\u0000'))
+const BrowsePath = z.string().max(4096).refine((s) => !s.includes('\u0000'))
+const NoteId = z.string().min(1).max(4096).refine((s) => !s.includes('\u0000'))
+
 export interface IpcDeps {
   session: MissionSession
   store: SettingsStore
@@ -73,5 +77,10 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.feedMessage, (a) => d.session.feedMessage(FeedMessageArgs.parse(a)))
   handle(IPC.feedHistory, (a) => d.session.feedHistory(FeedHistoryArgs.parse(a)))
   handle(IPC.feedSession, (a) => d.session.feedSession(FeedSessionArgs.parse(a)))
+  handle(IPC.brainGet, () => d.session.brainGet())
+  handle(IPC.brainSetVault, (a) => d.session.brainSetVault(a === null ? null : VaultPath.parse(a)))
+  handle(IPC.brainValidate, (a) => d.session.brainValidate(VaultPath.parse(a)))
+  handle(IPC.brainBrowse, (a) => d.session.brainBrowse(BrowsePath.parse(a)))
+  handle(IPC.brainNote, (a) => d.session.brainNote(NoteId.parse(a)))
   handle(IPC.appInfo, (): AppInfo => ({ version: app.getVersion(), electron: process.versions.electron ?? '', platform: process.platform }))
 }

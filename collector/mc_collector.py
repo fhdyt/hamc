@@ -1043,6 +1043,380 @@ def q_session(home, a):
     }
 
 
+# ---- second brain (vault) -------------------------------------------------
+
+VAULT_MAX_NOTES = 20000
+VAULT_CHUNK = 300
+VAULT_CHUNK_BYTES = 400000
+VAULT_MAX_LINKS = 2000
+VAULT_PARSE_BYTES = 524288
+VAULT_BIG_FILE = 2097152
+VAULT_POLL_S = 3.0
+NOTE_QUERY_BYTES = 262144
+BROWSE_MAX = 500
+ATTACH_EXT = {
+    "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "avif", "pdf", "mp3", "wav", "ogg", "m4a", "flac",
+    "mp4", "webm", "mov", "mkv", "zip", "csv", "json", "txt", "docx", "xlsx", "pptx", "canvas",
+}
+
+FENCE_RE = re.compile(r"^(```|~~~).*?^\1[^\n]*$", re.S | re.M)
+INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+WIKI_RE = re.compile(r"!?\[\[([^\[\]\n]+?)\]\]")
+MDLINK_RE = re.compile(r"!?\[[^\]\n]*\]\(\s*(<[^>\n]+>|[^()\s]+)(?:\s+\"[^\"\n]*\")?\s*\)")
+TAG_RE = re.compile(r"(?:^|[\s(])#([\w/-]+)")
+SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+
+
+def strip_code(text):
+    return INLINE_CODE_RE.sub(" ", FENCE_RE.sub(" ", text))
+
+
+def split_frontmatter(text):
+    """Return (frontmatter block or '', body)."""
+    if not text.startswith("---"):
+        return "", text
+    first = text.split("\n", 1)
+    if first[0].rstrip() != "---" or len(first) < 2:
+        return "", text
+    rest = first[1]
+    m = re.search(r"^(---|\.\.\.)[ \t]*$", rest, re.M)
+    if not m:
+        return "", text
+    return rest[:m.start()], rest[m.end():]
+
+
+def _fm_clean(v):
+    v = v.strip().strip("'\"").strip()
+    return v[1:] if v.startswith("#") else v
+
+
+def fm_list(block, keys):
+    """Values of the first matching key: inline list, comma or space separated text, or a block list."""
+    lines = block.split("\n")
+    for i, line in enumerate(lines):
+        m = re.match(r"^([A-Za-z_]+)\s*:\s*(.*)$", line)
+        if not m or m.group(1).lower() not in keys:
+            continue
+        val = m.group(2).strip()
+        if val.startswith("["):
+            inner = val[1:val.rfind("]")] if "]" in val else val[1:]
+            return [x for x in (_fm_clean(p) for p in inner.split(",")) if x]
+        if val:
+            sep = "," if "," in val else r"\s+"
+            return [x for x in (_fm_clean(p) for p in re.split(sep, val)) if x]
+        out = []
+        for nxt in lines[i + 1:]:
+            b = re.match(r"^\s*-\s*(.+?)\s*$", nxt)
+            if b:
+                out.append(_fm_clean(b.group(1)))
+            elif nxt.strip() and not nxt.startswith((" ", "\t")):
+                break
+        return [x for x in out if x]
+    return []
+
+
+def clean_target(raw, markdown=False):
+    t = raw.strip()
+    if markdown:
+        if t.startswith("<") and t.endswith(">"):
+            t = t[1:-1]
+        if SCHEME_RE.match(t) or t.startswith(("#", "//")):
+            return None
+        t = t.replace("%20", " ")
+    t = t.split("|", 1)[0]
+    t = re.split(r"[#^]", t, maxsplit=1)[0].strip().replace("\\", "/")
+    if t.lower().endswith(".md"):
+        t = t[:-3]
+    t = t.lstrip("/")
+    return t or None
+
+
+def parse_note(text):
+    fm, body = split_frontmatter(text)
+    tags = []
+    seen = set()
+
+    def add_tag(t):
+        t = t.strip("/")
+        if t and not t.isdigit() and t.lower() not in seen:
+            seen.add(t.lower())
+            tags.append(t)
+
+    for t in fm_list(fm, ("tags", "tag")):
+        add_tag(t)
+    plain = strip_code(body)
+    for m in TAG_RE.finditer(plain):
+        add_tag(m.group(1))
+    links = []
+    for m in WIKI_RE.finditer(plain):
+        t = clean_target(m.group(1))
+        if t:
+            links.append(t)
+    for m in MDLINK_RE.finditer(plain):
+        t = clean_target(m.group(1), True)
+        if t:
+            links.append(t)
+    aliases = fm_list(fm, ("aliases", "alias"))
+    return {"links": links, "tags": tags, "aliases": aliases}
+
+
+def parse_file(path, size):
+    if size > VAULT_BIG_FILE:
+        return {"links": [], "tags": [], "aliases": []}
+    try:
+        with open(path, "rb") as f:
+            text = f.read(VAULT_PARSE_BYTES).decode("utf-8", "replace")
+    except OSError:
+        return {"links": [], "tags": [], "aliases": []}
+    return parse_note(text)
+
+
+def walk_vault(root, limit=VAULT_MAX_NOTES):
+    """Return ([(id, abs path, mtime, size)], truncated). Skips dot folders and symlinks."""
+    out = []
+    stack = [root]
+    truncated = False
+    while stack and not truncated:
+        d = stack.pop()
+        try:
+            it = os.scandir(d)
+        except OSError:
+            continue
+        with it:
+            for e in it:
+                name = e.name
+                if name.startswith("."):
+                    continue
+                try:
+                    if e.is_dir(follow_symlinks=False):
+                        stack.append(e.path)
+                    elif name.lower().endswith(".md") and e.is_file(follow_symlinks=False):
+                        if len(out) >= limit:
+                            truncated = True
+                            break
+                        st = e.stat(follow_symlinks=False)
+                        rel = os.path.relpath(e.path, root).replace(os.sep, "/")
+                        out.append((rel, e.path, int(st.st_mtime), st.st_size))
+                except OSError:
+                    continue
+    return out, truncated
+
+
+def build_records(raw):
+    """Resolve every note's links the way Obsidian does and return {id: record}."""
+    by_base, by_path, by_alias = {}, {}, {}
+    for nid, r in raw.items():
+        low = nid[:-3].lower()
+        by_path[low] = nid
+        by_base.setdefault(low.rsplit("/", 1)[-1], []).append(nid)
+        for a in r["parsed"]["aliases"]:
+            by_alias.setdefault(a.lower(), []).append(nid)
+
+    def pick(ids):
+        return sorted(ids, key=lambda x: (len(x), x))[0]
+
+    def resolve(target):
+        low = target.lower()
+        if "/" in low:
+            if low in by_path:
+                return by_path[low]
+            hits = [i for i in by_base.get(low.rsplit("/", 1)[-1], []) if i[:-3].lower().endswith("/" + low)]
+            return pick(hits) if hits else None
+        if low in by_base:
+            return pick(by_base[low])
+        if low in by_alias:
+            return pick(by_alias[low])
+        return None
+
+    out = {}
+    for nid, r in raw.items():
+        p = r["parsed"]
+        linked, ghosts, attach = set(), {}, {}
+        for t in p["links"]:
+            hit = resolve(t)
+            if hit is not None:
+                if hit != nid:
+                    linked.add(hit)
+                continue
+            ext = t.rsplit(".", 1)[-1].lower() if "." in t else ""
+            base = t.rsplit("/", 1)[-1]
+            if ext in ATTACH_EXT:
+                attach.setdefault(base.lower(), base)
+            else:
+                ghosts.setdefault(t.lower(), t)
+        out[nid] = {
+            "id": nid,
+            "title": nid[:-3].rsplit("/", 1)[-1],
+            "mtime": r["mtime"],
+            "size": r["size"],
+            "tags": p["tags"][:200],
+            "aliases": p["aliases"][:50],
+            "links": sorted(linked)[:VAULT_MAX_LINKS],
+            "ghosts": sorted(ghosts.values(), key=str.lower)[:500],
+            "attachments": sorted(attach.values(), key=str.lower)[:200],
+        }
+    return out
+
+
+def record_digest(rec):
+    return hashlib.md5(json.dumps(rec, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+class VaultState:
+    def __init__(self, root, limit=VAULT_MAX_NOTES):
+        self.root = root
+        self.limit = limit
+        self.raw = {}
+        self.emitted = {}
+        self.truncated = False
+
+    def scan(self):
+        files, self.truncated = walk_vault(self.root, self.limit)
+        seen = set()
+        for nid, path, mtime, size in files:
+            seen.add(nid)
+            cur = self.raw.get(nid)
+            if cur is not None and cur["mtime"] == mtime and cur["size"] == size:
+                continue
+            self.raw[nid] = {"mtime": mtime, "size": size, "parsed": parse_file(path, size)}
+        for nid in [k for k in self.raw if k not in seen]:
+            del self.raw[nid]
+
+    def snapshot(self):
+        self.scan()
+        recs = build_records(self.raw)
+        self.emitted = {k: record_digest(v) for k, v in recs.items()}
+        return [recs[k] for k in sorted(recs)]
+
+    def poll(self):
+        self.scan()
+        recs = build_records(self.raw)
+        digests = {k: record_digest(v) for k, v in recs.items()}
+        upserts = [recs[k] for k in sorted(recs) if self.emitted.get(k) != digests[k]]
+        removed = sorted(k for k in self.emitted if k not in recs)
+        self.emitted = digests
+        return upserts, removed
+
+
+def vault_chunks(notes, mode, removed, total, truncated):
+    """Split notes into events of at most VAULT_CHUNK notes and about VAULT_CHUNK_BYTES of JSON each."""
+    groups, cur, size = [], [], 0
+    for note in notes:
+        n = len(json.dumps(note, separators=(",", ":")))
+        if cur and (len(cur) >= VAULT_CHUNK or size + n > VAULT_CHUNK_BYTES):
+            groups.append(cur)
+            cur, size = [], 0
+        cur.append(note)
+        size += n
+    groups.append(cur)
+    for i, group in enumerate(groups):
+        yield {
+            "mode": mode,
+            "first": i == 0,
+            "done": i == len(groups) - 1,
+            "total": total,
+            "truncated": truncated,
+            "notes": group,
+            "removed": removed if i == 0 else [],
+        }
+
+
+def expand_path(p):
+    if not isinstance(p, str) or not p or len(p) > 4096 or "\0" in p:
+        raise QueryError("bad_args")
+    return os.path.abspath(os.path.expanduser(p))
+
+
+def run_vault(root, interval, ticks=0):
+    root = expand_path(root)
+    state = VaultState(root)
+    started = False
+    reported = False
+    done = 0
+    while True:
+        try:
+            if not os.path.isdir(root) or not os.access(root, os.R_OK | os.X_OK):
+                if not reported:
+                    emit("error", {"code": "vault_unreadable", "message": "vault folder not found or not readable"})
+                    reported = True
+            else:
+                reported = False
+                if not started:
+                    notes = state.snapshot()
+                    for chunk in vault_chunks(notes, "snapshot", [], len(notes), state.truncated):
+                        emit("brain", chunk)
+                    started = True
+                else:
+                    upserts, removed = state.poll()
+                    if upserts or removed:
+                        for chunk in vault_chunks(upserts, "delta", removed, len(state.emitted), state.truncated):
+                            emit("brain", chunk)
+        except Exception as ex:  # noqa: BLE001 - never crash the stream
+            emit("error", {"code": "vault_failed", "message": type(ex).__name__})
+        done += 1
+        if ticks and done >= ticks:
+            return 0
+        time.sleep(interval)
+
+
+def q_vault_check(home, a):
+    root = expand_path(a.get("path"))
+    exists = os.path.isdir(root)
+    readable = exists and os.access(root, os.R_OK | os.X_OK)
+    notes, truncated = (0, False)
+    if readable:
+        files, truncated = walk_vault(root)
+        notes = len(files)
+    return {"path": root, "exists": exists, "readable": bool(readable), "notes": notes, "truncated": truncated}
+
+
+def q_browse(home, a):
+    raw = a.get("path")
+    root = expand_path(raw if raw else "~")
+    if not os.path.isdir(root):
+        raise QueryError("not_found")
+    dirs = []
+    try:
+        with os.scandir(root) as it:
+            names = sorted((e.name for e in it if not e.name.startswith(".") and e.is_dir(follow_symlinks=False)), key=str.lower)
+    except OSError:
+        raise QueryError("unreadable")
+    for name in names[:BROWSE_MAX]:
+        count = 0
+        try:
+            with os.scandir(os.path.join(root, name)) as it:
+                count = sum(1 for e in it if e.name.lower().endswith(".md") and not e.name.startswith("."))
+        except OSError:
+            pass
+        dirs.append({"name": name, "notes": count})
+    parent = os.path.dirname(root)
+    return {"path": root, "parent": parent if parent != root else None, "dirs": dirs, "truncated": len(names) > BROWSE_MAX}
+
+
+def q_note(home, a):
+    root = expand_path(a.get("root"))
+    nid = a.get("id")
+    if not isinstance(nid, str) or not nid.lower().endswith(".md") or "\0" in nid or len(nid) > 4096 or nid.startswith(("/", "\\")):
+        raise QueryError("bad_args")
+    parts = nid.replace("\\", "/").split("/")
+    if any(p in ("", ".", "..") or p.startswith(".") for p in parts):
+        raise QueryError("bad_args")
+    real_root = os.path.realpath(root)
+    path = os.path.realpath(os.path.join(real_root, *parts))
+    if os.path.commonpath([real_root, path]) != real_root:
+        raise QueryError("bad_args")
+    if not os.path.isfile(path):
+        raise QueryError("not_found")
+    with open(path, "rb") as f:
+        raw = f.read(NOTE_QUERY_BYTES + 1)
+    return {
+        "id": nid,
+        "text": raw[:NOTE_QUERY_BYTES].decode("utf-8", "replace"),
+        "truncated": len(raw) > NOTE_QUERY_BYTES,
+        "mtime": int(os.path.getmtime(path)),
+    }
+
+
 def run_query(home, cmd, raw):
     try:
         args = json.loads(raw)
@@ -1050,7 +1424,10 @@ def run_query(home, cmd, raw):
         return {"ok": False, "error": "bad_args"}
     if not isinstance(args, dict):
         return {"ok": False, "error": "bad_args"}
-    handler = {"message": q_message, "history": q_history, "session": q_session}.get(cmd)
+    handler = {
+        "message": q_message, "history": q_history, "session": q_session,
+        "vault_check": q_vault_check, "browse": q_browse, "note": q_note,
+    }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}
     try:
@@ -1059,6 +1436,8 @@ def run_query(home, cmd, raw):
         return {"ok": False, "error": str(e)}
     except sqlite3.Error:
         return {"ok": False, "error": "db_unreadable"}
+    except OSError:
+        return {"ok": False, "error": "unreadable"}
 
 
 def emit(kind, data, profile=None):
@@ -1075,7 +1454,7 @@ def emit(kind, data, profile=None):
 
 
 def parse_args(argv):
-    args = {"home": None, "ticks": 0, "interval": 1.0, "agents_interval": 10.0, "cursors": {}, "history": FEED_HISTORY_ROWS, "query": None}
+    args = {"home": None, "ticks": 0, "interval": 1.0, "agents_interval": 10.0, "cursors": {}, "history": FEED_HISTORY_ROWS, "query": None, "vault": None, "vault_interval": VAULT_POLL_S}
     it = iter(argv)
     for a in it:
         if a == "--cursors":
@@ -1088,6 +1467,10 @@ def parse_args(argv):
             args["history"] = int(next(it))
         elif a == "--query":
             args["query"] = (next(it), next(it))
+        elif a == "--vault":
+            args["vault"] = next(it)
+        elif a == "--vault-interval":
+            args["vault_interval"] = float(next(it))
         elif a == "--ticks":
             args["ticks"] = int(next(it))
         elif a == "--interval":
@@ -1107,6 +1490,8 @@ def main(argv):
         sys.stdout.write(json.dumps(run_query(args["home"], args["query"][0], args["query"][1]), separators=(",", ":"), allow_nan=False) + "\n")
         sys.stdout.flush()
         return 0
+    if args["vault"] is not None:
+        return run_vault(args["vault"], args["vault_interval"], args["ticks"])
     sampler = Sampler()
     feed = FeedState(args["cursors"])
     feed_reported = set()

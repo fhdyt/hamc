@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { CollectorEvent, FeedHistory, FeedMessageText, SessionDetail } from './events'
+import type { BrowseResult, CollectorEvent, FeedHistory, FeedMessageText, NoteText, SessionDetail, VaultCheck } from './events'
 import type { SettingsMap } from './settings'
 
 export { IPC } from './channels'
@@ -113,6 +113,7 @@ export type QueryError =
   | 'not_found'
   | 'unsupported_schema'
   | 'db_unreadable'
+  | 'unreadable'
   | 'unknown_command'
   | 'timeout'
   | 'not-connected'
@@ -155,6 +156,13 @@ export interface MissionApi {
     message(profile: string, messageId: number, field: 'content' | 'reasoning' | 'tool_calls', index?: number): Promise<QueryResult<FeedMessageText>>
     history(before: Record<string, number>, limit: number): Promise<QueryResult<FeedHistory>>
     session(profile: string, sessionId: string): Promise<QueryResult<SessionDetail>>
+  }
+  brain: {
+    get(): Promise<{ vault: string | null }>
+    setVault(path: string | null): Promise<void>
+    validate(path: string): Promise<QueryResult<VaultCheck>>
+    browse(path: string): Promise<QueryResult<BrowseResult>>
+    note(id: string): Promise<QueryResult<NoteText>>
   }
   onEvent(cb: (e: CollectorEvent) => void): Unsub
   onStatus(cb: (s: ConnStatus) => void): Unsub
