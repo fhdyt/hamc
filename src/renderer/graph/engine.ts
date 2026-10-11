@@ -16,6 +16,7 @@ export interface EngineStats {
 declare global {
   interface Window {
     __mcBrainStats?: () => EngineStats
+    __mcBrainLabels?: () => string[]
     __mcBrainNodes?: () => { id: string; x: number; y: number; wx: number; wy: number; wr: number }[]
   }
 }
@@ -56,6 +57,7 @@ export class GraphEngine {
     }
     renderer.setSink(layout)
     window.__mcBrainNodes = () => renderer.screenPositions()
+    window.__mcBrainLabels = () => renderer.visibleLabels()
     window.__mcBrainStats = () => this.stats()
   }
 
@@ -112,5 +114,6 @@ export class GraphEngine {
     this.renderer.destroy()
     delete window.__mcBrainStats
     delete window.__mcBrainNodes
+    delete window.__mcBrainLabels
   }
 }

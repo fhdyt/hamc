@@ -255,6 +255,11 @@ export class GraphRenderer {
     }))
   }
 
+  /** The texts of the labels that are on screen; used by the end-to-end tests. */
+  visibleLabels(): string[] {
+    return this.labels.filter((t) => t.visible && t.alpha > 0).map((t) => t.text)
+  }
+
   // ---- drawing ------------------------------------------------------------
 
   private request(): void {
@@ -438,9 +443,15 @@ export class GraphRenderer {
     const base = Math.max(0, Math.min(1, (k - threshold * 0.6) / (threshold * 0.8)))
     const wanted: { i: number; a: number }[] = []
     const seen = new Set<number>()
-    if (this.hover >= 0) for (const i of this.hoverSet) wanted.push({ i, a: 1 }), seen.add(i)
-    if (this.selected >= 0 && !seen.has(this.selected)) wanted.push({ i: this.selected, a: 1 }), seen.add(this.selected)
-    if (base > 0 && !this.opts.mini) {
+    // While the pointer is on a node only that node is named; the neighbours stay lit but unlabelled.
+    if (this.hover >= 0) {
+      wanted.push({ i: this.hover, a: 1 })
+      seen.add(this.hover)
+    } else if (this.selected >= 0) {
+      wanted.push({ i: this.selected, a: 1 })
+      seen.add(this.selected)
+    }
+    if (this.hover < 0 && base > 0 && !this.opts.mini) {
       let scanned = 0
       for (const i of this.order) {
         if (wanted.length >= MAX_LABELS || scanned++ > 2500) break
@@ -448,7 +459,7 @@ export class GraphRenderer {
         const sx = this.pos[i * 2]! * k + x
         const sy = this.pos[i * 2 + 1]! * k + y
         if (sx < -20 || sy < -20 || sx > w + 20 || sy > h + 20) continue
-        wanted.push({ i, a: this.hover >= 0 ? base * 0.25 : base })
+        wanted.push({ i, a: base })
       }
     }
     while (this.labels.length < wanted.length) {
