@@ -12,7 +12,9 @@ export function ConnectionForm({ mode, onConnected }: Props) {
   const saved = useConn((s) => s.saved)
   const secret = useConn((s) => s.secret)
   const connecting = useConn((s) => s.connecting)
-  const error = useConn((s) => s.connectError)
+  const connectError = useConn((s) => s.connectError)
+  // The host key panel already explains this case.
+  const error = connectError && !connectError.kind.startsWith('hostkey') ? connectError : null
   const [host, setHost] = useState(saved?.host ?? '')
   const [port, setPort] = useState(String(saved?.port ?? 22))
   const [username, setUsername] = useState(saved?.username ?? '')

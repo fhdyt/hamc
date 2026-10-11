@@ -108,7 +108,7 @@ export function Server() {
             const pct = d.total ? (d.used / d.total) * 100 : 0
             return (
               <div key={d.mount} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><span>{d.mount}</span><span style={{ color: '#A9B2D3' }}>{formatBytes(d.used)} / {formatBytes(d.total)} · {formatPct(pct)}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><span title={d.mount} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.mount}</span><span style={{ color: '#A9B2D3', flex: 'none', whiteSpace: 'nowrap' }}>{formatBytes(d.used)} / {formatBytes(d.total)} · {formatPct(pct)}</span></div>
                 <div className="mono-bar" style={{ color: loadColor(pct) }} aria-hidden="true">{textBar(pct, 34)}</div>
               </div>
             )

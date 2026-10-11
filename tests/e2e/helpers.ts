@@ -1,7 +1,8 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
+import { _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test'
+import type { FakeSsh } from '../helpers/fakeSshServer'
 
 export async function launchApp(userData: string): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await electron.launch({
@@ -14,3 +15,23 @@ export async function launchApp(userData: string): Promise<{ app: ElectronApplic
 }
 
 export const tmp = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix))
+
+export async function resizeWindow(app: ElectronApplication, width: number, height: number): Promise<void> {
+  await app.evaluate(({ BrowserWindow }, size) => {
+    const w = BrowserWindow.getAllWindows()[0]
+    w?.setSize(size.width, size.height)
+  }, { width, height })
+}
+
+/** Fills the first-time form with the fake server's throwaway credentials and trusts its host key. */
+export async function connectFresh(page: Page, srv: FakeSsh): Promise<void> {
+  await expect(page.getByText('first-time setup')).toBeVisible()
+  await page.getByLabel('host / public ip').fill('127.0.0.1')
+  await page.getByLabel('ssh port').fill(String(srv.port))
+  await page.getByLabel(/^username/).fill('tester')
+  await page.getByLabel(/^password/).fill('test-pass-123')
+  await page.getByRole('button', { name: /TEST & CONNECT/ }).click()
+  await expect(page.getByRole('alertdialog', { name: 'Host key verification' })).toBeVisible()
+  await page.getByRole('button', { name: /TRUST & CONTINUE/ }).click()
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible({ timeout: 25_000 })
+}

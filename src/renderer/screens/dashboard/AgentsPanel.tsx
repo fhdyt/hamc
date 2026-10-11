@@ -56,14 +56,15 @@ export function AgentsPanel() {
   }
 
   return (
-    <section className="pnl hi" aria-label="Agents" style={{ minHeight: 0, overflow: 'hidden', padding: '22px 10px 10px' }}>
-      <h2 className="pt">┤ agents ├</h2>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
+    <section className="card" aria-label="Agents" style={{ minHeight: 0, overflow: 'hidden' }}>
+      <div className="ph">
+        <h2>agents</h2>
         <span style={{ color: '#50FA7B', fontSize: 11 }}>{agents.length ? `${online}/${agents.length} online` : ''}</span>
-        <span style={{ marginLeft: 'auto' }} />
-        <button type="button" className="ib sm" onClick={() => void saveSetting('agents.panelCollapsed', true)} aria-label="Collapse agents panel" title="Collapse">
-          <Icon name="chevs-right" size={14} />
-        </button>
+        <span className="ph-actions">
+          <button type="button" className="ib sm" onClick={() => void saveSetting('agents.panelCollapsed', true)} aria-label="Collapse agents panel" title="Collapse">
+            <Icon name="chevs-right" size={14} />
+          </button>
+        </span>
       </div>
 
       {showSearch && (

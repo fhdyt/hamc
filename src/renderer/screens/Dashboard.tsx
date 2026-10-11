@@ -11,16 +11,16 @@ export function Dashboard() {
     <div className={`dash ${collapsed ? 'agents-rail' : ''}`}>
       <div className="col">
         <StatusBlock />
-        <Panel title="cron jobs">
+        <Panel variant="card" title="cron jobs">
           <UnsupportedState why="Schedules and run history arrive in a later release." />
         </Panel>
-        <Panel title="activity">
+        <Panel variant="card" title="activity" className="grow">
           <UnsupportedState why="The live feed of agent interactions arrives in a later release." />
         </Panel>
       </div>
       <div className="col">
         <ServerStrip />
-        <Panel title="second brain" className="grow">
+        <Panel variant="card" title="second brain" className="grow">
           <UnsupportedState why="The vault graph arrives in a later release." />
         </Panel>
       </div>
