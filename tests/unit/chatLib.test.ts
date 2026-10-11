@@ -122,6 +122,10 @@ describe('buildConversation', () => {
     expect(buildConversation([], null, ended).map((c) => c.kind)).toEqual(['stream'])
     // an old reply from before the turn does not hide it
     expect(buildConversation([item(1, 'reply', 'old')], null, ended).map((c) => c.kind)).toEqual(['reply', 'stream'])
+    // nor does a reply of the previous turn that is only a second older, once the new question is saved
+    const stopped: Turn = { ...newTurn('t', 'stream-json', (T0 + 5) * 1000), ended: true, stopped: true }
+    const quick = [item(4, 'user', 'first'), item(5, 'reply', 'first answer'), item(6, 'user', 'slow one')]
+    expect(buildConversation(quick, null, stopped).map((c) => c.kind)).toEqual(['user', 'reply', 'user', 'stream'])
   })
 
   it('keeps an empty ended turn out of the way unless something happened', () => {

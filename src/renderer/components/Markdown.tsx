@@ -22,12 +22,13 @@ export function Markdown({ text, className = '' }: { text: string; className?: s
     const b = (e.target as HTMLElement).closest('.md-copy')
     if (!b) return
     const code = b.closest('pre')?.querySelector('code')?.textContent ?? ''
-    void navigator.clipboard.writeText(code).then(() => {
-      b.textContent = 'Copied'
+    const flash = (label: string): void => {
+      b.textContent = label
       window.setTimeout(() => {
         b.textContent = 'Copy'
       }, 1200)
-    })
+    }
+    navigator.clipboard.writeText(code).then(() => flash('Copied'), () => flash('Failed'))
   }
 
   return <div ref={ref} className={`md-chat ${className}`} onClick={click} dangerouslySetInnerHTML={{ __html: html }} />

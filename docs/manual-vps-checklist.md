@@ -65,6 +65,22 @@ Berkas `/tmp/mc-start.txt` itu ulah Anda sendiri untuk pengukuran. Hapus setelah
 37. **Vault besar.** Bila vault berisi lebih dari 20.000 catatan, header menyebut hanya sebagian yang ditampilkan. Dengan ±5.000 catatan graph tetap lancar (≥ 30 fps).
 38. **Hanya baca.** Langkah 11 dan 12 tetap berlaku: tidak ada berkas baru di VPS, dan di `ps aux` ada satu proses collector tambahan (`python -u - ... --vault`) selama vault aktif yang hilang saat aplikasi ditutup.
 
+## Tambahan M5: Chat dan unggah berkas
+
+39. **Spike `hermes chat --help` (sekali, sebelum menguji chat).** Di VPS jalankan `hermes chat --help` dan simpan keluarannya. Aplikasi membaca daftar flag itu sendiri (`--oneshot`, `--query-file`, `--format stream-json`, `--source`, `--resume`, `-Q`). Bila `--format stream-json` atau `--query-file` tidak ada, chat memakai mode terbatas (tanpa chip tool langsung) dan layar menyebutkan alasannya. Kirim keluaran `--help` itu agar parser bisa dicocokkan dengan format asli.
+40. **Kirim pesan.** Buka Chat, pilih sebuah agent, kirim "halo". Balasan muncul bertahap sebagai markdown (daftar, tabel, blok kode dengan tombol **Copy**). Setelah selesai tampil durasi dan jumlah token. Cek di VPS: `hermes sessions list` memuat sesi baru dengan sumber `mission-control`.
+41. **Tool dan thinking.** Minta agent memakai satu tool (mis. cari di web). Chip tool muncul selagi berjalan (`web_search…` lalu `web_search ✓ 1.2s`). Beberapa detik setelah selesai, blok **Thinking** dan langkah tool (dengan argumen dan hasilnya) muncul dari `state.db` dan bisa dibuka.
+42. **Lanjutkan percakapan.** Kirim pesan kedua: agent mengingat yang pertama (sesi yang sama, `--resume`). **New chat** memulai sesi baru; **History** memuat daftar obrolan lama dan memilih salah satu melanjutkannya. Tutup dan buka lagi aplikasi: agent yang sama tetap melanjutkan sesinya.
+43. **Stop.** Kirim tugas yang lama, tekan **Stop**: balasan berhenti dalam beberapa detik dan tertulis "Stopped". Pastikan tidak ada proses `hermes chat` yatim di `ps aux`.
+44. **Kebijakan approval.** Minta tindakan yang diblokir kebijakan Hermes (mis. menghapus berkas). Aplikasi menampilkan pesan blokir dari Hermes dan **tidak** pernah menambahkan `--yolo` atau mengubah kebijakan.
+45. **Error.** Matikan sementara kunci provider agent (atau pakai agent yang modelnya salah): pesan error dari Hermes tampil di percakapan, bukan spinner yang tak berakhir.
+46. **Unggah berkas.** Klik **Attach files** (atau seret berkas ke kotak pesan), pilih satu gambar dan satu PDF, lalu kirim. Bilah progres bergerak, pesan Anda memuat kartu berkas, dan agent bisa membacanya. Di VPS: `ls -la ~/hermes-uploads/<agent>/<tanggal>/` berisi berkas itu dengan izin `0600` (folder `0700`). Nama berkas yang berbahaya (`../x`, spasi, karakter aneh) dibersihkan; berkas bernama sama mendapat akhiran `-1`.
+47. **Batas ukuran dan batal.** Berkas di atas batas (50 MB; atur di Settings → Uploads) ditolak dengan alasan. Batalkan unggahan besar di tengah jalan: berkas separuh jadi tidak tertinggal di VPS.
+48. **Settings → Uploads.** Daftar berkas yang diunggah cocok dengan isi `~/hermes-uploads`. Menghapus sebuah berkas meminta konfirmasi lalu menghapusnya di VPS; berkas lain (di luar `~/hermes-uploads/<agent>/<tanggal>/`) tidak bisa dihapus dari sini.
+49. **Backend terminal.** Pada agent dengan `terminal.backend` selain `local` (docker, ssh, modal), memasang berkas menampilkan peringatan bahwa folder unggahan mungkin tidak terlihat dari sandbox agent.
+50. **Dashboard.** Di panel Agents, memilih agent membuka ruang chat yang sama; ikon info membuka kartu detail dan **Open full chat** pindah ke layar Chat.
+51. **Zero-Change.** Satu-satunya yang ditulis ke VPS adalah berkas unggahan (lewat SFTP, hanya saat Anda menekan Kirim) dan sesi chat milik Hermes sendiri. Tidak ada skrip, port, atau berkas bantu baru, dan `.env` serta `auth.json` tidak dibaca.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.

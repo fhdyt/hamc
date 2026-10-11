@@ -62,6 +62,8 @@
 .md-copy { position: absolute; top: 4px; right: 4px; min-height: 22px; padding: 0 8px; background: transparent; border: 1px solid #6272a4; border-radius: 4px; color: #a9b2d3; font: inherit; font-size: 11px; cursor: pointer; }
 .md-copy:hover { background: #343746; color: #f8f8f2; }
 .md-chat ul, .md-chat ol { margin: 0 0 8px; padding-left: 20px; }
+.md-chat ul { list-style: disc; }
+.md-chat ol { list-style: decimal; }
 .md-chat blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 2px solid #44475a; color: #a9b2d3; }
 .md-chat table { border-collapse: collapse; margin: 0 0 8px; display: block; overflow-x: auto; }
 .md-chat th, .md-chat td { padding: 3px 8px; border: 1px solid #44475a; text-align: left; }

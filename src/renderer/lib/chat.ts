@@ -131,8 +131,14 @@ export function buildConversation(items: readonly FeedItem[], pending: PendingUs
     if (!saved) out.push({ kind: 'user', id: 'pending', ts: pending.at / 1000, text: pending.text, attachments: [], pending: true, thumbs: pending.attachments })
   }
   if (turn) {
-    const savedReply = turn.ended && out.some((c) => c.kind === 'reply' && c.ts >= startedS - 2)
-    const dbTools = out.some((c) => c.kind === 'tool' && c.ts >= startedS - 2)
+    // only what follows the last saved user message can belong to this turn (an earlier reply may be less than 2 s older)
+    let lastUser = -1
+    out.forEach((c, k) => {
+      if (c.kind === 'user') lastUser = k
+    })
+    const mine = out.slice(lastUser + 1)
+    const savedReply = turn.ended && mine.some((c) => c.kind === 'reply' && c.ts >= startedS - 2)
+    const dbTools = mine.some((c) => c.kind === 'tool' && c.ts >= startedS - 2)
     const hasContent = turn.text !== '' || turn.tools.length > 0 || !turn.ended || turn.error !== undefined || turn.notice !== undefined || turn.stopped
     if (!savedReply && hasContent) out.push({ kind: 'stream', id: 'stream', ts: turn.startedAt / 1000, turn, showChips: !dbTools })
   }
