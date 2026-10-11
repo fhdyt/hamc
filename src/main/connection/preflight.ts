@@ -46,19 +46,33 @@ export function shortFingerprint(fp: string): string {
   return `${prefix}${body.slice(0, 4)}…${body.slice(-3)}`
 }
 
-async function resolvePython(conn: Execer, hermesPath: string | null): Promise<{ path: string; version: string } | null> {
+const MIN_PYTHON = '3.8'
+
+/** The version in the output of `python --version`; any other program's version text does not count. */
+export function parsePythonVersion(text: string): string | null {
+  const m = /\bPython\s+(\d+\.\d+(?:\.\d+)?)/i.exec(text)
+  return m ? m[1]! : null
+}
+
+/**
+ * Finds a Python 3 interpreter: the one in the hermes shebang when it is one (many installs start `hermes` with
+ * `#!/usr/bin/env bash`, which says nothing about Python), then Hermes' own venv, then python3 and python from PATH.
+ * A candidate only counts when `--version` really prints `Python 3.x`, so `bash --version` cannot pass for it.
+ */
+export async function resolvePython(conn: Execer, hermesPath: string | null, hermesHome: string | null = null): Promise<{ path: string; version: string } | null> {
   const candidates: string[] = []
   if (hermesPath) {
     const head = await runSafe(conn, shebangCmd(hermesPath))
     const sb = head.code === 0 ? parseShebang(head.stdout.split('\n')[0] ?? '') : null
-    if (sb) candidates.push(sb)
+    if (sb && /(^|\/)python[\d.]*$/.test(sb)) candidates.push(sb)
   }
-  candidates.push('python3')
+  if (hermesHome) candidates.push(`${hermesHome.replace(/\/+$/, '')}/hermes-agent/venv/bin/python3`)
+  candidates.push('python3', 'python')
   for (const c of candidates) {
     const r = await runSafe(conn, pythonVersionCmd(c))
     if (r.code !== 0) continue
-    const v = parseVersion(r.stdout || r.stderr)
-    if (v) return { path: c, version: v }
+    const v = parsePythonVersion(r.stdout || r.stderr)
+    if (v && compareVersions(v, MIN_PYTHON) >= 0) return { path: c, version: v }
   }
   return null
 }
@@ -74,7 +88,7 @@ export async function runPreflight(conn: Execer, ctx: PreflightContext): Promise
   const verRes = hermesPath ? await runSafe(conn, versionCmd(hermesPath)) : null
   const version = verRes && verRes.code === 0 ? parseVersion(verRes.stdout || verRes.stderr) : null
 
-  const python = await resolvePython(conn, hermesPath)
+  const python = await resolvePython(conn, hermesPath, homeFound ? homePath : null)
 
   let profileCount = 0
   if (homeFound) {
@@ -127,8 +141,8 @@ export async function runPreflight(conn: Execer, ctx: PreflightContext): Promise
           hint: 'Looked in PATH, ~/.local/bin and the usual venv. Model names and capability checks will be unavailable.'
         },
     python
-      ? { id: 'python', label: 'python (hermes shebang)', state: 'ok', result: python.version }
-      : { id: 'python', label: 'python (hermes shebang)', state: 'fail', result: 'NOT FOUND', hint: 'No Python interpreter was found, so live monitoring cannot start.' },
+      ? { id: 'python', label: 'python 3', state: 'ok', result: python.version }
+      : { id: 'python', label: 'python 3', state: 'fail', result: 'NOT FOUND', hint: 'No Python interpreter was found, so live monitoring cannot start.' },
     { id: 'zero', label: 'zero-change mode', state: 'info', result: 'ON · 0 files written' }
   ]
 
