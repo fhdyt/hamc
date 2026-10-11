@@ -2,6 +2,7 @@ import { ensurePins } from './actions'
 import { useAgents } from './stores/agents'
 import { useConn } from './stores/conn'
 import { useCron } from './stores/cron'
+import { useFeed } from './stores/feed'
 import { useMetrics } from './stores/metrics'
 import { useUi } from './stores/ui'
 
@@ -13,6 +14,7 @@ export async function bootstrap(): Promise<void> {
       useAgents.getState().applyAgents(ev.data)
       void ensurePins()
     } else if (ev.type === 'cron') useCron.getState().applyCron(ev.data)
+    else if (ev.type === 'feed') useFeed.getState().applyFeed(ev.data)
   })
   mc.onStatus((status) => useConn.setState({ status }))
   mc.onStartup((startup) => useConn.setState({ startup }))
