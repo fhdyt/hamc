@@ -65,7 +65,7 @@ export class LayoutClient {
     return { pos, known }
   }
 
-  setGraph(g: Graph): Float32Array {
+  setGraph(g: Graph, radii: Float32Array): Float32Array {
     this.ids = g.nodes.map((n) => n.id)
     const { pos, known } = this.initialPositions(g)
     const edges = new Int32Array(g.edges.length * 2)
@@ -75,8 +75,12 @@ export class LayoutClient {
     })
     // most nodes already placed: only a gentle settling; a fresh graph starts hot
     const alpha = known === 0 ? 1 : known >= g.nodes.length ? 0.2 : 0.35
-    this.send({ type: 'set', pos: pos.slice(), edges, forces: this.forces, alpha }, [])
+    this.send({ type: 'set', pos: pos.slice(), edges, forces: this.forces, radii, alpha }, [])
     return pos
+  }
+
+  setRadii(radii: Float32Array): void {
+    this.send({ type: 'radii', radii })
   }
 
   setForces(forces: Forces): void {

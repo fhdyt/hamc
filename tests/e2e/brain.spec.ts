@@ -85,6 +85,11 @@ test('the graph appears with every note and a live indicator', async () => {
   await expect.poll(async () => (await stats())?.nodes).toBe(7) // 6 notes + the missing "Missing Note"
   await expect.poll(async () => (await stats())?.frames, { timeout: 10_000 }).toBeGreaterThan(2)
   await settled()
+  const overlapping = await page.evaluate(() => {
+    const nodes = window.__mcBrainNodes!()
+    return nodes.flatMap((a, i) => nodes.slice(i + 1).filter((b) => Math.hypot(a.wx - b.wx, a.wy - b.wy) < (a.wr + b.wr) * 0.9).map((b) => `${a.id} / ${b.id}`))
+  })
+  expect(overlapping, 'nodes that overlap').toEqual([])
   await page.waitForTimeout(300)
   await page.screenshot({ path: 'tests/e2e/shots/brain.png' })
 })

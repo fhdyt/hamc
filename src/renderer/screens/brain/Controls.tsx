@@ -66,7 +66,7 @@ export function Controls() {
         {g.groups.map((x) => (
           <div key={x.id} className="bc-group">
             <input type="color" value={x.color} aria-label="Group colour" onChange={(e) => editGroup(x.id, { color: e.target.value })} />
-            <input className="fld" value={x.query} placeholder="tag:#work or path:projects" aria-label="Group query" onChange={(e) => editGroup(x.id, { query: e.target.value })} />
+            <input className="fld" value={x.query} placeholder="path:projects, tag:#work, file:name" aria-label="Group query" onChange={(e) => editGroup(x.id, { query: e.target.value })} />
             <button type="button" className="ib sm" aria-label="Remove group" title="Remove group" onClick={() => set({ groups: g.groups.filter((y) => y.id !== x.id) })}>
               <Icon name="x" size={12} />
             </button>

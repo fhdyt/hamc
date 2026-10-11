@@ -1,7 +1,7 @@
 import 'pixi.js/unsafe-eval'
 import { Application, Container, Graphics, Mesh, MeshGeometry, Sprite, Text, Texture } from 'pixi.js'
 import { quadtree, type Quadtree } from 'd3-quadtree'
-import { neighbours, nodeRadius, type GNode, type Graph } from '../lib/brain/graphModel'
+import { densityScale, neighbours, nodeRadius, type GNode, type Graph } from '../lib/brain/graphModel'
 
 export interface GraphStyle {
   nodeSize: number
@@ -27,7 +27,7 @@ export interface DragSink {
   release(i: number): void
 }
 
-const COLORS = { note: 0xbd93f9, ghost: 0x8b95bd, tag: 0x50fa7b, attachment: 0xffb86c, edge: 0x6272a4, hi: 0xf8f8f2, pulse: 0x50fa7b, bg: 0x282a36 }
+const COLORS = { note: 0xa4abc9, ghost: 0x6b7089, tag: 0x50fa7b, attachment: 0xffb86c, edge: 0x8b95bd, hi: 0xf8f8f2, pulse: 0x50fa7b, bg: 0x191a21 }
 const MAX_LABELS = 70
 const TEX = 32
 const MIN_K = 0.03
@@ -66,6 +66,8 @@ export class GraphRenderer {
   private hover = -1
   private selected = -1
   private hoverSet = new Set<number>()
+  private density = 1
+  private edgeAlpha = 0.5
   private dirtyPos = true
   private dirtyCam = true
   private dirtyStyle = true
@@ -148,6 +150,8 @@ export class GraphRenderer {
     this.graph = g
     this.pos = pos
     this.nb = neighbours(g)
+    this.density = densityScale(g.nodes.length)
+    this.edgeAlpha = Math.min(0.55, Math.max(0.16, 0.62 - 0.13 * Math.log10(Math.max(10, g.edges.length))))
     this.order = g.nodes.map((_, i) => i).sort((a, b) => g.nodes[b]!.degree - g.nodes[a]!.degree)
     // sprites: reuse the pool
     while (this.sprites.length < g.nodes.length) {
@@ -240,8 +244,15 @@ export class GraphRenderer {
   }
 
   /** Node centres in canvas pixels; used by the end-to-end tests to click on nodes. */
-  screenPositions(): { id: string; x: number; y: number }[] {
-    return this.graph.nodes.map((n, i) => ({ id: n.id, x: this.pos[i * 2]! * this.cam.k + this.cam.x, y: this.pos[i * 2 + 1]! * this.cam.k + this.cam.y }))
+  screenPositions(): { id: string; x: number; y: number; wx: number; wy: number; wr: number }[] {
+    return this.graph.nodes.map((n, i) => ({
+      id: n.id,
+      x: this.pos[i * 2]! * this.cam.k + this.cam.x,
+      y: this.pos[i * 2 + 1]! * this.cam.k + this.cam.y,
+      wx: this.pos[i * 2]!,
+      wy: this.pos[i * 2 + 1]!,
+      wr: this.radiusOf(i)
+    }))
   }
 
   // ---- drawing ------------------------------------------------------------
@@ -260,7 +271,7 @@ export class GraphRenderer {
   }
 
   private radiusOf(i: number): number {
-    return nodeRadius(this.graph.nodes[i]!.degree, this.style.nodeSize)
+    return nodeRadius(this.graph.nodes[i]!.degree, this.style.nodeSize * this.density)
   }
 
   private rebuildEdgeGeometry(): void {
@@ -294,7 +305,7 @@ export class GraphRenderer {
     const mesh = this.edgeMesh
     if (!mesh) return
     const k = this.cam.k
-    const half = Math.max(0.4, this.style.linkWidth) / k / 2
+    const half = Math.max(0.3, this.style.linkWidth * 0.65) / k / 2
     const p = this.pos
     const out = mesh.geometry.positions
     const edges = this.graph.edges
@@ -320,7 +331,7 @@ export class GraphRenderer {
       out[o + 7] = y2 - dy
     }
     mesh.geometry.getBuffer('aPosition').update()
-    mesh.alpha = this.hover >= 0 ? 0.12 : 0.55
+    mesh.alpha = this.hover >= 0 ? 0.07 : this.edgeAlpha
 
     const am = this.arrowMesh
     if (am) {
@@ -351,7 +362,7 @@ export class GraphRenderer {
           ap[o + 5] = tipy - uy * size - ux * size * 0.45
         }
         am.geometry.getBuffer('aPosition').update()
-        am.alpha = this.hover >= 0 ? 0.12 : 0.7
+        am.alpha = this.hover >= 0 ? 0.07 : Math.min(0.8, this.edgeAlpha + 0.2)
       }
     }
   }
@@ -364,7 +375,7 @@ export class GraphRenderer {
       const s = this.sprites[i]!
       s.position.set(p[i * 2]!, p[i * 2 + 1]!)
       if (this.dirtyStyle || this.dirtyCam) {
-        const r = Math.max(this.radiusOf(i), 1.6 / k)
+        const r = Math.max(this.radiusOf(i), 1.1 / k)
         s.scale.set((r * 2) / TEX)
       }
       if (this.dirtyStyle) {
@@ -378,7 +389,7 @@ export class GraphRenderer {
     const dim = this.hover >= 0
     for (let i = 0; i < nodes.length; i++) {
       const base = nodes[i]!.kind === 'ghost' ? 0.7 : 1
-      this.sprites[i]!.alpha = dim ? (this.hoverSet.has(i) ? 1 : 0.15) : base
+      this.sprites[i]!.alpha = dim ? (this.hoverSet.has(i) ? 1 : 0.12) : base
     }
   }
 
@@ -397,8 +408,8 @@ export class GraphRenderer {
     const sr = this.selRing
     sr.clear()
     if (this.selected >= 0) {
-      const r = Math.max(this.radiusOf(this.selected), 1.6 / k) + 3 / k
-      sr.circle(this.pos[this.selected * 2]!, this.pos[this.selected * 2 + 1]!, r).stroke({ width: 1.6 / k, color: COLORS.hi })
+      const r = Math.max(this.radiusOf(this.selected), 1.1 / k) + 3 / k
+      sr.circle(this.pos[this.selected * 2]!, this.pos[this.selected * 2 + 1]!, r).stroke({ width: 1.1 / k, color: COLORS.hi })
     }
   }
 
@@ -411,7 +422,7 @@ export class GraphRenderer {
         r.g.destroy()
         return false
       }
-      const base = Math.max(this.radiusOf(r.i), 1.6 / k)
+      const base = Math.max(this.radiusOf(r.i), 1.1 / k)
       r.g.clear()
       r.g.circle(this.pos[r.i * 2]!, this.pos[r.i * 2 + 1]!, base * (1 + age * 3.5)).stroke({ width: 2 / k, color: COLORS.pulse, alpha: 1 - age })
       live = true
@@ -457,7 +468,7 @@ export class GraphRenderer {
       if (t.text !== n.label) t.text = n.label.length > 36 ? n.label.slice(0, 35) + '…' : n.label
       t.visible = true
       t.alpha = wnt.a
-      const r = Math.max(this.radiusOf(wnt.i), 1.6 / k) * k
+      const r = Math.max(this.radiusOf(wnt.i), 1.1 / k) * k
       t.position.set(this.pos[wnt.i * 2]! * k + x, this.pos[wnt.i * 2 + 1]! * k + y + r + 2)
     }
   }

@@ -1,4 +1,4 @@
-import type { Graph } from '../lib/brain/graphModel'
+import { radiiOf, type Graph } from '../lib/brain/graphModel'
 import { LayoutClient } from './layoutClient'
 import type { Forces } from './layoutTypes'
 import { GraphRenderer, type GraphStyle, type RendererHandlers, type RendererOptions } from './renderer'
@@ -16,7 +16,7 @@ export interface EngineStats {
 declare global {
   interface Window {
     __mcBrainStats?: () => EngineStats
-    __mcBrainNodes?: () => { id: string; x: number; y: number }[]
+    __mcBrainNodes?: () => { id: string; x: number; y: number; wx: number; wy: number; wr: number }[]
   }
 }
 
@@ -28,6 +28,8 @@ export class GraphEngine {
   private settleMs: number | null = null
   private nodes = 0
   private autoFit = false
+  private graph: Graph | null = null
+  private nodeSize = 1
   private lastFit = 0
   private edges = 0
 
@@ -68,11 +70,16 @@ export class GraphEngine {
     if (this.nodes === 0 && g.nodes.length > 0) this.autoFit = true // the first graph is framed as it unfolds
     this.nodes = g.nodes.length
     this.edges = g.edges.length
-    const pos = this.layout.setGraph(g)
+    this.graph = g
+    const pos = this.layout.setGraph(g, radiiOf(g.nodes, this.nodeSize))
     this.renderer.setGraph(g, pos)
   }
 
   setStyle(s: GraphStyle): void {
+    if (s.nodeSize !== this.nodeSize) {
+      this.nodeSize = s.nodeSize
+      if (this.graph) this.layout.setRadii(radiiOf(this.graph.nodes, s.nodeSize))
+    }
     this.renderer.setStyle(s)
   }
 

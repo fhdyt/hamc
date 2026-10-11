@@ -201,7 +201,7 @@ body {
 .bh-live { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
 .bp-state { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
 .bp-main { flex: 1; min-height: 0; display: flex; gap: 12px; }
-.bp-canvas { position: relative; flex: 1; min-width: 0; min-height: 280px; border: 1px solid #44475a; border-radius: 10px; background: #282a36; overflow: hidden; display: flex; flex-direction: column; }
+.bp-canvas { position: relative; flex: 1; min-width: 0; min-height: 280px; border: 1px solid #44475a; border-radius: 10px; background: #191a21; overflow: hidden; display: flex; flex-direction: column; }
 .brain-canvas { position: relative; flex: 1; min-height: 0; width: 100%; overflow: hidden; }
 .brain-canvas canvas { cursor: grab; }
 .bp-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
