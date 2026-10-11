@@ -1,0 +1,50 @@
+{
+  "name": "hermes-mission-control",
+  "productName": "Hermes Agent Mission Control",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mission Control for Hermes Agent",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "node scripts/run-vitest.mjs run",
+    "test:py": "python -m pytest tests/collector -q",
+    "test:e2e": "npm run build && playwright test",
+    "icons": "python scripts/gen-icons.py",
+    "check": "npm run typecheck && npm run test && npm run test:py",
+    "postinstall": "electron-builder install-app-deps",
+    "dev:fake": "tsx scripts/dev-fake-server.ts"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/vt323": "^5.3.0",
+    "better-sqlite3": "^13.0.3",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "ssh2": "^1.17.0",
+    "uplot": "^1.6.32",
+    "zod": "^4.6.5",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ssh2": "^1.15.6",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.7",
+    "vitest": "^5.0.3"
+  }
+}

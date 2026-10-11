@@ -27,6 +27,12 @@
 - Lingkungan dev: Windows 11, Git Bash. Perintah di plan memakai sintaks bash dan `python` (bukan `python3`).
 - Setiap commit diakhiri baris `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 
+## Catatan versi toolchain (ditemukan saat eksekusi Task 1)
+
+- `electron-vite@5` hanya mendukung Vite ≤ 7: pakai `vite@7` dan `@vitejs/plugin-react@5`.
+- TypeScript 7 membuang `baseUrl`: alias `paths` memakai awalan `./` dan tanpa `baseUrl`.
+- `npm run dev:fake` memakai `tsx`; `postinstall` menjalankan `electron-builder install-app-deps` (sudah terpasang di `package.json`).
+
 ## Catatan penyimpangan dari spec (sengaja)
 
 1. Tabel `known_hosts` dikunci oleh `(host, port)`, bukan `connection_id`, karena TOFU terjadi sebelum baris `connections` ada.

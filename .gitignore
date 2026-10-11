@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+tests/e2e/shots/
+__pycache__/
+.pytest_cache/
+*.pyc
+.superpowers/

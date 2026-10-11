@@ -87,7 +87,7 @@ Format event (PRD §8.3): `{"type": "metrics|agents|error", "ts": ..., "profile"
 Dijalankan oleh `ConnectionManager.exec`: `hermes -p <profile> config get model --json`. Hasilnya di-cache per profile dan baru dijalankan ulang ketika collector melaporkan mtime `config.yaml` berubah. YAML tidak di-parse sendiri.
 
 ### SettingsStore dan SecretStore
-- `app.db` (better-sqlite3) di folder userData. Tabel M1: `schema_version`, `connections`, `known_hosts`, `settings`, `agent_pins`. `agent_names` menyusul di milestone Settings → Agents.
+- `app.db` (better-sqlite3) di folder userData. Tabel M1: `schema_version`, `connections`, `known_hosts` (kunci `host`+`port`, karena TOFU terjadi sebelum baris `connections` ada), `settings`, `agent_pins`. `agent_names` menyusul di milestone Settings → Agents.
 - Migrasi berurutan berbasis `schema_version`.
 - Password hanya disimpan sebagai blob `safeStorage`. Jika backend `safeStorage` hanya `basic_text` (Linux tanpa keyring), opsi simpan password dimatikan dengan penjelasan. Semua isian lain tetap diingat dan password diminta tiap peluncuran (F-CONN-12).
 - Log aplikasi lokal (F-APP-4) tidak pernah memuat password.
@@ -97,7 +97,7 @@ Dijalankan oleh `ConnectionManager.exec`: `hermes -p <profile> config get model 
 | Event | Interval | Isi |
 |---|---|---|
 | `metrics` | 1 s | CPU total dan per-core, load 1/5/15, uptime, memori (used/cache/available), swap, disk per mount dan rate baca/tulis, rate rx/tx per interface, top proses (PID, user, CPU%, MEM%, command). CPU% dan rate dihitung dari selisih antar sampel. |
-| `agents` | 10 s, atau saat mtime berubah | Daftar profile, `display_name` dari `profile.yaml` (fallback nama folder), status gateway (`served_profiles`, heartbeat, `gateway.pid` hidup), marker `gateway.parked`, aktivitas terakhir, mtime `config.yaml`, kehadiran SOUL/MEMORY/USER. |
+| `agents` | 10 s | Daftar profile, `display_name` dari `profile.yaml` (fallback nama folder), status gateway (`served_profiles`, heartbeat, `gateway.pid` hidup), marker `gateway.parked`, aktivitas terakhir, mtime `config.yaml`, kehadiran SOUL/MEMORY/USER. |
 | `error` | sesuai kejadian | Kegagalan non-fatal (file tidak terbaca, skema tidak dikenal). |
 
 Aturan:
