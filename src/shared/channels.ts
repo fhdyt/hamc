@@ -30,6 +30,7 @@ export const IPC = {
   chatDetach: 'mc:chat:detach',
   chatBackend: 'mc:chat:backend',
   uploadsList: 'mc:uploads:list',
+  uploadsCancel: 'mc:uploads:cancel',
   uploadsDelete: 'mc:uploads:delete',
   evChat: 'mc:ev:chat',
   evUpload: 'mc:ev:upload',

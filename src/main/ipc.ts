@@ -29,6 +29,7 @@ const ChatSendArgs = z.object({
   text: z.string().max(100_000),
   attachmentIds: z.array(z.string().regex(/^[A-Za-z0-9-]{8,64}$/)).max(20)
 })
+const AttachmentId = z.string().regex(/^[A-Za-z0-9-]{8,64}$/)
 const SessionId = z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/)
 const TurnId = z.string().regex(/^[A-Za-z0-9-]{8,64}$/)
 
@@ -97,6 +98,12 @@ export function registerIpc(d: IpcDeps): void {
     const { profile, sessionId } = z.object({ profile: ProfileName, sessionId: SessionId.nullable() }).parse(a)
     d.session.chatSetSession(profile, sessionId)
   })
+  handle(IPC.chatPick, () => d.session.chatPick())
+  handle(IPC.chatAttach, (a) => d.session.chatAttach(z.array(z.string().min(1).max(4096)).max(20).parse(a)))
+  handle(IPC.chatDetach, (a) => d.session.chatDetach(AttachmentId.parse(a)))
+  handle(IPC.uploadsCancel, (a) => d.session.uploadsCancel(AttachmentId.parse(a)))
+  handle(IPC.uploadsList, () => d.session.uploadsList())
+  handle(IPC.uploadsDelete, (a) => d.session.uploadsRemove(z.string().min(1).max(4096).parse(a)))
   handle(IPC.chatSessions, (a) => d.session.chatSessions(ProfileName.parse(a)))
   handle(IPC.chatBackend, (a) => d.session.chatBackend(ProfileName.parse(a)))
   handle(IPC.appInfo, (): AppInfo => ({ version: app.getVersion(), electron: process.versions.electron ?? '', platform: process.platform }))

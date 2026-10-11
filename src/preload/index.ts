@@ -58,7 +58,8 @@ const api: MissionApi = {
   },
   uploads: {
     list: () => ipcRenderer.invoke(IPC.uploadsList),
-    remove: (path) => ipcRenderer.invoke(IPC.uploadsDelete, path)
+    remove: (path) => ipcRenderer.invoke(IPC.uploadsDelete, path),
+    cancel: (id) => ipcRenderer.invoke(IPC.uploadsCancel, id)
   },
   onEvent: (cb) => on(IPC.evEvent, cb),
   onChat: (cb) => on(IPC.evChat, cb),

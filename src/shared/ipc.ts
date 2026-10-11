@@ -218,6 +218,7 @@ export interface MissionApi {
   uploads: {
     list(): Promise<QueryResult<UploadsList>>
     remove(path: string): Promise<{ ok: true } | { ok: false; error: string }>
+    cancel(id: string): Promise<void>
   }
   onEvent(cb: (e: CollectorEvent) => void): Unsub
   onChat(cb: (e: ChatEvent) => void): Unsub

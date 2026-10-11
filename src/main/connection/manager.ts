@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { Client, type ClientChannel } from 'ssh2'
+import { Client, type ClientChannel, type SFTPWrapper } from 'ssh2'
 import type { HostKeyChallenge } from '@shared/ipc'
 import { ConnectError, HostKeyError, classifyConnectError, friendlyMessage } from './errors'
 import { decideHostKey, type KnownKey } from './hostkey'
@@ -158,6 +158,15 @@ export class ConnectionManager extends EventEmitter implements Execer {
         stream.end(stdin)
         resolve(stream)
       })
+    })
+  }
+
+  /** An SFTP session on the current connection. The caller ends it. Only used for uploads the user asked for. */
+  sftp(): Promise<SFTPWrapper> {
+    return new Promise((resolve, reject) => {
+      const c = this.client
+      if (!c) return reject(new Error('not connected'))
+      c.sftp((err, sftp) => (err ? reject(err) : resolve(sftp)))
     })
   }
 
