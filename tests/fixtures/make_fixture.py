@@ -35,6 +35,10 @@ class Fixture:
     home: Path
     now: float
 
+    @property
+    def vault(self) -> Path:
+        return self.root / "home" / "vault"
+
 
 def w(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -233,6 +237,42 @@ def set_heartbeat(fx: Fixture, ts: float) -> None:
     w(fx.home / "gateway_state.json", json.dumps(state))
 
 
+VAULT_NOTES = {
+    "Index.md": "---\ntags: [home, hub]\n---\n# Index\nStart with [[Alpha]] and [[Beta|the beta note]].\nSee [[folder/Gamma#Heading]] and ![[diagram.png]].\nTodo: [[Missing Note]] #project/x #idea\n",
+    "Alpha.md": "---\naliases:\n  - A\n  - First\ntags:\n  - alpha\n  - work\n---\nBack to [[Index]]. Also [Beta](Beta.md) and [site](https://example.com/x.md).\n",
+    "Beta.md": "Beta links to [[a]] (an alias) and [[ALPHA]] and [[Orphan]]. Not a tag: # heading and issue #123.\n",
+    "folder/Gamma.md": "Gamma goes [[Index]].\n```\n#notatag [[InCode]]\n```\nInline `[[AlsoCode]]` here. #nested/tag\n",
+    "folder/Alpha.md": "A second Alpha in a folder, links [[Index]].\n",
+    "Orphan.md": "Nobody links here.\n",
+    ".obsidian/app.json": "{}\n",
+    ".git/ignored.md": "[[Index]]\n",
+    ".trash/old.md": "[[Index]]\n",
+}
+
+
+def make_vault(fx: Fixture, notes: dict[str, str] | None = None) -> Path:
+    for rel, text in (VAULT_NOTES if notes is None else notes).items():
+        w(fx.vault / rel, text)
+    return fx.vault
+
+
+def make_synthetic_vault(root: Path, n: int, links_per_note: int = 4, seed: int = 7) -> int:
+    """n notes in about sqrt(n) folders, each linking to a few others (power-law-ish), plus some tags."""
+    import random
+
+    rnd = random.Random(seed)
+    folders = max(1, int(n ** 0.5) // 2)
+    names = [f"f{i % folders}/Note {i}" for i in range(n)]
+    for i, name in enumerate(names):
+        out = []
+        for _ in range(links_per_note):
+            j = int(n * rnd.random() ** 2) % n
+            if j != i:
+                out.append(f"[[{names[j].split('/')[1]}]]")
+        w(Path(root) / f"{name}.md", f"#t{i % 40} " + " ".join(out) + "\n")
+    return n
+
+
 def make_fixture(root: Path, now: float | None = None) -> Fixture:
     now = time.time() if now is None else now
     root = Path(root)
@@ -299,6 +339,7 @@ def make_fixture(root: Path, now: float | None = None) -> Fixture:
     add_message(sd, "s-scout-1", "user", "run the digest", now - 12)
     add_message(sd, "s-scout-1", "assistant", "digest done", now - 11, reasoning="plan: summarise")
     add_message(sd, "s-scout-child", "assistant", "child work", now - 11)
+    make_vault(fx)
     return fx
 
 
@@ -325,6 +366,12 @@ if __name__ == "__main__":
         add_profile(Path(sys.argv[2]), sys.argv[3])
     elif cmd == "add-message":
         print(add_message(Path(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5], float(sys.argv[6])))
+    elif cmd == "add-note":
+        w(Path(sys.argv[2]) / sys.argv[3], sys.argv[4])
+    elif cmd == "rm-note":
+        (Path(sys.argv[2]) / sys.argv[3]).unlink()
+    elif cmd == "synthetic-vault":
+        print(make_synthetic_vault(Path(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]) if len(sys.argv) > 4 else 4))
     elif cmd == "advance":
         advance(load(Path(sys.argv[2])), int(sys.argv[3]))
     else:
