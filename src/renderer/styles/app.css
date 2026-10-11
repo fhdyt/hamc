@@ -194,8 +194,8 @@ body {
 .bh-live { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
 .bp-state { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
 .bp-main { flex: 1; min-height: 0; display: flex; gap: 12px; }
-.bp-canvas { position: relative; flex: 1; min-width: 0; min-height: 280px; border: 1px solid #44475a; border-radius: 10px; background: #191a21; overflow: hidden; display: flex; flex-direction: column; }
-.brain-canvas { position: relative; flex: 1; min-height: 0; width: 100%; overflow: hidden; }
+.bp-canvas { position: relative; flex: 1; min-width: 0; min-height: 280px; border: 1px solid #44475a; border-radius: 10px; background: #0b0d17; overflow: hidden; display: flex; flex-direction: column; }
+.brain-canvas { position: relative; flex: 1; min-height: 0; width: 100%; overflow: hidden; background: radial-gradient(ellipse at center, rgba(40, 36, 80, 0.45) 0%, rgba(11, 13, 23, 0) 70%), #0b0d17; }
 .brain-canvas canvas { cursor: grab; }
 .bp-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .bp-banner { position: absolute; z-index: 4; top: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 4px 6px 4px 12px; border: 1px solid #6272a4; border-radius: 16px; background: #21222c; font-size: 11px; }
@@ -295,7 +295,7 @@ body {
 .d-meter-sub { color: #8b95bd; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .d-bars { display: flex; align-items: flex-end; gap: 2px; }
 .d-bars > i { flex: 1; display: block; min-width: 1px; }
-.d-graph { position: relative; flex: 1; min-height: 220px; border: 1px solid #44475a; border-radius: 14px; background: #191a21; overflow: hidden; display: flex; }
+.d-graph { position: relative; flex: 1; min-height: 220px; border: 1px solid #44475a; border-radius: 14px; background: #0b0d17; overflow: hidden; display: flex; }
 .d-graph .brain-canvas { position: absolute; inset: 0; }
 .d-graph-state { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 40px 16px 16px; }
 .d-graph-bar { position: absolute; z-index: 2; top: 8px; left: 10px; right: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; pointer-events: none; }
@@ -316,3 +316,11 @@ body {
 .rz-h { flex: none; height: 8px; margin: -3px 0; display: flex; align-items: center; justify-content: center; cursor: row-resize; z-index: 3; }
 .rz-h > span { width: 40px; height: 2px; }
 @media (max-width: 900px) { .dash2 { flex-direction: column; overflow-y: auto; } .d-left, .d-mid { flex: none; } .rz-v { display: none; } .d-agents { flex: none !important; min-height: 420px; } }
+
+/* neuron graph */
+.bc-tip { position: absolute; z-index: 6; transform: translateX(-50%); display: flex; flex-direction: column; gap: 1px; padding: 5px 9px; border: 1px solid #6272a4; border-radius: 6px; background: rgba(11, 13, 23, 0.9); pointer-events: none; white-space: nowrap; max-width: 320px; }
+.bc-tip strong { font-size: 12px; font-weight: 600; color: #e6e8f5; overflow: hidden; text-overflow: ellipsis; }
+.bc-tip span { font-size: 11px; color: #a9b2d3; }
+.bp-legend { position: absolute; z-index: 3; left: 12px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; font-size: 11px; color: #a9b2d3; pointer-events: none; max-width: calc(100% - 24px); }
+.bp-legend i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; }
+.d-legend { bottom: 8px; font-size: 10px; }

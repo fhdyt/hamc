@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_OPTIONS, backlinksOf, densityScale, buildGraph, fileId, ghostId, isEmptyQuery, matchesQuery, neighbours, nodeRadius, parseQuery, tagId, type GraphOptions } from '../../src/renderer/lib/brain/graphModel'
+import { DEFAULT_OPTIONS, FOLDER_PALETTE, anchorsOf, backlinksOf, collideRadius, densityScale, folderLegend, reachOf, somaRadius, topFolder, buildGraph, fileId, ghostId, isEmptyQuery, matchesQuery, neighbours, parseQuery, tagId, type GraphOptions } from '../../src/renderer/lib/brain/graphModel'
 import { sampleBrain, sampleNote } from '../helpers/samples'
 
 const notes = sampleBrain().notes
@@ -142,10 +142,62 @@ describe('helpers', () => {
     expect(densityScale(1)).toBeLessThanOrEqual(1.4)
   })
 
-  it('grows the radius with connections up to a cap', () => {
-    expect(nodeRadius(0, 1)).toBeLessThan(nodeRadius(4, 1))
-    expect(nodeRadius(4, 1)).toBeLessThan(nodeRadius(100, 1))
-    expect(nodeRadius(100000, 1)).toBe(24)
-    expect(nodeRadius(4, 2)).toBeGreaterThan(nodeRadius(4, 1))
+  it('sizes a neuron by its connections: soma, dendrite reach and the room it keeps', () => {
+    expect(somaRadius(0, 1)).toBeLessThan(somaRadius(4, 1))
+    expect(somaRadius(4, 1)).toBeLessThan(somaRadius(100, 1))
+    expect(somaRadius(100000, 1)).toBe(26)
+    expect(somaRadius(4, 2)).toBeGreaterThan(somaRadius(4, 1))
+    expect(reachOf(9, 1)).toBeGreaterThan(reachOf(8, 1) * 1.1) // a hub grows one more level of branches
+    expect(collideRadius({ kind: 'note', degree: 3 }, 1)).toBeGreaterThan(collideRadius({ kind: 'ghost', degree: 3 }, 1))
+  })
+
+  it('colours notes by their top-level folder, user groups first', () => {
+    const files = [
+      sampleNote({ id: 'projects/a.md', title: 'a', links: [], tags: [] }),
+      sampleNote({ id: 'projects/b.md', title: 'b', links: [], tags: [] }),
+      sampleNote({ id: 'daily/c.md', title: 'c', links: [], tags: [] }),
+      sampleNote({ id: 'root.md', title: 'root', links: [], tags: [] })
+    ]
+    const legend = folderLegend(files)
+    expect(legend.map((l) => [l.name, l.count, l.color])).toEqual([
+      ['projects', 2, FOLDER_PALETTE[0]],
+      ['daily', 1, FOLDER_PALETTE[1]]
+    ])
+    const folders = legend.map((l) => l.name)
+    const g = buildGraph(files, opts({ folders }))
+    const grp = (id: string): number => g.nodes[g.index.get(id)!]!.group
+    expect([grp('projects/a.md'), grp('projects/b.md'), grp('daily/c.md'), grp('root.md')]).toEqual([0, 0, 1, -1])
+    const withUser = buildGraph(files, opts({ folders, groups: [{ id: 'u', query: 'file:b', color: '#ff0000' }] }))
+    const gu = (id: string): number => withUser.nodes[withUser.index.get(id)!]!.group
+    expect([gu('projects/b.md'), gu('projects/a.md'), gu('daily/c.md')]).toEqual([0, 1, 2]) // user group wins, folders follow it
+  })
+
+  it('knows the top folder; colours repeat once the palette is used up', () => {
+    expect(topFolder('a/b/c.md')).toBe('a')
+    expect(topFolder('c.md')).toBe('')
+    const many = Array.from({ length: 30 }, (_, i) => sampleNote({ id: `f${i}/x.md`, title: 'x', links: [], tags: [] }))
+    const legend = folderLegend(many)
+    expect(legend).toHaveLength(24)
+    expect(legend[0]!.color).toBe(FOLDER_PALETTE[0])
+    expect(legend[FOLDER_PALETTE.length]!.color).toBe(FOLDER_PALETTE[0])
+    expect(folderLegend(many, 3)).toHaveLength(3)
+  })
+
+  it('places each group on a circle and notes without a group in the middle', () => {
+    const files = [
+      sampleNote({ id: 'a/1.md', title: '1', links: [], tags: [] }),
+      sampleNote({ id: 'b/2.md', title: '2', links: [], tags: [] }),
+      sampleNote({ id: 'c/3.md', title: '3', links: [], tags: [] }),
+      sampleNote({ id: 'root.md', title: 'r', links: [], tags: [] })
+    ]
+    const g = buildGraph(files, opts({ folders: ['a', 'b', 'c'] }))
+    const an = anchorsOf(g.nodes)
+    const at = (id: string): [number, number] => [an[g.index.get(id)! * 2]!, an[g.index.get(id)! * 2 + 1]!]
+    const radius = (p: [number, number]): number => Math.hypot(p[0], p[1])
+    expect(at('root.md')).toEqual([0, 0])
+    expect(radius(at('a/1.md'))).toBeGreaterThan(60)
+    expect(radius(at('a/1.md'))).toBeCloseTo(radius(at('b/2.md')), 3)
+    expect(at('a/1.md')).not.toEqual(at('b/2.md'))
+    expect(Array.from(anchorsOf(buildGraph(files.slice(0, 1), opts({ folders: ['a'] })).nodes)).map(Math.abs)).toEqual([0, 0]) // one group: no circle
   })
 })

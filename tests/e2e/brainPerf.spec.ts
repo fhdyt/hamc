@@ -53,21 +53,18 @@ test(`the graph of ${N} notes stays smooth`, async () => {
       return { bad, pairs: (nodes.length * (nodes.length - 1)) / 2 }
     })
     console.log('BRAIN OVERLAP', JSON.stringify(overlap))
-    // where do the unlinked notes sit compared with the linked ones? (the smallest dots are the unlinked ones)
-    const ring = await page.evaluate(() => {
-      const nodes = window.__mcBrainNodes!()
-      const minR = Math.min(...nodes.map((n) => n.wr))
-      const dist = (n: { wx: number; wy: number }): number => Math.hypot(n.wx, n.wy)
-      const lone = nodes.filter((n) => n.wr <= minR + 1e-6).map(dist).sort((a, b) => a - b)
-      const rest = nodes.filter((n) => n.wr > minR + 1e-6).map(dist).sort((a, b) => a - b)
-      const q = (a: number[], f: number): number => Math.round(a[Math.floor((a.length - 1) * f)] ?? 0)
-      return { lone: lone.length, loneP10: q(lone, 0.1), loneP50: q(lone, 0.5), loneP90: q(lone, 0.9), linkedP50: q(rest, 0.5), linkedP95: q(rest, 0.95), linkedMax: q(rest, 1) }
-    })
-    console.log('BRAIN RING', JSON.stringify(ring))
     expect(overlap.bad / Math.max(1, overlap.pairs)).toBeLessThan(0.00005)
     await page.getByRole('button', { name: 'Fit all nodes' }).click()
+    await page.mouse.move(0, 0)
     await page.waitForTimeout(500)
     await page.screenshot({ path: 'tests/e2e/shots/brain-perf.png' })
+    // zoom in on the middle to see the dendrites and synapses
+    const box = (await page.locator('.brain-canvas canvas').boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    for (let i = 0; i < 8; i++) await page.mouse.wheel(0, -240)
+    await page.waitForTimeout(600)
+    await page.screenshot({ path: 'tests/e2e/shots/brain-perf-zoom.png' })
+    await page.getByRole('button', { name: 'Fit all nodes' }).click()
     const zoomFps = await page.evaluate(async () => {
       const canvas = document.querySelector('.brain-canvas canvas') as HTMLCanvasElement
       const r = canvas.getBoundingClientRect()

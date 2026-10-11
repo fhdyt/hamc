@@ -21,7 +21,7 @@ export function BrainPanel() {
   const openNote = useBrain((s) => s.openNote)
   const navigate = useUi((s) => s.navigate)
   const connState = useConn((s) => s.status.state)
-  const { graph, style, forces } = useBrainGraph({ plain: true })
+  const { graph, style, forces, legend } = useBrainGraph({ plain: true })
   const engine = useRef<GraphEngine | null>(null)
   const live = phase === 'live' && connState === 'connected'
 
@@ -44,6 +44,16 @@ export function BrainPanel() {
         <div className="d-graph-state">{body}</div>
       ) : (
         <BrainCanvas graph={graph} style={style} forces={forces} hovered={hovered} selected={null} pulse={pulse} engineRef={engine} onHover={setHover} onSelect={(id) => id && notes.has(id) && openNote(id)} />
+      )}
+      {!body && legend.length > 0 && (
+        <ul className="bp-legend d-legend" aria-label="Colours">
+          {legend.map((l) => (
+            <li key={l.label}>
+              <i style={{ background: l.color }} aria-hidden="true" />
+              {l.label}
+            </li>
+          ))}
+        </ul>
       )}
       <div className="d-graph-bar">
         <div role="tablist" aria-label="Graph" className="d-gtabs">

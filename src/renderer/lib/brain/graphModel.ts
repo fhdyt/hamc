@@ -32,6 +32,8 @@ export interface GraphOptions {
   existingOnly: boolean
   showOrphans: boolean
   groups: readonly BrainGroup[]
+  /** Top-level folders that get their own colour, in the order of their colours; user groups come first in `group`. */
+  folders: readonly string[]
   local: { id: string; depth: number } | null
 }
 
@@ -95,6 +97,7 @@ export function matchesQuery(n: BrainNote, p: ParsedQuery): boolean {
 }
 
 export const DEFAULT_OPTIONS: GraphOptions = {
+  folders: [],
   search: '',
   showTags: false,
   showAttachments: false,
@@ -111,6 +114,7 @@ export function buildGraph(notes: Iterable<BrainNote>, opts: GraphOptions): Grap
   const parsedSearch = parseQuery(opts.search)
   const searching = !isEmptyQuery(parsedSearch)
   const groupQueries = opts.groups.map((g) => parseQuery(g.query))
+  const folderIndex = new Map(opts.folders.map((f, i) => [f, i]))
 
   interface Raw {
     id: string
@@ -195,7 +199,13 @@ export function buildGraph(notes: Iterable<BrainNote>, opts: GraphOptions): Grap
   for (const [id, r] of raw) {
     if (!keep.has(id)) continue
     let group = -1
-    if (r.note) group = groupQueries.findIndex((q) => matchesQuery(r.note!, q))
+    if (r.note) {
+      group = groupQueries.findIndex((q) => matchesQuery(r.note!, q))
+      if (group < 0) {
+        const f = folderIndex.get(topFolder(r.note.id))
+        if (f !== undefined) group = groupQueries.length + f
+      }
+    }
     index.set(id, nodes.length)
     nodes.push({ id, label: r.label, kind: r.kind, degree: 0, group, mtime: r.mtime })
   }
@@ -228,15 +238,64 @@ export function neighbours(g: Graph): number[][] {
   return out
 }
 
-/** Node radius in pixels at zoom 1: grows with the square root of the connections, so hubs stand out. */
-export function nodeRadius(degree: number, scale: number): number {
-  return Math.min(24, (1.8 + Math.sqrt(degree) * 1.25) * scale)
+/** Radius of a neuron's cell body (soma) in world units: grows with the square root of the connections. */
+export function somaRadius(degree: number, scale: number): number {
+  return Math.min(26, (4.5 + Math.sqrt(degree) * 1.5) * scale)
 }
 
-/** Drawn radius of every node of a graph, in the order of `g.nodes`. */
+/** How far the dendrites of a neuron reach from its centre: hubs branch one level deeper. */
+export function reachOf(degree: number, scale: number): number {
+  return (13 + 6.5 * Math.sqrt(degree + 1)) * (degree > 8 ? 2 : 1.75) * scale
+}
+
+/** Space a node keeps to itself in the layout, so neighbouring dendrites do not pile up. */
+export function collideRadius(n: Pick<GNode, 'kind' | 'degree'>, scale: number): number {
+  return n.kind === 'note' ? reachOf(n.degree, scale) * 0.62 : somaRadius(n.degree, scale) + 4
+}
+
+/** Collision radius of every node of a graph, in the order of `g.nodes`. */
 export function radiiOf(nodes: readonly GNode[], nodeSize: number): Float32Array {
   const scale = nodeSize * densityScale(nodes.length)
-  return Float32Array.from(nodes, (n) => nodeRadius(n.degree, scale))
+  return Float32Array.from(nodes, (n) => collideRadius(n, scale))
+}
+
+/** Where each group of notes is drawn towards: groups sit evenly on a circle, notes without a group in the middle. */
+export function anchorsOf(nodes: readonly GNode[]): Float32Array {
+  const used = [...new Set(nodes.map((n) => n.group).filter((g) => g >= 0))].sort((a, b) => a - b)
+  const slot = new Map(used.map((g, i) => [g, i]))
+  const R = used.length > 1 ? 60 + Math.sqrt(nodes.length) * 12 : 0
+  const out = new Float32Array(nodes.length * 2)
+  nodes.forEach((n, i) => {
+    const s = slot.get(n.group)
+    if (s === undefined) return
+    const a = (s / used.length) * Math.PI * 2 - Math.PI / 2
+    out[i * 2] = Math.cos(a) * R
+    out[i * 2 + 1] = Math.sin(a) * R
+  })
+  return out
+}
+
+export const FOLDER_PALETTE = ['#BD93F9', '#8BE9FD', '#50FA7B', '#FF79C6', '#FFB86C', '#F1FA8C', '#FF5555', '#6EA8FE'] as const
+
+/** The first folder of a note's path ('' for a note at the top of the vault). */
+export function topFolder(id: string): string {
+  const i = id.indexOf('/')
+  return i < 0 ? '' : id.slice(0, i)
+}
+
+export const MAX_FOLDERS = 24
+
+/** The folders that get a colour, biggest first. Colours repeat after the palette runs out, but every folder keeps its own region. */
+export function folderLegend(notes: Iterable<BrainNote>, max: number = MAX_FOLDERS): { name: string; color: string; count: number }[] {
+  const count = new Map<string, number>()
+  for (const n of notes) {
+    const f = topFolder(n.id)
+    if (f) count.set(f, (count.get(f) ?? 0) + 1)
+  }
+  return [...count.entries()]
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .slice(0, max)
+    .map(([name, c], i) => ({ name, color: FOLDER_PALETTE[i % FOLDER_PALETTE.length]!, count: c }))
 }
 
 /** Big vaults get smaller dots so the cloud stays readable (about 1.3 for 10 nodes, 0.75 for 1,000, 0.6 for 5,000). */
