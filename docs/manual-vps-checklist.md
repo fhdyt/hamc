@@ -81,6 +81,13 @@ Berkas `/tmp/mc-start.txt` itu ulah Anda sendiri untuk pengukuran. Hapus setelah
 50. **Dashboard.** Di panel Agents, memilih agent membuka ruang chat yang sama; ikon info membuka kartu detail dan **Open full chat** pindah ke layar Chat.
 51. **Zero-Change.** Satu-satunya yang ditulis ke VPS adalah berkas unggahan (lewat SFTP, hanya saat Anda menekan Kirim) dan sesi chat milik Hermes sendiri. Tidak ada skrip, port, atau berkas bantu baru, dan `.env` serta `auth.json` tidak dibaca.
 
+52. **Mode ACP tersedia.** Di VPS `hermes acp --check` menampilkan `Hermes ACP check OK`. Di aplikasi, Settings → Chat → **Ask before risky actions** menyala (bawaan). Kirim satu pesan: di VPS `ps aux | grep "hermes.* acp"` menunjukkan satu proses per agent yang dipakai, dan proses itu tetap hidup di antara pesan. Tutup aplikasi: prosesnya hilang.
+53. **Persetujuan.** Minta agent melakukan sesuatu yang oleh kebijakan Hermes perlu persetujuan (mis. menghapus berkas di luar allowlist). Kartu **Hermes asks for your approval** muncul di chat dengan perintahnya dan tombol sesuai pilihan Hermes (Allow once, Always allow, Deny). **Deny** membuat agent menjawab bahwa ia tidak diizinkan; **Allow once** menjalankannya. Kartu yang sudah dijawab tetap terlihat ("Allowed: …" / "Denied: …"). Catat nama pilihan yang dikirim Hermes dan apakah "Always allow" menambah `command_allowlist` di config agent (itu perilaku Hermes sendiri, bukan aplikasi).
+54. **Stop.** Saat kartu persetujuan terbuka, tekan **Stop**: kartu menjadi "Not answered", giliran berakhir sebagai "Stopped", dan agent bisa dipakai lagi. Hal yang sama bila Anda menutup aplikasi.
+55. **Ingatan.** Kirim "1+1", lalu "tambah 3": agent menjawab 5 (satu sesi). **New chat** memulai sesi baru. Setelah menutup dan membuka aplikasi, pesan berikutnya memuat sesi lama (`session/load`) atau, bila Hermes tidak mendukungnya, memulai yang baru.
+56. **Tanpa ACP.** Matikan saklar di Settings → Chat: chat kembali ke mode satu kali jalan (`hermes chat -Q`), dan tindakan berisiko ditolak menurut kebijakan Hermes. Aplikasi tidak pernah menambahkan `--yolo`, tidak mengubah `approvals.*`, dan tidak menjalankan `hermes config set` untuk chat.
+57. **Format nyata.** Bila kartu tidak muncul atau teks tool aneh, catat keluaran `hermes acp` yang sebenarnya (pesan `session/update` dan `session/request_permission`) dan kirim ke pengembang; bentuk pesan ACP Hermes belum diverifikasi.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.

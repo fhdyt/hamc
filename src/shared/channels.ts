@@ -22,6 +22,7 @@ export const IPC = {
   brainNote: 'mc:brain:note',
   chatSend: 'mc:chat:send',
   chatStop: 'mc:chat:stop',
+  chatApprove: 'mc:chat:approve',
   chatGetSession: 'mc:chat:get-session',
   chatSetSession: 'mc:chat:set-session',
   chatSessions: 'mc:chat:sessions',

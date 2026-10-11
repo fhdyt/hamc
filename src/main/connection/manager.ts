@@ -161,6 +161,15 @@ export class ConnectionManager extends EventEmitter implements Execer {
     })
   }
 
+  /** Starts a command and keeps its stdin open (ACP mode talks to `hermes acp` over it). */
+  openDuplex(argv: readonly string[]): Promise<ClientChannel> {
+    return new Promise((resolve, reject) => {
+      const c = this.client
+      if (!c) return reject(new Error('not connected'))
+      c.exec(buildCommand(argv), (err, stream) => (err ? reject(err) : resolve(stream)))
+    })
+  }
+
   /** An SFTP session on the current connection. The caller ends it. Only used for uploads the user asked for. */
   sftp(): Promise<SFTPWrapper> {
     return new Promise((resolve, reject) => {

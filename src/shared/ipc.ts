@@ -123,12 +123,15 @@ export type QueryResult<T> = { ok: true; data: T } | { ok: false; error: QueryEr
 
 /** One thing that happens during a chat turn, as the main process sees it on the server. */
 export type ChatEvent = { turn: string; profile: string } & (
-  | { kind: 'start'; mode: 'stream-json' | 'plain'; note?: string }
+  | { kind: 'start'; mode: 'stream-json' | 'plain' | 'acp'; note?: string }
   | { kind: 'session'; sessionId: string }
   | { kind: 'text'; text: string }
   | { kind: 'tool'; id: string; name: string; state: 'running' | 'ok' | 'error'; ms?: number }
   | { kind: 'result'; exitCode: number | null; durationMs?: number; inputTokens?: number; outputTokens?: number }
   | { kind: 'notice'; code: 'blocked'; message: string }
+  /** Hermes asks before it runs something (ACP mode). Answered with `chat.approve`. */
+  | { kind: 'approval'; id: string; title: string; detail?: string; options: { id: string; name: string; kind: 'allow' | 'deny' }[] }
+  | { kind: 'approval-done'; id: string; outcome: 'allowed' | 'denied' | 'cancelled'; choice?: string }
   | { kind: 'error'; message: string }
   | { kind: 'end'; exitCode: number | null; stopped: boolean }
 )
@@ -204,6 +207,8 @@ export interface MissionApi {
   chat: {
     send(req: { profile: string; text: string; attachmentIds: string[] }): Promise<ChatSendResult>
     stop(turn: string): Promise<void>
+    /** Answers an approval request of a running turn; `option` null cancels it. Resolves false when it is no longer pending. */
+    approve(req: { turn: string; approval: string; option: string | null }): Promise<boolean>
     getSession(profile: string): Promise<string | null>
     setSession(profile: string, sessionId: string | null): Promise<void>
     sessions(profile: string): Promise<QueryResult<ChatSessions>>

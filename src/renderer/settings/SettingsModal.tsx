@@ -16,6 +16,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'alerts', label: 'Alerts' },
   { id: 'agents', label: 'Agents' },
   { id: 'workspace', label: 'Workspace' },
+  { id: 'chat', label: 'Chat' },
   { id: 'uploads', label: 'Uploads' },
   { id: 'data', label: 'Data' },
   { id: 'about', label: 'About' }
@@ -58,6 +59,18 @@ function General() {
       <Row label="Reduce motion" hint="Turns off animations">
         <Switch checked={s['ui.reduceMotion']} label="Reduce motion" onChange={(v) => void saveSetting('ui.reduceMotion', v)} />
       </Row>
+    </div>
+  )
+}
+
+function ChatSettings() {
+  const on = useUi((st) => st.settings['chat.useAcp'])
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <Row label="Ask before risky actions" hint="Chats through hermes acp when the server has it. Hermes then asks you in the chat before it runs something its policy does not allow by itself, like Telegram does. Without it, such actions are refused.">
+        <Switch checked={on} label="Ask before risky actions" onChange={(v) => void saveSetting('chat.useAcp', v)} />
+      </Row>
+      <div style={{ color: '#8B95BD', fontSize: 11 }}>Mission Control never turns approvals off and never adds --yolo. Your answer is only for the action Hermes asks about.</div>
     </div>
   )
 }
@@ -105,8 +118,9 @@ export function SettingsModal() {
           {tab === 'general' && <General />}
           {tab === 'connection' && <EditConnectionDialogBody onDone={close} />}
           {tab === 'about' && <About />}
+          {tab === 'chat' && <ChatSettings />}
           {tab === 'uploads' && <UploadsTab />}
-          {tab !== 'general' && tab !== 'connection' && tab !== 'about' && tab !== 'uploads' && <UnsupportedState why="This section arrives in a later release." />}
+          {tab !== 'general' && tab !== 'connection' && tab !== 'about' && tab !== 'uploads' && tab !== 'chat' && <UnsupportedState why="This section arrives in a later release." />}
         </div>
       </div>
     </Modal>

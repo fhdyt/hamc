@@ -1,9 +1,9 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { loadHistory } from '../../chatActions'
+import { answerApproval, loadHistory } from '../../chatActions'
 import { Icon } from '../../components/Icon'
 import { Markdown } from '../../components/Markdown'
 import { EmptyState, ErrorState, Skeleton } from '../../components/States'
-import { buildConversation, callArgs, chipText, formatDuration, sessionItems, type Conv, type ToolChip, type Turn } from '../../lib/chat'
+import { buildConversation, callArgs, chipText, formatDuration, sessionItems, type ApprovalCard, type Conv, type ToolChip, type Turn } from '../../lib/chat'
 import { clock } from '../../lib/feed'
 import { emptyRoom, useChat } from '../../stores/chat'
 import { useFeed } from '../../stores/feed'
@@ -16,6 +16,33 @@ function Chip({ chip }: { chip: ToolChip }) {
     <span className={`cv-chip ${chip.state}`} role="status" aria-label={chipText(chip)}>
       <Icon name="tool" size={11} /> {chipText(chip)}
     </span>
+  )
+}
+
+function Approval({ turn, a }: { turn: string; a: ApprovalCard }) {
+  const pending = a.state === 'pending'
+  const label = a.state === 'allowed' ? `Allowed${a.choice ? `: ${a.choice}` : ''}` : a.state === 'denied' ? `Denied${a.choice ? `: ${a.choice}` : ''}` : a.state === 'cancelled' ? 'Not answered' : ''
+  return (
+    <div className={`cv-approval ${a.state}`} role="group" aria-label={`Approval: ${a.title}`}>
+      <div className="cv-approval-head">
+        <Icon name="shield" size={13} /> <strong>{pending ? 'Hermes asks for your approval' : 'Approval'}</strong>
+      </div>
+      <div className="cv-approval-title">{a.title}</div>
+      {a.detail && <code className="cv-code">{a.detail}</code>}
+      {pending ? (
+        <div className="cv-approval-actions">
+          {a.options.map((o) => (
+            <button key={o.id} type="button" className={`cb ${o.kind === 'allow' ? 'pri' : 'dng'}`} onClick={() => void answerApproval(turn, a.id, o.id)}>
+              {o.name}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="cv-meta" role="status">
+          {label}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -32,7 +59,7 @@ function Foldout({ label, color, children }: { label: string; color: string; chi
 }
 
 function StreamBubble({ turn, showChips }: { turn: Turn; showChips: boolean }) {
-  const waiting = !turn.ended && turn.text === ''
+  const waiting = !turn.ended && turn.text === '' && !turn.approvals.some((a) => a.state === 'pending')
   const stats = [
     turn.result?.durationMs !== undefined ? formatDuration(turn.result.durationMs) : null,
     turn.result?.inputTokens !== undefined ? `${turn.result.inputTokens} in` : null,
@@ -52,6 +79,9 @@ function StreamBubble({ turn, showChips }: { turn: Turn; showChips: boolean }) {
           ))}
         </div>
       )}
+      {turn.approvals.map((a) => (
+        <Approval key={a.id} turn={turn.id} a={a} />
+      ))}
       {turn.notice && (
         <div className="cv-banner warn" role="status">
           <Icon name="shield" size={12} /> {turn.notice}

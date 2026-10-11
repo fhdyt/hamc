@@ -9,13 +9,24 @@ export interface ToolChip {
   ms?: number
 }
 
+/** A question from Hermes before it runs something (ACP mode), and what the user answered. */
+export interface ApprovalCard {
+  id: string
+  title: string
+  detail?: string
+  options: { id: string; name: string; kind: 'allow' | 'deny' }[]
+  state: 'pending' | 'allowed' | 'denied' | 'cancelled'
+  choice?: string
+}
+
 /** One turn of a chat as the main process reports it while it runs. */
 export interface Turn {
   id: string
-  mode: 'stream-json' | 'plain'
+  mode: 'stream-json' | 'plain' | 'acp'
   note?: string
   text: string
   tools: ToolChip[]
+  approvals: ApprovalCard[]
   notice?: string
   error?: string
   result?: { exitCode: number | null; durationMs?: number; inputTokens?: number; outputTokens?: number }
@@ -44,7 +55,7 @@ export type Conv =
   | { kind: 'reply'; id: string; ts: number; text: string; truncated: boolean; messageId: number; profile: string }
   | { kind: 'stream'; id: string; ts: number; turn: Turn; showChips: boolean }
 
-export const newTurn = (id: string, mode: Turn['mode'], at: number, note?: string): Turn => ({ id, mode, ...(note ? { note } : {}), text: '', tools: [], ended: false, stopped: false, startedAt: at })
+export const newTurn = (id: string, mode: Turn['mode'], at: number, note?: string): Turn => ({ id, mode, ...(note ? { note } : {}), text: '', tools: [], approvals: [], ended: false, stopped: false, startedAt: at })
 
 /** Folds one chat event into the running turn (null when the event belongs to a turn that is no longer shown). */
 export function foldEvent(turn: Turn | null, ev: ChatEvent, now = Date.now()): Turn | null {
@@ -63,6 +74,10 @@ export function foldEvent(turn: Turn | null, ev: ChatEvent, now = Date.now()): T
       return { ...turn, result: { exitCode: ev.exitCode, ...(ev.durationMs !== undefined ? { durationMs: ev.durationMs } : {}), ...(ev.inputTokens !== undefined ? { inputTokens: ev.inputTokens } : {}), ...(ev.outputTokens !== undefined ? { outputTokens: ev.outputTokens } : {}) } }
     case 'notice':
       return { ...turn, notice: ev.message }
+    case 'approval':
+      return turn.approvals.some((a) => a.id === ev.id) ? turn : { ...turn, approvals: [...turn.approvals, { id: ev.id, title: ev.title, ...(ev.detail ? { detail: ev.detail } : {}), options: ev.options, state: 'pending' }] }
+    case 'approval-done':
+      return { ...turn, approvals: turn.approvals.map((a) => (a.id === ev.id ? { ...a, state: ev.outcome, ...(ev.choice ? { choice: ev.choice } : {}) } : a)) }
     case 'error':
       return { ...turn, error: ev.message }
     case 'end':
@@ -139,8 +154,10 @@ export function buildConversation(items: readonly FeedItem[], pending: PendingUs
     const mine = out.slice(lastUser + 1)
     const savedReply = turn.ended && mine.some((c) => c.kind === 'reply' && c.ts >= startedS - 2)
     const dbTools = mine.some((c) => c.kind === 'tool' && c.ts >= startedS - 2)
-    const hasContent = turn.text !== '' || turn.tools.length > 0 || !turn.ended || turn.error !== undefined || turn.notice !== undefined || turn.stopped
+    const hasContent = turn.text !== '' || turn.tools.length > 0 || !turn.ended || turn.error !== undefined || turn.notice !== undefined || turn.stopped || turn.approvals.length > 0
     if (!savedReply && hasContent) out.push({ kind: 'stream', id: 'stream', ts: turn.startedAt / 1000, turn, showChips: !dbTools })
+    // the saved reply replaces the streamed one, but what was asked and answered stays visible
+    else if (savedReply && turn.approvals.length > 0) out.push({ kind: 'stream', id: 'stream', ts: turn.startedAt / 1000, turn: { ...turn, text: '', tools: [], result: undefined } as Turn, showChips: false })
   }
   return out
 }

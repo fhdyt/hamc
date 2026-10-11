@@ -3,7 +3,8 @@ import type { ClientChannel } from 'ssh2'
 import type { ChatEvent, ChatSendResult } from '@shared/ipc'
 import { LineSplitter } from '../collector/lines'
 import type { Execer } from '../connection/manager'
-import { backendCmd, chatHelpCmd, chatPlainCmd, chatQuietFileCmd, chatStreamCmd, runSafe } from '../connection/remote'
+import { acpCheckCmd, backendCmd, chatHelpCmd, chatPlainCmd, chatQuietFileCmd, chatStreamCmd, runSafe } from '../connection/remote'
+import { AcpHub, type AcpTurn } from './acp'
 import { ASSUMED_FLAGS, canStream, parseChatHelp, type ChatFlags } from './flags'
 import { ChatLineParser } from './parser'
 
@@ -20,7 +21,7 @@ export interface UploadPort {
 }
 
 export interface ChatDeps {
-  conn: Execer & { openStream(argv: readonly string[], stdin: string): Promise<ClientChannel>; isConnected(): boolean }
+  conn: Execer & { openStream(argv: readonly string[], stdin: string): Promise<ClientChannel>; openDuplex(argv: readonly string[]): Promise<ClientChannel>; isConnected(): boolean }
   hermesPath: () => string | null
   getSession: (profile: string) => string | null
   setSession: (profile: string, sessionId: string | null) => void
@@ -28,6 +29,10 @@ export interface ChatDeps {
   /** The sessions of this app for an agent, newest first, read from its state.db (used when the stream names no session). */
   recentSessions?: (profile: string, anySource: boolean) => Promise<{ id: string; startedAt: number | null }[]>
   uploads?: UploadPort
+  /** The setting `chat.useAcp`. */
+  useAcp?: () => boolean
+  /** The working folder given to `hermes acp`. */
+  acpCwd?: () => string
   log?: (msg: string) => void
   /** How long a stopped turn may take to end on its own before the channel is closed. */
   stopGraceMs?: number
@@ -41,9 +46,13 @@ const SESSION_LINE = /^\s*session[ _-]?id\s*[:=]\s*(\S+)\s*$/i
 
 interface Active {
   turn: string
-  ch: ClientChannel
   stopped: boolean
   timer: NodeJS.Timeout | null
+  /** Asks the running turn to stop (INT for a one-shot process, a cancel message for ACP). */
+  interrupt(): void
+  /** Ends the process or channel of the turn. */
+  close(): void
+  acp?: AcpTurn
 }
 
 /**
@@ -77,12 +86,64 @@ export class ChatService {
   /** Profiles that are uploading or starting; they count as busy before there is a channel. */
   private starting = new Set<string>()
   private flagsCache: ChatFlags | null = null
+  /** `hermes acp --check` passed on this server (null = not asked yet). */
+  private acpOk: boolean | null = null
+  private hub: AcpHub | null = null
 
   constructor(private readonly d: ChatDeps) {}
 
   /** Forget what was learned about the server (called when the connection changes). */
   reset(): void {
     this.flagsCache = null
+    this.acpOk = null
+  }
+
+  private async acpReady(hermes: string): Promise<boolean> {
+    if (!this.d.useAcp?.()) return false
+    if (this.acpOk === null) {
+      const r = await runSafe(this.d.conn, acpCheckCmd(hermes), 25_000)
+      this.acpOk = r.code === 0
+      if (!this.acpOk) this.d.log?.('chat: hermes acp is not available, using one-shot chat')
+    }
+    return this.acpOk
+  }
+
+  /** One message through the persistent `hermes acp` process. Null when it cannot start, so the caller falls back. */
+  private async sendAcp(hermes: string, profile: string, message: string): Promise<ChatSendResult | null> {
+    this.hub ??= new AcpHub({ conn: this.d.conn, hermes, cwd: () => this.d.acpCwd?.() ?? '/', ...(this.d.log ? { log: this.d.log } : {}), ...(this.d.stopGraceMs !== undefined ? { stopGraceMs: this.d.stopGraceMs } : {}) })
+    let agent
+    try {
+      agent = await this.hub.agent(profile)
+    } catch (e) {
+      this.acpOk = false
+      this.d.log?.(`chat: hermes acp did not start (${e instanceof Error ? e.message : String(e)}), using one-shot chat`)
+      return null
+    }
+    const turn = randomUUID()
+    const emit = (e: { kind: ChatEvent['kind'] } & Record<string, unknown>): void => this.d.emit({ turn, profile, ...e } as ChatEvent)
+    let handle: AcpTurn
+    try {
+      handle = await agent.turn(turn, message, this.d.getSession(profile), emit, (id) => {
+        this.d.setSession(profile, id)
+        emit({ kind: 'start', mode: 'acp' })
+        emit({ kind: 'session', sessionId: id })
+      })
+    } catch (e) {
+      return { ok: false, error: 'failed-to-start', detail: e instanceof Error ? e.message : String(e) }
+    }
+    const act: Active = { turn, stopped: false, timer: null, interrupt: () => handle.cancel(), close: () => handle.kill(), acp: handle }
+    this.active.set(profile, act)
+    void handle.done.then(() => {
+      if (act.timer) clearTimeout(act.timer)
+      if (this.active.get(profile) === act) this.active.delete(profile)
+    })
+    return { ok: true, turn }
+  }
+
+  /** Answers an approval request of a running turn (ACP). */
+  approve(turn: string, approval: string, option: string | null): boolean {
+    for (const act of this.active.values()) if (act.turn === turn) return act.acp?.approve(approval, option) ?? false
+    return false
   }
 
   async flags(hermes: string): Promise<ChatFlags> {
@@ -133,6 +194,10 @@ export class ChatService {
         if (!up.ok) return { ok: false, error: up.error === 'attachment-missing' ? 'attachment-missing' : 'upload-failed', detail: up.error }
         message = `${attachmentBlock(up.files)}${text ? `\n\n${text}` : ''}`
       }
+      if (await this.acpReady(hermes)) {
+        const viaAcp = await this.sendAcp(hermes, profile, message)
+        if (viaAcp) return viaAcp
+      }
       const flags = await this.flags(hermes)
       const stream = canStream(flags)
       const resume = flags.resume ? this.d.getSession(profile) : null
@@ -146,9 +211,9 @@ export class ChatService {
         return { ok: false, error: 'failed-to-start', detail: e instanceof Error ? e.message : String(e) }
       }
       const turn = randomUUID()
-      const act: Active = { turn, ch, stopped: false, timer: null }
+      const act: Active = { turn, stopped: false, timer: null, interrupt: () => interrupt(ch), close: () => ch.close() }
       this.active.set(profile, act)
-      this.run(profile, act, stream, resume !== null)
+      this.run(profile, act, ch, stream, resume !== null)
       this.d.emit({
         turn,
         profile,
@@ -162,8 +227,8 @@ export class ChatService {
     }
   }
 
-  private run(profile: string, act: Active, stream: boolean, resumed: boolean): void {
-    const { turn, ch } = act
+  private run(profile: string, act: Active, ch: ClientChannel, stream: boolean, resumed: boolean): void {
+    const { turn } = act
     const startedAt = Date.now() / 1000
     let sawSession = resumed
     const emit = (e: { kind: ChatEvent['kind'] } & Record<string, unknown>): void => this.d.emit({ turn, profile, ...e } as ChatEvent)
@@ -260,8 +325,8 @@ export class ChatService {
     for (const act of this.active.values()) {
       if (act.turn !== turn || act.stopped) continue
       act.stopped = true
-      interrupt(act.ch)
-      act.timer = setTimeout(() => act.ch.close(), this.d.stopGraceMs ?? 3000)
+      act.interrupt()
+      act.timer = setTimeout(() => act.close(), this.d.stopGraceMs ?? 3000)
       act.timer.unref()
     }
   }
@@ -270,9 +335,11 @@ export class ChatService {
   dispose(): void {
     for (const act of this.active.values()) {
       if (act.timer) clearTimeout(act.timer)
-      act.ch.close()
+      act.close()
     }
     this.active.clear()
+    this.hub?.dispose()
+    this.hub = null
     this.starting.clear()
     this.reset()
   }
