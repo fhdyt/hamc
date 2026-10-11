@@ -9,6 +9,15 @@ md.renderer.rules['image'] = (tokens, idx) => {
   return `<span class="md-img">[image${alt ? ': ' + alt : ''}]</span>`
 }
 
+// Code blocks get a class and their language, so the chat can put a Copy button on them.
+md.renderer.rules['fence'] = (tokens, idx) => {
+  const t = tokens[idx]
+  const lang = (t?.info ?? '').trim().split(/\s+/)[0] ?? ''
+  const safe = lang.replace(/[^A-Za-z0-9_+.-]/g, '').slice(0, 20)
+  return `<pre class="md-pre"${safe ? ` data-lang="${safe}"` : ''}><code>${md.utils.escapeHtml(t?.content ?? '')}</code></pre>
+`
+}
+
 /** Drops a leading `---` YAML block. */
 export function stripFrontmatter(text: string): string {
   if (!text.startsWith('---')) return text
@@ -59,6 +68,16 @@ function hook(): void {
       if (href) node.setAttribute('title', href)
       node.setAttribute('class', 'ext-link')
     }
+  })
+}
+
+/** Markdown of an untrusted text (a chat reply) to safe HTML: no wikilinks, links are inert, code blocks are marked. */
+export function renderMarkdown(text: string): string {
+  hook()
+  return DOMPurify.sanitize(md.render(text), {
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
+    FORBID_TAGS: ['style', 'form', 'input', 'img', 'iframe', 'object', 'embed', 'svg', 'math', 'button', 'textarea', 'select'],
+    FORBID_ATTR: ['style', 'srcset', 'src']
   })
 }
 

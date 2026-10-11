@@ -7,6 +7,7 @@ import { stepZoom } from './lib/zoom'
 import { useAgents } from './stores/agents'
 import { IDLE_STATUS, useConn } from './stores/conn'
 import { useBrain } from './stores/brain'
+import { useChat } from './stores/chat'
 import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
 import { useMetrics } from './stores/metrics'
@@ -17,7 +18,10 @@ export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
   useConn.setState({ connecting: true, connectError: null, hostKey: null, lastRequest: withoutPassword })
   // Feed ids only mean something on one server; drop what a different server left behind before new events arrive.
   const prev = useConn.getState().saved
-  if (prev && (prev.host !== req.host || prev.port !== req.port || prev.username !== req.username)) useFeed.getState().reset()
+  if (prev && (prev.host !== req.host || prev.port !== req.port || prev.username !== req.username)) {
+    useFeed.getState().reset()
+    useChat.getState().reset()
+  }
   const res = await window.mc.connection.connect(req)
   if (res.ok) {
     useConn.setState({ connecting: false, saved: await window.mc.connection.saved(), connectError: null, hostKey: null })
@@ -48,6 +52,7 @@ export async function forgetConnection(): Promise<void> {
   useCron.getState().reset()
   useFeed.getState().reset()
   useBrain.getState().reset()
+  useChat.getState().reset()
   useConn.setState({
     saved: null, status: IDLE_STATUS, startup: null, preflight: null, capabilities: null, hostKey: null, connectError: null, lastRequest: null
   })

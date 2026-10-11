@@ -1,6 +1,7 @@
 import { ensurePins, refreshVault } from './actions'
 import { useAgents } from './stores/agents'
 import { useBrain } from './stores/brain'
+import { useChat } from './stores/chat'
 import { useConn } from './stores/conn'
 import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
@@ -20,6 +21,8 @@ export async function bootstrap(): Promise<void> {
     else if (ev.type === 'error' && ev.data.code.startsWith('vault_')) useBrain.getState().setError(ev.data.message)
     else if (ev.type === 'error' && ['unsupported_schema', 'db_unreadable', 'feed_failed'].includes(ev.data.code)) useFeed.getState().setError(`${ev.data.message}${ev.data.profile ? ` (${ev.data.profile})` : ''}`)
   })
+  mc.onChat((ev) => useChat.getState().applyChat(ev))
+  mc.onUpload((p) => useChat.getState().applyUpload(p))
   mc.onStatus((status) => {
     const was = useConn.getState().status.state
     useConn.setState({ status })
