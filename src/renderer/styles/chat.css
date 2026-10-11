@@ -103,3 +103,13 @@
 .up-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .up-meta { flex: none; color: #8b95bd; font-size: 11px; }
 .up-ask { display: inline-flex; gap: 6px; }
+
+.cv-approval { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid #ffb86c; border-radius: 8px; background: #21222c; }
+.cv-approval.allowed { border-color: #50fa7b; }
+.cv-approval.denied { border-color: #ff5555; }
+.cv-approval.cancelled { border-color: #44475a; }
+.cv-approval-head { display: flex; align-items: center; gap: 6px; color: #ffb86c; font-size: 12px; }
+.cv-approval.allowed .cv-approval-head { color: #50fa7b; }
+.cv-approval.denied .cv-approval-head { color: #ff5555; }
+.cv-approval-title { font-weight: 600; overflow-wrap: anywhere; }
+.cv-approval-actions { display: flex; flex-wrap: wrap; gap: 8px; }

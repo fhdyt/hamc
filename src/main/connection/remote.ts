@@ -33,6 +33,9 @@ export const versionCmd = (hermes: string): string[] => [hermes, '--version']
 export const profileCountCmd = (home: string): string[] => ['sh', '-c', COUNT_PROFILES, 'sh', home]
 export const stateDbCmd = (python: string, home: string): string[] => [python, '-c', STATE_DB_PY, home]
 export const pythonVersionCmd = (python: string): string[] => [python, '--version']
+/** `hermes acp --check` exits 0 only when the ACP adapter and its dependencies are there. */
+export const acpCheckCmd = (hermes: string): string[] => [hermes, 'acp', '--check']
+export const acpCmd = (hermes: string, profile: string): string[] => (profile === 'default' ? [hermes, 'acp'] : [hermes, '-p', profile, 'acp'])
 export const probeCmd = (hermes: string, sub: string[]): string[] => [hermes, ...sub, '--help']
 export const modelCmd = (hermes: string, profile: string): string[] =>
   profile === 'default' ? [hermes, 'config', 'get', 'model', '--json'] : [hermes, '-p', profile, 'config', 'get', 'model', '--json']

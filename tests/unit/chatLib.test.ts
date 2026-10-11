@@ -42,6 +42,34 @@ describe('foldEvent', () => {
   })
 })
 
+describe('approvals in a turn', () => {
+  const ev = (e: object): ChatEvent => ({ turn: 't1', profile: 'default', ...e }) as ChatEvent
+  const ask = ev({ kind: 'approval', id: 'ap1', title: 'terminal', detail: 'rm -rf ~/x', options: [{ id: 'allow_once', name: 'Allow once', kind: 'allow' }, { id: 'reject_once', name: 'Deny', kind: 'deny' }] })
+
+  it('adds a pending card once and settles it with the answer', () => {
+    let t = foldEvent(null, ev({ kind: 'start', mode: 'acp' }), 1)!
+    t = foldEvent(t, ask)!
+    t = foldEvent(t, ask)!
+    expect(t.approvals).toHaveLength(1)
+    expect(t.approvals[0]).toMatchObject({ id: 'ap1', title: 'terminal', detail: 'rm -rf ~/x', state: 'pending' })
+    t = foldEvent(t, ev({ kind: 'approval-done', id: 'ap1', outcome: 'allowed', choice: 'Allow once' }))!
+    expect(t.approvals[0]).toMatchObject({ state: 'allowed', choice: 'Allow once' })
+  })
+
+  it('keeps what was asked and answered visible after the saved reply replaces the streamed one', () => {
+    let t = foldEvent(null, ev({ kind: 'start', mode: 'acp' }), (T0 + 5) * 1000)!
+    t = foldEvent(t, ask)!
+    t = foldEvent(t, ev({ kind: 'approval-done', id: 'ap1', outcome: 'denied', choice: 'Deny' }))!
+    t = foldEvent(t, ev({ kind: 'text', text: 'not allowed' }))!
+    t = foldEvent(t, ev({ kind: 'end', exitCode: 0, stopped: false }))!
+    const conv = buildConversation([item(1, 'user', 'danger'), item(7, 'reply', 'not allowed')], null, t)
+    expect(conv.map((c) => c.kind)).toEqual(['user', 'reply', 'stream'])
+    const last = conv.at(-1)!
+    expect(last.kind === 'stream' && last.turn.text).toBe('')
+    expect(last.kind === 'stream' && last.turn.approvals[0]!.state).toBe('denied')
+  })
+})
+
 describe('splitAttachments', () => {
   it('moves the attachment lines out of the message text', () => {
     const msg = '[Attached: /home/u/hermes-uploads/atlas/20261010/report.pdf · 2.1 MB · application/pdf]\n[Attached: /home/u/x/a.txt · 12 B · text/plain]\n\nplease read'

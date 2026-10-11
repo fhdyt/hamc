@@ -47,6 +47,7 @@ const api: MissionApi = {
   chat: {
     send: (req) => ipcRenderer.invoke(IPC.chatSend, req),
     stop: (turn) => ipcRenderer.invoke(IPC.chatStop, turn),
+    approve: (req) => ipcRenderer.invoke(IPC.chatApprove, req),
     getSession: (profile) => ipcRenderer.invoke(IPC.chatGetSession, profile),
     setSession: (profile, sessionId) => ipcRenderer.invoke(IPC.chatSetSession, { profile, sessionId }),
     sessions: (profile) => ipcRenderer.invoke(IPC.chatSessions, profile),

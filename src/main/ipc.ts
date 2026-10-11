@@ -93,6 +93,7 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.brainNote, (a) => d.session.brainNote(NoteId.parse(a)))
   handle(IPC.chatSend, (a) => d.session.chatSend(ChatSendArgs.parse(a)))
   handle(IPC.chatStop, (a) => d.session.chatStop(TurnId.parse(a)))
+  handle(IPC.chatApprove, (a) => d.session.chatApprove(z.object({ turn: TurnId, approval: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/), option: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/).nullable() }).parse(a)))
   handle(IPC.chatGetSession, (a) => d.session.chatGetSession(ProfileName.parse(a)))
   handle(IPC.chatSetSession, (a) => {
     const { profile, sessionId } = z.object({ profile: ProfileName, sessionId: SessionId.nullable() }).parse(a)

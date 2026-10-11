@@ -66,6 +66,11 @@ export async function stopTurn(profile: string): Promise<void> {
   if (t && !t.ended) await window.mc.chat.stop(t.id)
 }
 
+/** Answers a question from Hermes (ACP mode). `option` null cancels it. */
+export async function answerApproval(turn: string, approval: string, option: string | null): Promise<void> {
+  await window.mc.chat.approve({ turn, approval, option })
+}
+
 /** Starts a fresh conversation with the agent; the old one stays on the server and in the history menu. */
 export async function newChat(profile: string): Promise<void> {
   await window.mc.chat.setSession(profile, null)

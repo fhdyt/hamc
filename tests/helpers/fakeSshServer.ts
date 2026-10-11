@@ -48,6 +48,8 @@ export interface FakeSshOptions {
   chatHelp?: string
   /** What `hermes config get terminal.backend` prints. */
   backend?: string
+  /** `hermes acp` is installed (`--check` passes and a fake ACP agent answers). Off by default. */
+  acp?: boolean
 }
 
 export interface FakeSsh {
@@ -61,8 +63,8 @@ export interface FakeSsh {
   close(): Promise<void>
 }
 
-type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend'>> &
-  Pick<FakeSshOptions, 'capabilities' | 'models' | 'chatHelp' | 'backend'>
+type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp'>> &
+  Pick<FakeSshOptions, 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp'>
 
 const MARKERS = ['config.yaml', '.env', 'SOUL.md', 'profile.yaml', 'state.db']
 
@@ -163,6 +165,24 @@ export const FULL_CHAT_HELP = `usage: hermes chat [options]
 
 const chats = new WeakMap<ServerChannel, ChildProcess>()
 
+/** `hermes acp`: a JSON-RPC peer that stays open until the client closes the channel. */
+function runAcp(argv: string[], stream: ServerChannel, o: Resolved): void {
+  const child = spawn(pythonExe, [resolve('tests/fixtures/fake_hermes_acp.py'), ...argv.slice(1)], {
+    env: { ...process.env, MC_FAKE_HOME: o.fixture.home },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  child.stdin.on('error', () => {})
+  stream.pipe(child.stdin)
+  child.stdout.pipe(stream, { end: false })
+  child.stderr.on('data', (d: Buffer) => stream.stderr.write(d))
+  child.on('close', (code) => {
+    if (!stream.writable) return
+    stream.exit(code ?? 0)
+    stream.end()
+  })
+  stream.on('close', () => child.kill())
+}
+
 function runChat(argv: string[], stream: ServerChannel, o: Resolved): void {
   const child = spawn(pythonExe, [resolve('tests/fixtures/fake_hermes.py'), ...argv.slice(1)], {
     env: { ...process.env, MC_FAKE_HOME: o.fixture.home },
@@ -215,6 +235,10 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
   }
   if (cmd === 'head') return reply(stream, `#!${o.pythonPath}\n`)
   if (cmd === o.hermesPath) {
+    if (rest.includes('acp')) {
+      if (rest.includes('--check')) return o.acp ? reply(stream, 'Hermes ACP check OK\n') : reply(stream, '', 1, 'ModuleNotFoundError: No module named acp\n')
+      return o.acp ? runAcp(argv, stream, o) : reply(stream, '', 1, 'ACP is not installed\n')
+    }
     if (rest.includes('chat')) return rest.includes('--help') ? reply(stream, o.chatHelp ?? FULL_CHAT_HELP) : runChat(argv, stream, o)
     if (rest.includes('terminal.backend')) return reply(stream, `${o.backend ?? 'local'}\n`)
     if (rest[0] === '--version') return reply(stream, `Hermes Agent v${o.version}\n`)

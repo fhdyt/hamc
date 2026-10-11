@@ -118,6 +118,12 @@ export class MissionSession {
         if (id !== undefined) this.d.store.setChatSession(id, profile, sessionId)
       },
       emit: (e) => d.send(IPC.evChat, e),
+      useAcp: () => d.store.getSetting('chat.useAcp'),
+      // the working folder of ACP sessions: the folder that holds ~/.hermes, normally the home of the server user
+      acpCwd: () => {
+        const parts = (this.hermes?.home ?? '').split('/').filter(Boolean)
+        return parts.length > 1 ? `/${parts.slice(0, -1).join('/')}` : '/'
+      },
       recentSessions: async (profile, anySource) => {
         const res = await this.queries.run('chat_sessions', { profile, ...(anySource ? { any: true } : {}) }, ChatSessions)
         return res.ok ? res.data.sessions.map((x) => ({ id: x.id, startedAt: x.startedAt })) : []
@@ -453,6 +459,10 @@ export class MissionSession {
 
   chatStop(turn: string): void {
     this.chat.stop(turn)
+  }
+
+  chatApprove(req: { turn: string; approval: string; option: string | null }): boolean {
+    return this.chat.approve(req.turn, req.approval, req.option)
   }
 
   chatGetSession(profile: string): string | null {

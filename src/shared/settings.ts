@@ -63,6 +63,8 @@ export interface SettingsMap {
   'dashboard.cronOpen': boolean
   'chat.uploadDir': string
   'chat.maxUploadMb': number
+  /** Chat through `hermes acp` when the server has it, so Hermes can ask before risky actions. */
+  'chat.useAcp': boolean
   'dashboard.activityOpen': boolean
   'dashboard.serverOpen': boolean
   'dashboard.chatW': number
@@ -82,6 +84,7 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'dashboard.cronOpen': true,
   'chat.uploadDir': '~/hermes-uploads',
   'chat.maxUploadMb': 50,
+  'chat.useAcp': true,
   'dashboard.activityOpen': true,
   'dashboard.serverOpen': true,
   'dashboard.chatW': 320,
@@ -101,6 +104,7 @@ export const SETTINGS_SCHEMA = {
   'dashboard.cronOpen': z.boolean(),
   'chat.uploadDir': z.string().min(1).max(300),
   'chat.maxUploadMb': z.number().int().min(1).max(2048),
+  'chat.useAcp': z.boolean(),
   'dashboard.activityOpen': z.boolean(),
   'dashboard.serverOpen': z.boolean(),
   'dashboard.chatW': z.number().min(260).max(640),
