@@ -1,8 +1,10 @@
-import { app, BrowserWindow, dialog, Menu, safeStorage, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, Menu, Notification, safeStorage, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { IPC } from '@shared/channels'
 import { loadCollectorScript } from './collector/channel'
 import { ConnectionManager } from './connection/manager'
+import type { CronAlert } from './cron/watcher'
 import { registerIpc } from './ipc'
 import { createLogger } from './log'
 import { WEB_PREFERENCES, hardenWebContents, type AppTarget } from './security'
@@ -23,6 +25,28 @@ const projectRoot = join(__dirname, '..', '..')
 
 function collectorPath(): string {
   return app.isPackaged ? join(process.resourcesPath, 'mc_collector.py') : join(projectRoot, 'collector', 'mc_collector.py')
+}
+
+const liveNotifications = new Set<Notification>()
+
+/** Failed cron runs only notify when the window is not in front of the user. */
+function showCronAlert(alert: CronAlert): void {
+  const w = win
+  const inFront = !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized() && w.isFocused()
+  if (inFront || !Notification.isSupported()) return
+  const reason = (alert.lastError ?? alert.lastStatus ?? 'failed').replace(/\s+/g, ' ').slice(0, 120)
+  const n = new Notification({ title: `Cron failed: ${alert.name}`, body: `${alert.profile} · ${reason}` })
+  liveNotifications.add(n)
+  n.on('close', () => liveNotifications.delete(n))
+  n.on('click', () => {
+    liveNotifications.delete(n)
+    if (!win || win.isDestroyed()) return
+    win.show()
+    if (win.isMinimized()) win.restore()
+    win.focus()
+    win.webContents.send(IPC.evOpenCron, { profile: alert.profile, jobId: alert.jobId })
+  })
+  n.show()
 }
 
 function buildMenu(): Menu {
@@ -93,7 +117,8 @@ if (!app.requestSingleInstanceLock()) {
       send: (channel, payload) => {
         if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
       },
-      log
+      log,
+      notify: showCronAlert
     })
     registerIpc({ session, store, getWindow: () => win, target })
     Menu.setApplicationMenu(buildMenu())

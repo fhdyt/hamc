@@ -17,6 +17,7 @@ export interface IpcDeps {
 const SetSetting = z.object({ key: z.string(), value: z.unknown() })
 const Pins = z.array(z.string().max(128)).max(500)
 const Zoom = z.number().min(0.7).max(1.5)
+const CronOutputArgs = z.object({ profile: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/), jobId: z.string().regex(/^[A-Za-z0-9._-]{1,128}$/) })
 
 export function registerIpc(d: IpcDeps): void {
   const handle = (channel: string, fn: (arg: unknown) => unknown): void => {
@@ -52,5 +53,9 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.setZoom, (a) => {
     d.getWindow()?.webContents.setZoomFactor(Zoom.parse(a))
   })
-  handle(IPC.appInfo, (): AppInfo => ({ version: app.getVersion(), electron: process.versions.electron ?? '', platform: process.platform }))
+  handle(IPC.cronOutput, (a) => {
+    const { profile, jobId } = CronOutputArgs.parse(a)
+    return d.session.cronOutput(profile, jobId)
+  })
+  handle(IPC.appInfo,(): AppInfo => ({ version: app.getVersion(), electron: process.versions.electron ?? '', platform: process.platform }))
 }

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { Server, utils, type Connection, type ServerChannel } from 'ssh2'
 import { pythonExe, type FixtureDirs } from './fixture'
@@ -73,7 +73,7 @@ function countProfiles(home: string): number {
 }
 
 function runCollector(argv: string[], stream: ServerChannel, o: Resolved): void {
-  const args = ['-u', '-', ...argv.slice(3).map((a) => (a === o.remoteHome ? o.fixture.home : a))]
+  const args = ['-u', '-', ...argv.slice(3).map((a) => (a === o.remoteHome ? o.fixture.home : a)), '--agents-interval', '0.5']
   const child = spawn(pythonExe, args, {
     env: { ...process.env, MC_PROC_ROOT: o.fixture.proc, MC_SYS_ROOT: o.fixture.sysfs },
     stdio: ['pipe', 'pipe', 'pipe']
@@ -100,6 +100,14 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
     if (script.includes('profiles')) return reply(stream, String(countProfiles(o.fixture.home)))
   }
   if (cmd === 'test' && rest[0] === '-d') return reply(stream, '', o.hasHome && rest[1] === o.remoteHome ? 0 : 1)
+  if (cmd === 'head' && rest[0] === '-c') {
+    const remote = rest[2] ?? ''
+    const root = o.remoteHome.replace(/\/+$/, '')
+    if (!remote.startsWith(root + '/')) return reply(stream, '', 1, 'No such file\n')
+    const local = join(o.fixture.home, ...remote.slice(root.length + 1).split('/'))
+    if (!existsSync(local) || !statSync(local).isFile()) return reply(stream, '', 1, 'No such file\n')
+    return reply(stream, readFileSync(local).subarray(0, Number(rest[1])).toString('utf8'))
+  }
   if (cmd === 'head') return reply(stream, `#!${o.pythonPath}\n`)
   if (cmd === o.hermesPath) {
     if (rest[0] === '--version') return reply(stream, `Hermes Agent v${o.version}\n`)

@@ -1,10 +1,13 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
 import type {
-  ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, HostKeyChallenge, SavedConnection
+  ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, SavedConnection
 } from '@shared/ipc'
 import { CollectorChannel } from './collector/channel'
 import { ModelResolver } from './collector/models'
+import { readCronOutput } from './cron/output'
+import { CronStore } from './cron/store'
+import { CronWatcher, type CronAlert } from './cron/watcher'
 import { backoffDelay } from './connection/backoff'
 import { probeCapabilities } from './connection/capabilities'
 import { ConnectError, HostKeyError } from './connection/errors'
@@ -23,6 +26,8 @@ export interface SessionDeps {
   collectorScript: string
   send: Send
   log?: (msg: string) => void
+  /** Called once per newly failed cron run (after the baseline). */
+  notify?: (alert: CronAlert) => void
   backoff?: (attempt: number) => number
   latencyIntervalMs?: number
 }
@@ -63,6 +68,9 @@ export class MissionSession {
   private generation = 0
   /** Password held only in memory so a host key can be trusted without retyping it. */
   private pending: Pending | null = null
+  private readonly cronStore = new CronStore()
+  private readonly cronWatcher = new CronWatcher()
+  private lastTarget: string | null = null
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -129,6 +137,12 @@ export class MissionSession {
     startup.done('credentials', fromKeychain ? 'from keychain' : '')
 
     const params: ConnectParams = { host: req.host, port: req.port, username: req.username, password }
+    const target = `${req.host}:${req.port}:${req.username}`
+    if (this.lastTarget !== null && this.lastTarget !== target) {
+      this.cronWatcher.reset()
+      this.cronStore.clear()
+    }
+    this.lastTarget = target
     this.params = params
     const result = await this.establish(params, startup, gen, true)
     if (gen !== this.generation) return fail('unknown', 'Connection attempt was cancelled.')
@@ -239,6 +253,10 @@ export class MissionSession {
     ch.on('event', (ev: CollectorEvent) => {
       this.d.send(IPC.evEvent, ev)
       if (ev.type === 'agents') void this.models?.update(ev.data.agents)
+      if (ev.type === 'cron') {
+        this.cronStore.apply(ev.data.jobs)
+        for (const alert of this.cronWatcher.ingest(ev.data.jobs)) this.d.notify?.(alert)
+      }
     })
     ch.on('closed', () => {
       if (this.collector !== ch) return
@@ -337,6 +355,15 @@ export class MissionSession {
 
   async forget(): Promise<void> {
     await this.disconnect()
+    this.cronWatcher.reset()
+    this.cronStore.clear()
+    this.lastTarget = null
     this.d.store.forgetConnection()
+  }
+
+  async cronOutput(profile: string, jobId: string): Promise<CronOutputResult> {
+    const h = this.hermes
+    if (!h || !this.d.manager.isConnected()) return { ok: false, reason: 'not-connected' }
+    return readCronOutput(this.d.manager, h.home, this.cronStore, profile, jobId)
   }
 }
