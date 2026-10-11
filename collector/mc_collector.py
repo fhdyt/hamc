@@ -309,3 +309,256 @@ class Sampler:
             "procs": pick_procs(rows),
             "tasks": len(procs),
         }
+
+
+MARKERS = ("config.yaml", ".env", "SOUL.md", "profile.yaml", "state.db")
+HB_KEYS = ("heartbeat", "heartbeat_at", "last_heartbeat", "updated_at", "timestamp", "ts")
+STALE_HEARTBEAT_S = 120
+WORKING_WINDOW_S = 30
+CLI_WINDOW_S = 300
+
+
+def read_json(path):
+    text = read_text(path)
+    if not text:
+        return None
+    try:
+        value = json.loads(text)
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def to_epoch(v):
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        f = float(v)
+        return f / 1000.0 if f > 1e11 else f
+    if isinstance(v, str):
+        s = v.strip()
+        try:
+            return to_epoch(float(s))
+        except ValueError:
+            pass
+        try:
+            return datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return None
+    return None
+
+
+def read_pid(path):
+    text = read_text(path)
+    if not text:
+        return None
+    text = text.strip()
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        value = json.loads(text)
+    except ValueError:
+        return None
+    pid = value.get("pid") if isinstance(value, dict) else None
+    return pid if isinstance(pid, int) else None
+
+
+def pid_alive(pid):
+    return pid is not None and pid > 0 and os.path.isdir(PROC + "/" + str(pid))
+
+
+def list_profiles(home):
+    out = [("default", home)]
+    pdir = os.path.join(home, "profiles")
+    try:
+        names = sorted(os.listdir(pdir))
+    except OSError:
+        names = []
+    for name in names:
+        d = os.path.join(pdir, name)
+        if os.path.isdir(d) and any(os.path.exists(os.path.join(d, m)) for m in MARKERS):
+            out.append((name, d))
+    return out
+
+
+def display_name(pdir, fallback):
+    text = read_text(os.path.join(pdir, "profile.yaml"))
+    if text:
+        m = re.search(r"^display_name:\s*(.+?)\s*$", text, re.M)
+        if m:
+            value = m.group(1).strip().strip("'\"")
+            if value:
+                return value[:64]
+    return fallback
+
+
+def extract_platforms(state):
+    p = state.get("platforms") if isinstance(state, dict) else None
+    names = []
+    if isinstance(p, dict):
+        names = [str(k) for k in p.keys()]
+    elif isinstance(p, list):
+        for item in p:
+            if isinstance(item, str):
+                names.append(item)
+            elif isinstance(item, dict) and item.get("name"):
+                names.append(str(item["name"]))
+    return sorted(set(names))[:12]
+
+
+def probe_db(path):
+    if not os.path.isfile(path):
+        return None, False, None
+    con = None
+    try:
+        uri = Path(path).resolve().as_uri() + "?mode=ro"
+        con = sqlite3.connect(uri, uri=True, timeout=1.0)
+        con.execute("PRAGMA query_only=1")
+        cols = {r[1] for r in con.execute("PRAGMA table_info(messages)")}
+        if "timestamp" not in cols:
+            return None, False, "unsupported_schema"
+        where = " WHERE active=1" if "active" in cols else ""
+        row = con.execute("SELECT MAX(timestamp) FROM messages" + where).fetchone()
+        last = to_epoch(row[0]) if row and row[0] is not None else None
+        scols = {r[1] for r in con.execute("PRAGMA table_info(sessions)")}
+        open_session = False
+        if "ended_at" in scols:
+            open_session = con.execute("SELECT 1 FROM sessions WHERE ended_at IS NULL LIMIT 1").fetchone() is not None
+        return last, open_session, None
+    except sqlite3.Error:
+        return None, False, "db_unreadable"
+    finally:
+        if con is not None:
+            con.close()
+
+
+def collect_agents(home, now):
+    errors = []
+    state = read_json(os.path.join(home, "gateway_state.json")) or {}
+    served_raw = state.get("served_profiles")
+    served = [str(x) for x in served_raw if isinstance(x, str)] if isinstance(served_raw, list) else []
+    hb = None
+    for key in HB_KEYS:
+        if key in state:
+            hb = to_epoch(state[key])
+            if hb is not None:
+                break
+    age = max(0.0, now - hb) if hb is not None else None
+    pid_ok = pid_alive(read_pid(os.path.join(home, "gateway.pid")))
+    fresh = age is None or age <= STALE_HEARTBEAT_S
+    gateway_up = bool(pid_ok and fresh)
+
+    agents = []
+    for name, pdir in list_profiles(home):
+        last_ts, open_session, err = probe_db(os.path.join(pdir, "state.db"))
+        if err:
+            msg = "state.db schema not recognized" if err == "unsupported_schema" else "state.db could not be read"
+            errors.append({"code": err, "message": msg, "profile": name})
+        parked = os.path.exists(os.path.join(pdir, "gateway.parked"))
+        primary = gateway_up and name in served
+        secondary = name != "default" and pid_alive(read_pid(os.path.join(pdir, "gateway.pid")))
+        recent = last_ts is not None and (now - last_ts) <= CLI_WINDOW_S
+        active = primary or secondary or bool(open_session and recent)
+        if parked:
+            status = "parked"
+        elif active:
+            status = "working" if (last_ts is not None and now - last_ts <= WORKING_WINDOW_S) else "idle"
+        else:
+            status = "offline"
+        pstate = state if name == "default" else (read_json(os.path.join(pdir, "gateway_state.json")) or state)
+        try:
+            cfg_mtime = os.stat(os.path.join(pdir, "config.yaml")).st_mtime
+        except OSError:
+            cfg_mtime = None
+        agents.append({
+            "profile": name,
+            "displayName": display_name(pdir, name),
+            "status": status,
+            "platforms": extract_platforms(pstate),
+            "lastActivityTs": last_ts,
+            "configMtime": cfg_mtime,
+            "hasSoul": os.path.isfile(os.path.join(pdir, "SOUL.md")),
+            "hasMemory": os.path.isfile(os.path.join(pdir, "memories", "MEMORY.md")),
+            "hasUser": os.path.isfile(os.path.join(pdir, "memories", "USER.md")),
+        })
+    data = {
+        "agents": agents,
+        "gateway": {"up": gateway_up, "heartbeatAgeS": round(age, 1) if age is not None else None, "served": served},
+    }
+    return data, errors
+
+
+def emit(kind, data, profile=None):
+    line = json.dumps(
+        {"type": kind, "ts": round(time.time(), 3), "profile": profile, "data": data},
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    try:
+        sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+    except (BrokenPipeError, OSError, ValueError):
+        os._exit(0)
+
+
+def parse_args(argv):
+    args = {"home": None, "ticks": 0, "interval": 1.0, "agents_interval": 10.0}
+    it = iter(argv)
+    for a in it:
+        if a == "--ticks":
+            args["ticks"] = int(next(it))
+        elif a == "--interval":
+            args["interval"] = float(next(it))
+        elif a == "--agents-interval":
+            args["agents_interval"] = float(next(it))
+        elif args["home"] is None:
+            args["home"] = a
+    if not args["home"]:
+        args["home"] = os.environ.get("HERMES_HOME") or os.path.expanduser("~/.hermes")
+    return args
+
+
+def main(argv):
+    args = parse_args(argv)
+    sampler = Sampler()
+    try:
+        sampler.sample()
+    except Exception as ex:  # noqa: BLE001 - never crash the stream
+        emit("error", {"code": "sample_failed", "message": type(ex).__name__})
+    clock = time.monotonic
+    next_metrics = clock() + min(args["interval"], 0.5)
+    next_agents = clock()
+    reported = set()
+    done = 0
+    while True:
+        now = clock()
+        if now >= next_agents:
+            try:
+                data, errors = collect_agents(args["home"], time.time())
+                emit("agents", data)
+                current = set()
+                for e in errors:
+                    key = (e["code"], e.get("profile"))
+                    current.add(key)
+                    if key not in reported:
+                        emit("error", e, e.get("profile"))
+                reported = current
+            except Exception as ex:  # noqa: BLE001
+                emit("error", {"code": "agents_failed", "message": type(ex).__name__})
+            next_agents = clock() + args["agents_interval"]
+        if now >= next_metrics:
+            try:
+                emit("metrics", sampler.sample())
+            except Exception as ex:  # noqa: BLE001
+                emit("error", {"code": "sample_failed", "message": type(ex).__name__})
+            next_metrics = clock() + args["interval"]
+            done += 1
+            if args["ticks"] and done >= args["ticks"]:
+                return 0
+        time.sleep(max(0.0, min(next_metrics, next_agents) - clock()))
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
