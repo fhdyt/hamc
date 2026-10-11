@@ -3,15 +3,10 @@ import type { BrowseResult } from '@shared/events'
 import { Icon } from '../../components/Icon'
 import { Modal } from '../../components/Modal'
 import { ErrorState, Skeleton } from '../../components/States'
+import { describeQueryError } from '../../lib/queryError'
 
 type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ok'; data: BrowseResult }
 
-const ERRORS: Record<string, string> = {
-  not_found: 'This folder does not exist.',
-  unreadable: 'This folder cannot be read by your SSH user.',
-  timeout: 'The server took too long to answer.',
-  'not-connected': 'Not connected to the server.'
-}
 
 /** Lists the folders of the server (read-only) so a vault can be picked without typing its path. */
 export function BrowseDialog({ start, onPick, onClose }: { start: string; onPick(path: string): void; onClose(): void }) {
@@ -25,7 +20,7 @@ export function BrowseDialog({ start, onPick, onClose }: { start: string; onPick
     void window.mc.brain.browse(path).then((res) => {
       if (!live) return
       if (res.ok) setLoad({ status: 'ok', data: res.data })
-      else setLoad({ status: 'error', message: ERRORS[res.error] ?? 'Could not list this folder.' })
+      else setLoad({ status: 'error', message: describeQueryError(res.error, res.detail) })
     })
     return () => {
       live = false

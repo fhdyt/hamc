@@ -2,14 +2,11 @@ import { useEffect, useState } from 'react'
 import type { VaultCheck } from '@shared/events'
 import { saveVault } from '../../actions'
 import { Icon } from '../../components/Icon'
+import { describeQueryError } from '../../lib/queryError'
 import { BrowseDialog } from './BrowseDialog'
 
 type Check = { status: 'idle' } | { status: 'checking' } | { status: 'done'; check: VaultCheck } | { status: 'error'; message: string }
 
-const ERRORS: Record<string, string> = {
-  timeout: 'The server took too long to answer.',
-  'not-connected': 'Not connected to the server.'
-}
 
 /** Asks for the vault folder, checks it on the server and saves it for this connection. */
 export function VaultSetup({ initial, onDone, onCancel }: { initial: string; onDone(): void; onCancel?: () => void }) {
@@ -29,7 +26,7 @@ export function VaultSetup({ initial, onDone, onCancel }: { initial: string; onD
     const t = window.setTimeout(() => {
       void window.mc.brain.validate(p).then((res) => {
         if (!live) return
-        setCheck(res.ok ? { status: 'done', check: res.data } : { status: 'error', message: ERRORS[res.error] ?? 'Could not check this folder.' })
+        setCheck(res.ok ? { status: 'done', check: res.data } : { status: 'error', message: describeQueryError(res.error, res.detail) })
       })
     }, 450)
     return () => {

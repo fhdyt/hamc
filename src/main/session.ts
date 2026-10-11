@@ -87,7 +87,7 @@ export class MissionSession {
       onEvent: (ev) => d.send(IPC.evEvent, ev),
       log: (m) => d.log?.(m)
     })
-    this.queries = new QueryRunner(d.manager, d.collectorScript, () => (this.hermes && d.manager.isConnected() ? { python: this.hermes.python, home: this.hermes.home } : null))
+    this.queries = new QueryRunner(d.manager, d.collectorScript, () => (this.hermes && d.manager.isConnected() ? { python: this.hermes.python, home: this.hermes.home } : null), (m) => d.log?.(m))
   }
 
   private log = (m: string): void => this.d.log?.(m)

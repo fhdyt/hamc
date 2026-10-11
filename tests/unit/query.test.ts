@@ -37,30 +37,44 @@ describe('QueryRunner', () => {
 
   it('treats an unknown error code as an invalid response', async () => {
     const { q } = runner(async () => ok('{"ok":false,"error":"rm -rf"}'))
-    expect(await q.run('session', {}, schema)).toEqual({ ok: false, error: 'invalid-response' })
+    expect(await q.run('session', {}, schema)).toMatchObject({ ok: false, error: 'invalid-response' })
   })
 
   it('rejects data that does not match the schema', async () => {
     const { q } = runner(async () => ok('{"ok":true,"data":{"text":42}}'))
-    expect(await q.run('message', {}, schema)).toEqual({ ok: false, error: 'invalid-response' })
+    expect(await q.run('message', {}, schema)).toMatchObject({ ok: false, error: 'invalid-response' })
   })
 
   it('rejects output that is not JSON, empty output and non-zero exits', async () => {
     expect((await runner(async () => ok('Traceback...')).q.run('message', {}, schema)).ok).toBe(false)
-    expect(await runner(async () => ok('')).q.run('message', {}, schema)).toEqual({ ok: false, error: 'invalid-response' })
-    expect(await runner(async () => ({ code: 1, stdout: '', stderr: 'boom' })).q.run('message', {}, schema)).toEqual({ ok: false, error: 'invalid-response' })
-    expect(await runner(async () => ok('"just a string"')).q.run('message', {}, schema)).toEqual({ ok: false, error: 'invalid-response' })
+    expect(await runner(async () => ok('')).q.run('message', {}, schema)).toMatchObject({ ok: false, error: 'invalid-response' })
+    expect(await runner(async () => ({ code: 1, stdout: '', stderr: 'boom' })).q.run('message', {}, schema)).toMatchObject({ ok: false, error: 'invalid-response' })
+    expect(await runner(async () => ok('"just a string"')).q.run('message', {}, schema)).toMatchObject({ ok: false, error: 'invalid-response' })
   })
 
   it('refuses oversized output', async () => {
     const { q } = runner(async () => ok('x'.repeat(QUERY_MAX_OUTPUT + 1)))
-    expect(await q.run('message', {}, schema)).toEqual({ ok: false, error: 'invalid-response' })
+    expect(await q.run('message', {}, schema)).toMatchObject({ ok: false, error: 'invalid-response' })
   })
 
   it('reports a timeout and a lost connection distinctly', async () => {
     expect(await runner(async () => Promise.reject(new Error('timed out after 15000 ms'))).q.run('message', {}, schema)).toEqual({ ok: false, error: 'timeout' })
     expect(await runner(async () => Promise.reject(new Error('not connected'))).q.run('message', {}, schema)).toEqual({ ok: false, error: 'not-connected' })
-    expect(await runner(async () => Promise.reject(new Error('weird'))).q.run('message', {}, schema)).toEqual({ ok: false, error: 'invalid-response' })
+    expect(await runner(async () => Promise.reject(new Error('weird'))).q.run('message', {}, schema)).toMatchObject({ ok: false, error: 'invalid-response' })
+  })
+
+  it('explains an unexpected failure with the exit code and the end of stderr, and logs it', async () => {
+    const logs: string[] = []
+    const exec = { exec: async () => ({ code: 1, stdout: '', stderr: 'Traceback (most recent call last):\n  File "<stdin>", line 9\nSyntaxError: invalid syntax' }) }
+    const q = new QueryRunner(exec, 'SCRIPT', target, (m) => logs.push(m))
+    const r = await q.run('vault_check', { path: '/x' }, schema)
+    expect(r).toMatchObject({ ok: false, error: 'invalid-response' })
+    expect(r.ok === false && r.detail).toContain('exit 1')
+    expect(r.ok === false && r.detail).toContain('SyntaxError: invalid syntax')
+    expect(logs[0]).toContain('vault_check')
+    expect(logs[0]).toContain('SyntaxError')
+    const notJson = await new QueryRunner({ exec: async () => ({ code: 0, stdout: 'hello\n', stderr: '' }) }, 'S', target).run('browse', {}, schema)
+    expect(notJson.ok === false && notJson.detail).toBe('not JSON: hello')
   })
 
   it('does nothing when there is no target yet', async () => {

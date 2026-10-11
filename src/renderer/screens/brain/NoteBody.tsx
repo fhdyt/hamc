@@ -3,16 +3,11 @@ import type { BrainNote } from '@shared/events'
 import { ErrorState, Skeleton } from '../../components/States'
 import { backlinksOf, resolveNoteId } from '../../lib/brain/graphModel'
 import { renderNote } from '../../lib/brain/markdown'
+import { describeQueryError } from '../../lib/queryError'
 import { useBrain } from '../../stores/brain'
 
 type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ok'; html: string; truncated: boolean }
 
-const ERRORS: Record<string, string> = {
-  not_found: 'This note is no longer in the vault.',
-  timeout: 'The server took too long to answer.',
-  'not-connected': 'Not connected to the server.',
-  bad_args: 'This note cannot be opened.'
-}
 
 /** The rendered text of a note with its links; `onOpen` is called with the id of a note that a link points to. */
 export function NoteText({ id, onOpen }: { id: string; onOpen(id: string): void }) {
@@ -26,7 +21,7 @@ export function NoteText({ id, onOpen }: { id: string; onOpen(id: string): void 
     setLoad({ status: 'loading' })
     void window.mc.brain.note(id).then((res) => {
       if (!live) return
-      setLoad(res.ok ? { status: 'ok', html: renderNote(res.data.text), truncated: res.data.truncated } : { status: 'error', message: ERRORS[res.error] ?? 'Could not read this note.' })
+      setLoad(res.ok ? { status: 'ok', html: renderNote(res.data.text), truncated: res.data.truncated } : { status: 'error', message: describeQueryError(res.error, res.detail) })
     })
     return () => {
       live = false

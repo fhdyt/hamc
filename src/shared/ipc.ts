@@ -119,7 +119,7 @@ export type QueryError =
   | 'not-connected'
   | 'invalid-response'
 
-export type QueryResult<T> = { ok: true; data: T } | { ok: false; error: QueryError }
+export type QueryResult<T> = { ok: true; data: T } | { ok: false; error: QueryError; detail?: string }
 
 export interface OpenCronTarget {
   profile: string
