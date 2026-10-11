@@ -434,6 +434,23 @@ def probe_db(path):
             con.close()
 
 
+STOPPED_STATES = {"stopped", "stopping", "exited", "failed", "crashed", "shutdown"}
+
+
+def gateway_alive(pdir):
+    state = read_json(os.path.join(pdir, "gateway_state.json")) or {}
+    pid = state.get("pid")
+    if not isinstance(pid, int) or isinstance(pid, bool):
+        pid = read_pid(os.path.join(pdir, "gateway.pid"))
+    if not pid_alive(pid):
+        return False
+    if str(state.get("gateway_state") or "").lower() in STOPPED_STATES:
+        return False
+    if state.get("exit_reason"):
+        return False
+    return True
+
+
 def collect_agents(home, now):
     errors = []
     state = read_json(os.path.join(home, "gateway_state.json")) or {}
@@ -446,9 +463,8 @@ def collect_agents(home, now):
             if hb is not None:
                 break
     age = max(0.0, now - hb) if hb is not None else None
-    pid_ok = pid_alive(read_pid(os.path.join(home, "gateway.pid")))
-    fresh = age is None or age <= STALE_HEARTBEAT_S
-    gateway_up = bool(pid_ok and fresh)
+    gateway_up = gateway_alive(home)
+    multiplex_up = bool(served) and gateway_up
 
     agents = []
     for name, pdir in list_profiles(home):
@@ -457,10 +473,10 @@ def collect_agents(home, now):
             msg = "state.db schema not recognized" if err == "unsupported_schema" else "state.db could not be read"
             errors.append({"code": err, "message": msg, "profile": name})
         parked = os.path.exists(os.path.join(pdir, "gateway.parked"))
-        primary = gateway_up and name in served
-        secondary = name != "default" and pid_alive(read_pid(os.path.join(pdir, "gateway.pid")))
+        primary = multiplex_up and name in served
+        own = gateway_alive(pdir)
         recent = last_ts is not None and (now - last_ts) <= CLI_WINDOW_S
-        active = primary or secondary or bool(open_session and recent)
+        active = primary or own or bool(open_session and recent)
         if parked:
             status = "parked"
         elif active:

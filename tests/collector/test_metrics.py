@@ -68,7 +68,7 @@ def test_sampler_computes_rates(fx):
     assert m["net"][0]["rxBps"] == 500_000
     assert m["net"][0]["txBps"] == 100_000
     assert m["io"] == {"readBps": 1_048_576, "writeBps": 524_288}
-    assert m["tasks"] == 3
+    assert m["tasks"] == 4
     assert [d["fs"] for d in m["disks"]] == ["ext4", "ext4"]
 
 

@@ -23,7 +23,8 @@ def test_status_matrix(fx):
     assert a["atlas"]["status"] == "offline"
     assert a["scout"]["displayName"] == "Scout"
     assert a["default"]["displayName"] == "default"
-    assert a["default"]["platforms"] == ["telegram"]
+    assert a["default"]["platforms"] == ["lightclawbot", "telegram"]
+    assert a["scout"]["platforms"] == ["telegram"]
     assert a["default"]["hasSoul"] and a["default"]["hasMemory"] and a["default"]["hasUser"]
     assert a["atlas"]["hasSoul"] and not a["atlas"]["hasMemory"]
     assert a["scout"]["lastActivityTs"] == fx.now - 10
@@ -36,23 +37,50 @@ def test_inactive_messages_are_ignored(fx):
     assert a["scout"]["lastActivityTs"] == fx.now - 10  # the active=0 message at now-1 is skipped
 
 
-def test_gateway_info(fx):
+def test_gateway_info_in_the_per_profile_layout(fx):
     data, _ = c.collect_agents(str(fx.home), fx.now + 4)
-    assert data["gateway"] == {"up": True, "heartbeatAgeS": 4.0, "served": ["default", "scout"]}
+    assert data["gateway"] == {"up": True, "heartbeatAgeS": 4.0, "served": []}
 
 
-def test_stale_heartbeat_marks_gateway_down(fx):
-    mf.set_heartbeat(fx, fx.now - 500)
+def test_an_old_updated_at_does_not_make_a_live_gateway_offline(fx):
+    mf.set_updated_at(fx, fx.now - 3 * 86400)
+    data, _ = c.collect_agents(str(fx.home), fx.now)
+    assert data["gateway"]["up"] is True
+    assert data["gateway"]["heartbeatAgeS"] == 259200.0
+    assert by_name(data)["default"]["status"] == "idle"
+
+
+def test_dead_gateway_pid_marks_the_profile_offline(fx):
+    mf.write_gateway_state(fx.home, 999999, updated_at=fx.now)
     data, _ = c.collect_agents(str(fx.home), fx.now)
     assert data["gateway"]["up"] is False
-    assert data["gateway"]["heartbeatAgeS"] == 500.0
     assert by_name(data)["default"]["status"] == "offline"
 
 
-def test_dead_gateway_pid_marks_gateway_down(fx):
-    (fx.home / "gateway.pid").write_text("999999")
+def test_a_stopped_gateway_state_is_offline_even_if_the_pid_lives(fx):
+    mf.write_gateway_state(fx.home, mf.GATEWAY_PID, state="stopped", updated_at=fx.now)
+    assert by_name(c.collect_agents(str(fx.home), fx.now)[0])["default"]["status"] == "offline"
+
+
+def test_an_exit_reason_means_the_gateway_is_down(fx):
+    mf.write_gateway_state(fx.home, mf.GATEWAY_PID, exit_reason="crashed", updated_at=fx.now)
+    assert by_name(c.collect_agents(str(fx.home), fx.now)[0])["default"]["status"] == "offline"
+
+
+def test_a_missing_gateway_state_falls_back_to_gateway_pid(fx):
+    (fx.home / "gateway_state.json").unlink()
+    (fx.home / "gateway.pid").write_text(str(mf.GATEWAY_PID))
+    assert by_name(c.collect_agents(str(fx.home), fx.now)[0])["default"]["status"] == "idle"
+
+
+def test_multiplex_layout_still_marks_served_profiles_active(fx):
+    mf.make_multiplex(fx)
     data, _ = c.collect_agents(str(fx.home), fx.now)
-    assert data["gateway"]["up"] is False
+    a = by_name(data)
+    assert data["gateway"]["served"] == ["default", "atlas"]
+    assert a["atlas"]["status"] == "idle"
+    assert a["default"]["status"] == "idle"
+    assert a["scout"]["status"] == "offline"
 
 
 def test_parked_marker(fx):
@@ -62,7 +90,7 @@ def test_parked_marker(fx):
 
 def test_standalone_gateway_makes_profile_active(fx):
     atlas = fx.home / "profiles" / "atlas"
-    (atlas / "gateway.pid").write_text(str(mf.GATEWAY_PID))
+    mf.write_gateway_state(atlas, mf.GATEWAY_PID, updated_at=fx.now)
     assert by_name(c.collect_agents(str(fx.home), fx.now)[0])["atlas"]["status"] == "idle"
 
 

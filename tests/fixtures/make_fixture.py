@@ -3,6 +3,7 @@
 Used by pytest (import) and by the TypeScript integration tests
 (`python make_fixture.py init <root>`).
 """
+import datetime
 import hashlib
 import json
 import sqlite3
@@ -13,6 +14,7 @@ from pathlib import Path
 
 CORES = 4
 GATEWAY_PID = 1842
+SCOUT_GATEWAY_PID = 2001
 MEMINFO = """MemTotal:       16384000 kB
 MemFree:         4608000 kB
 MemAvailable:   10137600 kB
@@ -86,6 +88,39 @@ def write_gateway_proc(proc: Path, step: int) -> None:
     write_proc(proc, GATEWAY_PID, "python", 0, 1000 + 25 * step, 25600, ["python", "-m", "hermes_cli.main", "gateway", "run"])
 
 
+def iso(ts: float, offset_min: int = 420) -> str:
+    tz = datetime.timezone(datetime.timedelta(minutes=offset_min))
+    return datetime.datetime.fromtimestamp(ts, tz).isoformat()
+
+
+def write_gateway_state(pdir: Path, pid: int, state: str = "running", updated_at: float | None = None,
+                        platforms: dict | None = None, exit_reason=None) -> None:
+    """Shape observed on a real Hermes v0.21.0 install: one gateway per profile, no served_profiles/heartbeat."""
+    w(
+        pdir / "gateway_state.json",
+        json.dumps({
+            "pid": pid, "kind": "gateway", "argv": ["hermes", "gateway", "run"], "start_time": 1,
+            "gateway_state": state, "exit_reason": exit_reason, "restart_requested": False, "active_agents": 1,
+            "platforms": platforms if platforms is not None else {"telegram": {"state": "connected", "error_code": None}},
+            "updated_at": iso(updated_at if updated_at is not None else time.time()),
+            "code_sha": "abc", "code_version": "0.21.0", "session_store": {"status": "ok"},
+        }),
+    )
+
+
+def set_updated_at(fx, ts: float) -> None:
+    state = json.loads((fx.home / "gateway_state.json").read_text())
+    state["updated_at"] = iso(ts)
+    w(fx.home / "gateway_state.json", json.dumps(state))
+
+
+def make_multiplex(fx) -> None:
+    """Older layout: one gateway at the home serves several profiles."""
+    w(fx.home / "gateway_state.json", json.dumps({"served_profiles": ["default", "atlas"], "heartbeat": fx.now, "platforms": {"telegram": {}}}))
+    w(fx.home / "gateway.pid", str(GATEWAY_PID))
+    (fx.home / "profiles" / "scout" / "gateway_state.json").unlink(missing_ok=True)
+
+
 def advance(fx: Fixture, step: int) -> None:
     write_cpu(fx.proc, step)
     write_net(fx.proc, step)
@@ -147,8 +182,8 @@ def make_fixture(root: Path, now: float | None = None) -> Fixture:
     write_proc(proc, 1, "systemd", 0, 500, 2000, ["/sbin/init"])
     write_proc(proc, 912, "node", 1000, 800, 40000, ["node", "/srv/app/server.js"])
 
-    w(home / "gateway_state.json", json.dumps({"served_profiles": ["default", "scout"], "heartbeat": now, "platforms": {"telegram": {"connected": True}}}))
-    w(home / "gateway.pid", str(GATEWAY_PID))
+    write_gateway_state(home, GATEWAY_PID, updated_at=now, platforms={"telegram": {"state": "connected"}, "lightclawbot": {"state": "connected"}})
+    write_proc(proc, SCOUT_GATEWAY_PID, "python", 0, 300, 20000, ["python", "-m", "hermes_cli.main", "gateway", "run"])
     w(home / "config.yaml", "model:\n  default: x/y\n")
     w(home / "SOUL.md", "soul\n")
     w(home / "memories" / "MEMORY.md", "m\n")
@@ -158,6 +193,7 @@ def make_fixture(root: Path, now: float | None = None) -> Fixture:
     make_db(home / "state.db", messages=[(now - 3600, 1)]).close()
 
     scout = add_profile(home, "scout", display_name="Scout", markers=("config.yaml",))
+    write_gateway_state(scout, SCOUT_GATEWAY_PID, updated_at=now, platforms={"telegram": {"state": "connected"}})
     make_db(scout / "state.db", messages=[(now - 10, 1), (now - 1, 0)]).close()
     add_profile(home, "atlas", markers=("SOUL.md",))
     (home / "profiles" / "empty").mkdir(parents=True, exist_ok=True)
