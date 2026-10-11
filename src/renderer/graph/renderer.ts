@@ -27,8 +27,9 @@ export interface DragSink {
   release(i: number): void
 }
 
-const COLORS = { note: 0xa4abc9, ghost: 0x6b7089, tag: 0x50fa7b, attachment: 0xffb86c, edge: 0x8b95bd, hi: 0xf8f8f2, pulse: 0x50fa7b, bg: 0x191a21 }
+const COLORS = { note: 0xa4abc9, ghost: 0x6b7089, tag: 0x50fa7b, attachment: 0xffb86c, edge: 0x8b95bd, hi: 0xf8f8f2, accent: 0xbd93f9, pulse: 0x50fa7b, bg: 0x191a21 }
 const MAX_LABELS = 70
+const MAX_NEIGHBOUR_LABELS = 160
 const TEX = 32
 const MIN_K = 0.03
 const MAX_K = 10
@@ -336,7 +337,7 @@ export class GraphRenderer {
       out[o + 7] = y2 - dy
     }
     mesh.geometry.getBuffer('aPosition').update()
-    mesh.alpha = this.hover >= 0 ? 0.07 : this.edgeAlpha
+    mesh.alpha = this.hover >= 0 ? 0.05 : this.edgeAlpha
 
     const am = this.arrowMesh
     if (am) {
@@ -394,7 +395,10 @@ export class GraphRenderer {
     const dim = this.hover >= 0
     for (let i = 0; i < nodes.length; i++) {
       const base = nodes[i]!.kind === 'ghost' ? 0.7 : 1
-      this.sprites[i]!.alpha = dim ? (this.hoverSet.has(i) ? 1 : 0.12) : base
+      const s = this.sprites[i]!
+      s.alpha = dim ? (this.hoverSet.has(i) ? 1 : 0.1) : base
+      // the node under the pointer takes the accent colour; its neighbours keep their own
+      s.tint = i === this.hover ? COLORS.accent : this.nodeColor(nodes[i]!)
     }
   }
 
@@ -403,12 +407,12 @@ export class GraphRenderer {
     const hl = this.hiLines
     hl.clear()
     if (this.hover >= 0) {
-      const w = 1.4 / k
+      const w = 1.3 / k
       for (const e of this.graph.edges) {
         if (e.s !== this.hover && e.t !== this.hover) continue
         hl.moveTo(this.pos[e.s * 2]!, this.pos[e.s * 2 + 1]!).lineTo(this.pos[e.t * 2]!, this.pos[e.t * 2 + 1]!)
       }
-      hl.stroke({ width: w, color: COLORS.hi, alpha: 0.85 })
+      hl.stroke({ width: w, color: COLORS.accent, alpha: 0.95 })
     }
     const sr = this.selRing
     sr.clear()
@@ -441,14 +445,22 @@ export class GraphRenderer {
     const { w, h } = this.size
     const threshold = 0.25 + this.style.labelFade * 1.6
     const base = Math.max(0, Math.min(1, (k - threshold * 0.6) / (threshold * 0.8)))
-    const wanted: { i: number; a: number }[] = []
+    const wanted: { i: number; a: number; hot?: boolean }[] = []
     const seen = new Set<number>()
-    // While the pointer is on a node only that node is named; the neighbours stay lit but unlabelled.
+    // Under the pointer: the node in white and its neighbours in grey, so the names read clearly against the dimmed rest.
     if (this.hover >= 0) {
-      wanted.push({ i: this.hover, a: 1 })
+      wanted.push({ i: this.hover, a: 1, hot: true })
       seen.add(this.hover)
+      for (const i of this.hoverSet) {
+        if (seen.has(i) || wanted.length >= MAX_NEIGHBOUR_LABELS) continue
+        const sx = this.pos[i * 2]! * k + x
+        const sy = this.pos[i * 2 + 1]! * k + y
+        if (sx < -20 || sy < -20 || sx > w + 20 || sy > h + 20) continue
+        wanted.push({ i, a: 1 })
+        seen.add(i)
+      }
     } else if (this.selected >= 0) {
-      wanted.push({ i: this.selected, a: 1 })
+      wanted.push({ i: this.selected, a: 1, hot: true })
       seen.add(this.selected)
     }
     if (this.hover < 0 && base > 0 && !this.opts.mini) {
@@ -479,6 +491,8 @@ export class GraphRenderer {
       if (t.text !== n.label) t.text = n.label.length > 36 ? n.label.slice(0, 35) + '…' : n.label
       t.visible = true
       t.alpha = wnt.a
+      t.tint = wnt.hot ? 0xffffff : this.hover >= 0 ? 0xb4b9d6 : 0xf8f8f2
+      t.scale.set(wnt.hot ? 1.15 : 1)
       const r = Math.max(this.radiusOf(wnt.i), 1.1 / k) * k
       t.position.set(this.pos[wnt.i * 2]! * k + x, this.pos[wnt.i * 2 + 1]! * k + y + r + 2)
     }

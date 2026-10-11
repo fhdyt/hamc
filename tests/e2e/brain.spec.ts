@@ -94,15 +94,16 @@ test('the graph appears with every note and a live indicator', async () => {
   await page.screenshot({ path: 'tests/e2e/shots/brain.png' })
 })
 
-test('hovering a node names only that node', async () => {
-  const labels = () => page.evaluate(() => window.__mcBrainLabels?.() ?? [])
+test('hovering a node names it and its neighbours, and nobody else', async () => {
+  const labels = async () => (await page.evaluate(() => window.__mcBrainLabels?.() ?? [])).sort()
   const p = await pointOf('Index.md')
   await page.mouse.move(p.x - 40, p.y - 40)
   await page.mouse.move(p.x, p.y)
-  await expect.poll(labels).toEqual(['Index'])
+  await expect.poll(labels).toEqual(['Alpha', 'Alpha', 'Beta', 'Gamma', 'Index', 'Missing Note'])
+  await page.screenshot({ path: 'tests/e2e/shots/brain-hover.png' })
   const q = await pointOf('Beta.md')
   await page.mouse.move(q.x, q.y)
-  await expect.poll(labels).toEqual(['Beta'])
+  await expect.poll(labels).toEqual(['Alpha', 'Beta', 'Index', 'Orphan'])
 })
 
 test('clicking a node opens the note with its backlinks and outgoing links', async () => {
