@@ -164,7 +164,11 @@ export class GraphRenderer {
     app.stage.addChild(this.world)
     app.stage.addChild(this.labelLayer)
     this.bindEvents(app.canvas)
+    // Pixi's own `resizeTo` only follows the window, so follow the container ourselves (panels opening and closing resize it).
     const ro = new ResizeObserver(() => {
+      if (this.destroyed) return
+      const { w, h } = this.size
+      this.app.renderer.resize(w, h)
       this.dirtyCam = true
       this.request()
     })
