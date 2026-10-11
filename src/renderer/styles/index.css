@@ -1,0 +1,26 @@
+@import 'tailwindcss';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/600.css';
+@import '@fontsource/jetbrains-mono/700.css';
+@import '@fontsource/vt323/400.css';
+@import './base.css';
+@import './app.css';
+
+@theme {
+  --font-sans: 'JetBrains Mono', ui-monospace, monospace;
+  --color-bg: #282a36;
+  --color-bg-deep: #191a21;
+  --color-panel: #21222c;
+  --color-line: #44475a;
+  --color-sel: #343746;
+  --color-fg: #f8f8f2;
+  --color-fg-2: #a9b2d3;
+  --color-fg-3: #8b95bd;
+  --color-green: #50fa7b;
+  --color-cyan: #8be9fd;
+  --color-purple: #bd93f9;
+  --color-pink: #ff79c6;
+  --color-orange: #ffb86c;
+  --color-red: #ff5555;
+  --color-yellow: #f1fa8c;
+}
