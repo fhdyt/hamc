@@ -1,4 +1,4 @@
-import { radiiOf, type Graph } from '../lib/brain/graphModel'
+import { anchorsOf, radiiOf, type Graph } from '../lib/brain/graphModel'
 import { LayoutClient } from './layoutClient'
 import type { Forces } from './layoutTypes'
 import { GraphRenderer, type GraphStyle, type RendererHandlers, type RendererOptions } from './renderer'
@@ -17,6 +17,7 @@ declare global {
   interface Window {
     __mcBrainStats?: () => EngineStats
     __mcBrainLabels?: () => string[]
+    __mcBrainActivity?: () => { signals: number; lit: number }
     __mcBrainNodes?: () => { id: string; x: number; y: number; wx: number; wy: number; wr: number }[]
   }
 }
@@ -58,6 +59,7 @@ export class GraphEngine {
     renderer.setSink(layout)
     window.__mcBrainNodes = () => renderer.screenPositions()
     window.__mcBrainLabels = () => renderer.visibleLabels()
+    window.__mcBrainActivity = () => renderer.activity()
     window.__mcBrainStats = () => this.stats()
   }
 
@@ -73,7 +75,7 @@ export class GraphEngine {
     this.nodes = g.nodes.length
     this.edges = g.edges.length
     this.graph = g
-    const pos = this.layout.setGraph(g, radiiOf(g.nodes, this.nodeSize))
+    const pos = this.layout.setGraph(g, radiiOf(g.nodes, this.nodeSize), anchorsOf(g.nodes))
     this.renderer.setGraph(g, pos)
   }
 
@@ -101,6 +103,11 @@ export class GraphEngine {
     this.renderer.pulse(ids)
   }
 
+  /** Makes a well connected neuron fire (the "Fire signal" button). */
+  fire(): void {
+    this.renderer.fire()
+  }
+
   fit(): void {
     this.renderer.fit()
   }
@@ -115,5 +122,6 @@ export class GraphEngine {
     delete window.__mcBrainStats
     delete window.__mcBrainNodes
     delete window.__mcBrainLabels
+    delete window.__mcBrainActivity
   }
 }

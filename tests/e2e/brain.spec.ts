@@ -94,16 +94,40 @@ test('the graph appears with every note and a live indicator', async () => {
   await page.screenshot({ path: 'tests/e2e/shots/brain.png' })
 })
 
-test('hovering a node names only that node', async () => {
+test('hovering a neuron shows a card with its name and no other label', async () => {
   const labels = async () => (await page.evaluate(() => window.__mcBrainLabels?.() ?? [])).sort()
+  const tip = page.locator('.bc-tip')
   const p = await pointOf('Index.md')
   await page.mouse.move(p.x - 40, p.y - 40)
   await page.mouse.move(p.x, p.y)
-  await expect.poll(labels).toEqual(['Index'])
+  await expect(tip).toContainText('Index')
+  await expect(tip).toContainText(/\d+ links/)
+  await expect.poll(labels).toEqual([])
   await page.screenshot({ path: 'tests/e2e/shots/brain-hover.png' })
   const q = await pointOf('Beta.md')
   await page.mouse.move(q.x, q.y)
-  await expect.poll(labels).toEqual(['Beta'])
+  await expect(tip).toContainText('Beta')
+  await page.mouse.move(p.x + 400, p.y + 300)
+  await expect(tip).toHaveCount(0)
+})
+
+test('neurons fire: a click and the Fire signal button light neurons and send signals', async () => {
+  const activity = () => page.evaluate(() => window.__mcBrainActivity?.() ?? { signals: 0, lit: 0 })
+  await page.getByRole('button', { name: /Fire signal/ }).click()
+  await expect.poll(async () => (await activity()).lit).toBeGreaterThan(0)
+  const p = await pointOf('Alpha.md')
+  await page.mouse.click(p.x, p.y)
+  await expect.poll(async () => (await activity()).signals + (await activity()).lit).toBeGreaterThan(0)
+  await page.getByRole('button', { name: 'Index', exact: true }).first().click().catch(() => {})
+})
+
+test('folders get their own colour, shown in a legend that follows the Color by folder switch', async () => {
+  const legend = page.getByRole('list', { name: 'Colours' })
+  await expect(legend).toContainText('folder')
+  await page.getByRole('switch', { name: 'Color by folder' }).uncheck()
+  await expect(legend).toHaveCount(0)
+  await page.getByRole('switch', { name: 'Color by folder' }).check()
+  await expect(legend).toContainText('folder')
 })
 
 test('clicking a node opens the note with its backlinks and outgoing links', async () => {
@@ -111,7 +135,7 @@ test('clicking a node opens the note with its backlinks and outgoing links', asy
   await page.mouse.move(p.x, p.y)
   await page.mouse.click(p.x, p.y)
   const preview = page.getByRole('complementary', { name: 'Note preview' })
-  await expect(preview.getByRole('heading', { name: 'Index' })).toBeVisible()
+  await expect(preview.getByRole('heading', { name: 'Index', level: 2 })).toBeVisible()
   await expect(preview).toContainText('Start with', { timeout: 15_000 })
   await expect(preview.getByRole('region', { name: 'Backlinks' })).toContainText('Alpha')
   await expect(preview.getByRole('region', { name: 'Backlinks' })).toContainText('Gamma')
@@ -119,7 +143,7 @@ test('clicking a node opens the note with its backlinks and outgoing links', asy
   await expect(preview.locator('.tag', { hasText: '#project/x' })).toBeVisible()
   // following a wikilink in the text selects the target
   await preview.locator('a.wikilink', { hasText: 'Alpha' }).first().click()
-  await expect(preview.getByRole('heading', { name: 'Alpha' })).toBeVisible()
+  await expect(preview.getByRole('heading', { name: 'Alpha', level: 2 })).toBeVisible()
   await page.screenshot({ path: 'tests/e2e/shots/brain-note.png' })
 })
 

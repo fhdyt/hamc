@@ -31,7 +31,7 @@ export function Brain() {
   const search = useBrain((s) => s.search)
   const g = useUi((s) => s.settings['brain.graph'])
   const connState = useConn((s) => s.status.state)
-  const { graph, style, forces } = useBrainGraph()
+  const { graph, style, forces, legend } = useBrainGraph()
   const engine = useRef<GraphEngine | null>(null)
   const [changing, setChanging] = useState(false)
 
@@ -55,6 +55,9 @@ export function Brain() {
             <span className="dot" style={{ background: phase === 'live' && connState === 'connected' ? '#8BE9FD' : '#8B95BD' }} aria-hidden="true" />
             {phase === 'live' && connState === 'connected' ? 'live' : phase === 'loading' ? 'reading' : 'paused'}
           </span>
+          <button type="button" className="cb sm" onClick={() => engine.current?.fire()} title="Make a neuron fire and send signals along its links">
+            <Icon name="activity" size={12} /> Fire signal
+          </button>
           <button type="button" className="ib sm" aria-label="Fit all nodes" title="Fit all nodes" onClick={() => engine.current?.fit()}>
             <Icon name="maximize" size={13} />
           </button>
@@ -98,6 +101,16 @@ export function Brain() {
               </div>
             )}
             <BrainCanvas graph={graph} style={style} forces={forces} hovered={hovered} selected={selected} pulse={pulse} engineRef={engine} onHover={setHover} onSelect={select} />
+            {legend.length > 0 && (
+              <ul className="bp-legend" aria-label="Colours">
+                {legend.map((l) => (
+                  <li key={l.label}>
+                    <i style={{ background: l.color }} aria-hidden="true" />
+                    {l.label}
+                  </li>
+                ))}
+              </ul>
+            )}
             {graph.nodes.length === 0 && (
               <div className="bp-empty">
                 <EmptyState title="Nothing to show" why={search ? 'No note matches the search.' : 'The current filters hide every note.'} />

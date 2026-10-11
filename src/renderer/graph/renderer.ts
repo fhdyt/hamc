@@ -1,24 +1,27 @@
 import 'pixi.js/unsafe-eval'
 import { Application, Container, Graphics, Mesh, MeshGeometry, Sprite, Text, Texture } from 'pixi.js'
 import { quadtree, type Quadtree } from 'd3-quadtree'
-import { densityScale, neighbours, nodeRadius, type GNode, type Graph } from '../lib/brain/graphModel'
+import { densityScale, neighbours, reachOf, somaRadius, type GNode, type Graph } from '../lib/brain/graphModel'
 
 export interface GraphStyle {
   nodeSize: number
   linkWidth: number
+  /** Show the synapse dot at the end of every link even when zoomed out. */
   arrows: boolean
   /** 0..1, higher means labels only show when zoomed in further. */
   labelFade: number
   groupColors: readonly string[]
+  /** Idle neurons fire now and then; off when the reader asked for reduced motion. */
+  motion: boolean
 }
 
 export interface RendererHandlers {
-  onHover(id: string | null): void
+  onHover(id: string | null, at?: { x: number; y: number }): void
   onSelect(id: string | null): void
 }
 
 export interface RendererOptions {
-  /** Compact mode for the Dashboard: no wheel zoom and no node dragging. */
+  /** Compact mode for the Dashboard: no hub labels and no node dragging. */
   mini?: boolean
 }
 
@@ -27,15 +30,26 @@ export interface DragSink {
   release(i: number): void
 }
 
-const COLORS = { note: 0xa4abc9, ghost: 0x6b7089, tag: 0x50fa7b, attachment: 0xffb86c, edge: 0x8b95bd, hi: 0xf8f8f2, accent: 0xbd93f9, pulse: 0x50fa7b, bg: 0x191a21 }
-const MAX_LABELS = 70
+const NEUTRAL = { note: 0xa9b2d3, ghost: 0x6b7089, tag: 0x50fa7b, attachment: 0xffb86c }
+const WHITE = 0xffffff
+const ACCENT = 0xbd93f9
+const MAX_LABELS = 60
 const TEX = 32
-const MIN_K = 0.03
+const GLOW = 128
+const MIN_K = 0.02
 const MAX_K = 10
-const ARROW_EDGE_LIMIT = 12000
 const PULSE_MS = 1400
+const SEGMENTS = 3 // segments per half of a link
+const MAX_ARBORS = 260
+const MAX_SIGNALS = 260
+const MAX_SYNAPSES = 700
+const RECENT_S = 3600
+const FRAME_MS = 33
 
 const hex = (s: string): number => parseInt(s.replace('#', ''), 16)
+const css = (c: number, a: number): string => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`
+const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(b, v))
+const rng = (seed: number) => (): number => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296
 
 interface Ring {
   i: number
@@ -43,36 +57,72 @@ interface Ring {
   g: Graphics
 }
 
+interface Signal {
+  e: number
+  from: number
+  t: number
+  sp: number
+  hops: number
+}
+
+interface Bucket {
+  color: number
+  entries: Int32Array
+  mesh: Mesh
+}
+
+type Seg = [number, number, number, number]
+
 export class GraphRenderer {
   private app!: Application
   private world = new Container()
   private labelLayer = new Container()
-  private ringLayer = new Container()
-  private nodeLayer = new Container()
-  private edgeMesh: Mesh | null = null
-  private arrowMesh: Mesh | null = null
+  private edgeLayer = new Container()
+  private synGfx = new Graphics()
+  private signalLayer = new Container()
+  private arborLayer = new Container()
+  private glowLayer = new Container()
+  private discLayer = new Container()
+  private coreLayer = new Container()
   private hiLines = new Graphics()
+  private recentGfx = new Graphics()
+  private ringLayer = new Container()
   private selRing = new Graphics()
-  private sprites: Sprite[] = []
+  private buckets: Bucket[] = []
+  private glows: Sprite[] = []
+  private discs: Sprite[] = []
+  private cores: Sprite[] = []
+  private sigSprites: Sprite[] = []
   private labels: Text[] = []
   private rings: Ring[] = []
+  private arbors = new Map<number, Graphics>()
+  private glowTex = new Map<number, Texture>()
   private tex!: Texture
   private graph: Graph = { nodes: [], edges: [], index: new Map() }
   private nb: number[][] = []
+  private adjE: number[][] = []
   private order: number[] = []
+  private recent: number[] = []
   private pos: Float32Array = new Float32Array(0)
+  private ctrl: Float32Array = new Float32Array(0)
+  private curv: Float32Array = new Float32Array(0)
+  private fireV: Float32Array = new Float32Array(0)
+  private signals: Signal[] = []
   private cam = { x: 0, y: 0, k: 1 }
-  private style: GraphStyle = { nodeSize: 1, linkWidth: 1, arrows: false, labelFade: 0.5, groupColors: [] }
+  private style: GraphStyle = { nodeSize: 1, linkWidth: 1, arrows: false, labelFade: 0.5, groupColors: [], motion: true }
+  private density = 1
+  private edgeAlpha = 0.5
   private hover = -1
   private selected = -1
   private hoverSet = new Set<number>()
-  private density = 1
-  private edgeAlpha = 0.5
   private dirtyPos = true
   private dirtyCam = true
   private dirtyStyle = true
   private dirtyHi = true
+  private colorKey = ''
   private scheduled = 0
+  private lastFrame = 0
+  private ambientT = 1
   private tree: Quadtree<number> | null = null
   private treeStale = true
   private mode: { kind: 'none' } | { kind: 'pan'; x: number; y: number; moved: number } | { kind: 'node'; i: number; x: number; y: number; moved: number } = { kind: 'none' }
@@ -97,15 +147,7 @@ export class GraphRenderer {
 
   private async init(): Promise<void> {
     const app = new Application()
-    await app.init({
-      resizeTo: this.host,
-      background: COLORS.bg,
-      antialias: true,
-      autoDensity: true,
-      resolution: window.devicePixelRatio || 1,
-      autoStart: false,
-      preference: 'webgl'
-    })
+    await app.init({ resizeTo: this.host, backgroundAlpha: 0, antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1, autoStart: false, preference: 'webgl' })
     if (this.destroyed) {
       app.destroy(true, { children: true, texture: true })
       return
@@ -118,10 +160,7 @@ export class GraphRenderer {
     const g = new Graphics().circle(TEX / 2, TEX / 2, TEX / 2).fill(0xffffff)
     this.tex = app.renderer.generateTexture({ target: g, resolution: 2 })
     g.destroy()
-    this.world.addChild(this.hiLines)
-    this.world.addChild(this.nodeLayer)
-    this.world.addChild(this.selRing)
-    this.world.addChild(this.ringLayer)
+    for (const l of [this.edgeLayer, this.synGfx, this.signalLayer, this.arborLayer, this.glowLayer, this.discLayer, this.coreLayer, this.hiLines, this.recentGfx, this.ringLayer, this.selRing]) this.world.addChild(l)
     app.stage.addChild(this.world)
     app.stage.addChild(this.labelLayer)
     this.bindEvents(app.canvas)
@@ -146,29 +185,37 @@ export class GraphRenderer {
 
   setGraph(g: Graph, pos: Float32Array): void {
     if (this.destroyed || !this.app) return
-    const oldIds = this.graph.nodes.map((n) => n.id)
+    const first = this.graph.nodes.length === 0
     this.graph = g
     this.pos = pos
     this.nb = neighbours(g)
+    this.adjE = g.nodes.map(() => [])
+    g.edges.forEach((e, i) => {
+      this.adjE[e.s]!.push(i)
+      this.adjE[e.t]!.push(i)
+    })
     this.density = densityScale(g.nodes.length)
-    this.edgeAlpha = Math.min(0.55, Math.max(0.16, 0.62 - 0.13 * Math.log10(Math.max(10, g.edges.length))))
+    this.edgeAlpha = clamp(0.62 - 0.12 * Math.log10(Math.max(10, g.edges.length)), 0.2, 0.55)
     this.order = g.nodes.map((_, i) => i).sort((a, b) => g.nodes[b]!.degree - g.nodes[a]!.degree)
-    // sprites: reuse the pool
-    while (this.sprites.length < g.nodes.length) {
-      const s = new Sprite(this.tex)
-      s.anchor.set(0.5)
-      this.nodeLayer.addChild(s)
-      this.sprites.push(s)
-    }
-    for (let i = 0; i < this.sprites.length; i++) this.sprites[i]!.visible = i < g.nodes.length
-    this.rebuildEdgeGeometry()
+    this.fireV = new Float32Array(g.nodes.length)
+    this.signals = []
+    const nowS = Date.now() / 1000
+    this.recent = g.nodes.map((n, i) => (n.kind === 'note' && n.mtime > 0 && nowS - n.mtime < RECENT_S ? i : -1)).filter((i) => i >= 0).slice(0, 80)
+    this.curv = Float32Array.from(g.edges, (e) => {
+      const h = Math.imul(e.s + 1, 73856093) ^ Math.imul(e.t + 1, 19349663)
+      return (((h >>> 0) % 1000) / 1000 - 0.5) * 0.5
+    })
+    this.ctrl = new Float32Array(g.edges.length * 6)
+    this.ensurePools(g.nodes.length)
     this.hover = this.selected = -1
     this.hoverSet.clear()
     this.treeStale = true
-    this.dirtyPos = this.dirtyStyle = this.dirtyCam = this.dirtyHi = true
     for (const r of this.rings) r.g.destroy()
     this.rings = []
-    if (oldIds.length === 0) this.fit()
+    this.clearArbors()
+    this.rebuildBuckets()
+    this.dirtyPos = this.dirtyStyle = this.dirtyCam = this.dirtyHi = true
+    if (first) this.fit()
     this.request()
   }
 
@@ -181,8 +228,14 @@ export class GraphRenderer {
   }
 
   setStyle(s: GraphStyle): void {
+    const key = s.groupColors.join(',')
     this.style = s
     this.dirtyStyle = true
+    if (key !== this.colorKey) {
+      this.colorKey = key
+      this.clearArbors()
+      this.rebuildBuckets()
+    }
     this.request()
   }
 
@@ -203,11 +256,13 @@ export class GraphRenderer {
     this.request()
   }
 
+  /** Notes that just appeared or changed: their neurons fire and a ring spreads out. */
   pulse(ids: readonly string[]): void {
     const now = performance.now()
     for (const id of ids.slice(0, 40)) {
       const i = this.graph.index.get(id)
       if (i === undefined) continue
+      this.fire(i, 3)
       const g = new Graphics()
       this.ringLayer.addChild(g)
       this.rings.push({ i, t0: now, g })
@@ -216,7 +271,23 @@ export class GraphRenderer {
     this.request()
   }
 
-  /** Frames the bulk of the graph (2nd to 98th percentile, so a few far-away nodes do not shrink everything). */
+  /** Makes a neuron fire and sends signals along some of its links. Without an id a well connected one is picked. */
+  fire(id?: number, hops = 5): void {
+    const nodes = this.graph.nodes
+    if (nodes.length === 0) return
+    let i = id ?? -1
+    if (i < 0) {
+      const pool = nodes.map((n, k) => (n.degree > 3 ? k : -1)).filter((k) => k >= 0)
+      const from = pool.length ? pool : nodes.map((_, k) => k)
+      i = from[Math.floor(Math.random() * from.length)]!
+    }
+    this.fireV[i] = 1
+    const es = this.adjE[i]!.slice().sort(() => Math.random() - 0.5).slice(0, 4)
+    for (const e of es) if (this.signals.length < MAX_SIGNALS) this.signals.push({ e, from: i, t: 0, sp: 0.55 + Math.random() * 0.4, hops: hops - 1 })
+    this.request()
+  }
+
+  /** Frames the bulk of the graph (2nd to 98th percentile, so a few far-away neurons do not shrink everything). */
   fit(): void {
     const n = this.graph.nodes.length
     if (n === 0 || !this.app) return
@@ -230,20 +301,19 @@ export class GraphRenderer {
     ys.sort((a, b) => a - b)
     const q = (a: number[], p: number): number => a[Math.min(a.length - 1, Math.max(0, Math.floor(p * (a.length - 1))))]!
     const lo = n > 50 ? 0.02 : 0
-    const x0 = q(xs, lo)
-    const x1 = q(xs, 1 - lo)
-    const y0 = q(ys, lo)
-    const y1 = q(ys, 1 - lo)
+    const margin = reachOf(4, this.style.nodeSize * this.density) * 0.7
+    const x0 = q(xs, lo) - margin
+    const x1 = q(xs, 1 - lo) + margin
+    const y0 = q(ys, lo) - margin
+    const y1 = q(ys, 1 - lo) + margin
     const { w, h } = this.size
-    const bw = Math.max(40, x1 - x0) * 1.2
-    const bh = Math.max(40, y1 - y0) * 1.2
-    const k = Math.min(w / bw, h / bh, 2.5)
+    const k = Math.min(w / Math.max(40, x1 - x0), h / Math.max(40, y1 - y0), 2.5) * 0.94
     this.cam = { k, x: w / 2 - ((x0 + x1) / 2) * k, y: h / 2 - ((y0 + y1) / 2) * k }
     this.dirtyCam = true
     this.request()
   }
 
-  /** Node centres in canvas pixels; used by the end-to-end tests to click on nodes. */
+  /** Node centres in canvas pixels and world units; used by the end-to-end tests to click on nodes. */
   screenPositions(): { id: string; x: number; y: number; wx: number; wy: number; wr: number }[] {
     return this.graph.nodes.map((n, i) => ({
       id: n.id,
@@ -251,7 +321,7 @@ export class GraphRenderer {
       y: this.pos[i * 2 + 1]! * this.cam.k + this.cam.y,
       wx: this.pos[i * 2]!,
       wy: this.pos[i * 2 + 1]!,
-      wr: this.radiusOf(i)
+      wr: this.somaOf(i)
     }))
   }
 
@@ -260,59 +330,190 @@ export class GraphRenderer {
     return this.labels.filter((t) => t.visible && t.alpha > 0).map((t) => t.text)
   }
 
-  // ---- drawing ------------------------------------------------------------
-
-  private request(): void {
-    if (this.destroyed || this.scheduled) return
-    this.scheduled = requestAnimationFrame(() => {
-      this.scheduled = 0
-      this.frame()
-    })
+  /** How many signals are travelling and how many neurons are lit; used by the end-to-end tests. */
+  activity(): { signals: number; lit: number } {
+    let lit = 0
+    for (const v of this.fireV) if (v > 0.05) lit++
+    return { signals: this.signals.length, lit }
   }
 
-  private nodeColor(n: GNode): number {
+  // ---- geometry helpers ---------------------------------------------------
+
+  private scale(): number {
+    return this.style.nodeSize * this.density
+  }
+
+  private somaOf(i: number): number {
+    return somaRadius(this.graph.nodes[i]!.degree, this.scale())
+  }
+
+  private colorOf(n: GNode): number {
     if (n.group >= 0 && this.style.groupColors[n.group]) return hex(this.style.groupColors[n.group]!)
-    return COLORS[n.kind]
+    return NEUTRAL[n.kind]
   }
 
-  private radiusOf(i: number): number {
-    return nodeRadius(this.graph.nodes[i]!.degree, this.style.nodeSize * this.density)
+  private glowTexture(color: number): Texture {
+    let t = this.glowTex.get(color)
+    if (t) return t
+    const c = document.createElement('canvas')
+    c.width = c.height = GLOW
+    const g = c.getContext('2d')!
+    const gr = g.createRadialGradient(GLOW / 2, GLOW / 2, 0, GLOW / 2, GLOW / 2, GLOW / 2)
+    gr.addColorStop(0, 'rgba(255,255,255,1)')
+    gr.addColorStop(0.16, css(color, 0.95))
+    gr.addColorStop(0.4, css(color, 0.3))
+    gr.addColorStop(1, css(color, 0))
+    g.fillStyle = gr
+    g.fillRect(0, 0, GLOW, GLOW)
+    t = Texture.from(c)
+    this.glowTex.set(color, t)
+    return t
   }
 
-  private rebuildEdgeGeometry(): void {
-    for (const m of [this.edgeMesh, this.arrowMesh]) {
-      if (m) {
-        this.world.removeChild(m)
-        m.destroy()
+  private ensurePools(n: number): void {
+    while (this.glows.length < n) {
+      const glow = new Sprite(this.glowTexture(NEUTRAL.note))
+      glow.anchor.set(0.5)
+      glow.blendMode = 'add'
+      this.glowLayer.addChild(glow)
+      this.glows.push(glow)
+      const disc = new Sprite(this.tex)
+      disc.anchor.set(0.5)
+      this.discLayer.addChild(disc)
+      this.discs.push(disc)
+      const core = new Sprite(this.tex)
+      core.anchor.set(0.5)
+      core.tint = WHITE
+      this.coreLayer.addChild(core)
+      this.cores.push(core)
+    }
+    for (let i = 0; i < this.glows.length; i++) {
+      const on = i < n
+      this.glows[i]!.visible = this.discs[i]!.visible = this.cores[i]!.visible = on
+    }
+  }
+
+  // ---- dendrites ----------------------------------------------------------
+
+  private clearArbors(): void {
+    for (const g of this.arbors.values()) g.destroy()
+    this.arbors.clear()
+  }
+
+  /** A neuron's dendrite tree: a few thick branches from the soma that fork into thinner ones. Hubs fork once more. */
+  private buildArbor(i: number): Graphics {
+    const n = this.graph.nodes[i]!
+    const r = rng(Math.imul(i + 1, 2654435761) >>> 0)
+    const rs = somaRadius(n.degree, 1)
+    const levels: Seg[][] = [[], [], [], [], []]
+    const L0 = 13 + 6.5 * Math.sqrt(n.degree + 1)
+    const nprim = 4 + Math.floor(r() * 3)
+    const dmax = n.degree > 8 ? 4 : 3
+    const grow = (x: number, y: number, a: number, len: number, d: number): void => {
+      const bend = (r() - 0.5) * 0.35
+      const x2 = x + Math.cos(a + bend) * len
+      const y2 = y + Math.sin(a + bend) * len
+      levels[d]!.push([x, y, x2, y2])
+      if (d >= dmax) return
+      for (let k = 0; k < 2; k++) grow(x2, y2, a + (k ? 1 : -1) * (0.35 + r() * 0.55), len * (0.66 + r() * 0.13), d + 1)
+    }
+    for (let k = 0; k < nprim; k++) {
+      const a = (k / nprim) * Math.PI * 2 + r() * 0.6
+      grow(Math.cos(a) * rs, Math.sin(a) * rs, a, L0, 0)
+    }
+    const color = this.colorOf(n)
+    const widths = [2.2, 1.6, 1.15, 0.8, 0.6]
+    const g = new Graphics()
+    levels.forEach((segs, lv) => {
+      if (!segs.length) return
+      for (const s of segs) g.moveTo(s[0], s[1]).lineTo(s[2], s[3])
+      g.stroke({ width: widths[lv]!, color, alpha: 0.62 - lv * 0.08, cap: 'round' })
+    })
+    return g
+  }
+
+  private updateArbors(): void {
+    const { k, x, y } = this.cam
+    const { w, h } = this.size
+    const sc = this.scale()
+    const want: number[] = []
+    for (const i of this.order) {
+      const n = this.graph.nodes[i]!
+      if (n.kind !== 'note') continue
+      const reach = reachOf(n.degree, sc)
+      if (reach * k < 14) continue
+      const sx = this.pos[i * 2]! * k + x
+      const sy = this.pos[i * 2 + 1]! * k + y
+      const m = reach * k
+      if (sx < -m || sy < -m || sx > w + m || sy > h + m) continue
+      want.push(i)
+      if (want.length >= MAX_ARBORS) break
+    }
+    const keep = new Set(want)
+    for (const [i, g] of this.arbors) {
+      if (keep.has(i)) continue
+      g.visible = false
+      if (this.arbors.size > MAX_ARBORS * 2) {
+        g.destroy()
+        this.arbors.delete(i)
       }
     }
-    this.edgeMesh = this.arrowMesh = null
-    const e = this.graph.edges.length
-    if (e === 0) return
-    const idx = new Uint32Array(e * 6)
-    for (let i = 0; i < e; i++) idx.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4 + 1, i * 4 + 3, i * 4 + 2], i * 6)
-    const geo = new MeshGeometry({ positions: new Float32Array(e * 8), uvs: new Float32Array(e * 8), indices: idx })
-    this.edgeMesh = new Mesh({ geometry: geo, texture: Texture.WHITE })
-    this.edgeMesh.tint = COLORS.edge
-    this.world.addChildAt(this.edgeMesh, 0)
-    if (e <= ARROW_EDGE_LIMIT) {
-      const aidx = new Uint32Array(e * 3)
-      for (let i = 0; i < e; i++) aidx.set([i * 3, i * 3 + 1, i * 3 + 2], i * 3)
-      const ageo = new MeshGeometry({ positions: new Float32Array(e * 6), uvs: new Float32Array(e * 6), indices: aidx })
-      this.arrowMesh = new Mesh({ geometry: ageo, texture: Texture.WHITE })
-      this.arrowMesh.tint = COLORS.edge
-      this.arrowMesh.visible = false
-      this.world.addChildAt(this.arrowMesh, 1)
+    for (const i of want) {
+      let g = this.arbors.get(i)
+      if (!g) {
+        g = this.buildArbor(i)
+        this.arborLayer.addChild(g)
+        this.arbors.set(i, g)
+      }
+      const dim = this.hover >= 0 ? (this.hoverSet.has(i) ? 1 : 0.22) : 1
+      g.visible = true
+      g.position.set(this.pos[i * 2]!, this.pos[i * 2 + 1]!)
+      g.scale.set(sc)
+      g.alpha = clamp(dim * (1 + this.fireV[i]! * 0.7), 0, 1)
     }
   }
 
-  private updateEdges(): void {
-    const mesh = this.edgeMesh
-    if (!mesh) return
+  // ---- links --------------------------------------------------------------
+
+  private rebuildBuckets(): void {
+    for (const b of this.buckets) {
+      this.edgeLayer.removeChild(b.mesh)
+      b.mesh.destroy()
+    }
+    this.buckets = []
+    const nodes = this.graph.nodes
+    const lists = new Map<number, number[]>()
+    this.graph.edges.forEach((e, i) => {
+      for (const [h, c] of [
+        [0, this.colorOf(nodes[e.s]!)],
+        [1, this.colorOf(nodes[e.t]!)]
+      ] as const) {
+        const l = lists.get(c) ?? []
+        l.push(i * 2 + h)
+        lists.set(c, l)
+      }
+    })
+    for (const [color, list] of lists) {
+      const m = list.length
+      const idx = new Uint32Array(m * SEGMENTS * 6)
+      for (let k = 0; k < m; k++) {
+        for (let s = 0; s < SEGMENTS; s++) {
+          const v = k * (SEGMENTS + 1) * 2 + s * 2
+          idx.set([v, v + 1, v + 2, v + 1, v + 3, v + 2], (k * SEGMENTS + s) * 6)
+        }
+      }
+      const geo = new MeshGeometry({ positions: new Float32Array(m * (SEGMENTS + 1) * 4), uvs: new Float32Array(m * (SEGMENTS + 1) * 4), indices: idx })
+      const mesh = new Mesh({ geometry: geo, texture: Texture.WHITE })
+      mesh.tint = color
+      this.edgeLayer.addChild(mesh)
+      this.buckets.push({ color, entries: Int32Array.from(list), mesh })
+    }
+  }
+
+  /** Control points of every link: it starts at the edge of the first soma, bends a little and ends at the next one. */
+  private updateCtrl(): void {
     const k = this.cam.k
-    const half = Math.max(0.3, this.style.linkWidth * 0.65) / k / 2
     const p = this.pos
-    const out = mesh.geometry.positions
     const edges = this.graph.edges
     for (let i = 0; i < edges.length; i++) {
       const e = edges[i]!
@@ -320,104 +521,238 @@ export class GraphRenderer {
       const y1 = p[e.s * 2 + 1]!
       const x2 = p[e.t * 2]!
       const y2 = p[e.t * 2 + 1]!
-      let dx = y2 - y1
-      let dy = x1 - x2
-      const len = Math.hypot(dx, dy) || 1
-      dx = (dx / len) * half
-      dy = (dy / len) * half
-      const o = i * 8
-      out[o] = x1 + dx
-      out[o + 1] = y1 + dy
-      out[o + 2] = x1 - dx
-      out[o + 3] = y1 - dy
-      out[o + 4] = x2 + dx
-      out[o + 5] = y2 + dy
-      out[o + 6] = x2 - dx
-      out[o + 7] = y2 - dy
+      const dx = x2 - x1
+      const dy = y2 - y1
+      const L = Math.hypot(dx, dy) || 1
+      const ra = Math.max(this.somaOf(e.s), 1.1 / k)
+      const rb = Math.max(this.somaOf(e.t), 1.1 / k) + 2
+      const ax = x1 + (dx / L) * ra
+      const ay = y1 + (dy / L) * ra
+      const bx = x2 - (dx / L) * rb
+      const by = y2 - (dy / L) * rb
+      const c = this.curv[i]!
+      const o = i * 6
+      this.ctrl[o] = ax
+      this.ctrl[o + 1] = ay
+      this.ctrl[o + 2] = bx
+      this.ctrl[o + 3] = by
+      this.ctrl[o + 4] = (ax + bx) / 2 - (by - ay) * c
+      this.ctrl[o + 5] = (ay + by) / 2 + (bx - ax) * c
     }
-    mesh.geometry.getBuffer('aPosition').update()
-    mesh.alpha = this.hover >= 0 ? 0.05 : this.edgeAlpha
+  }
 
-    const am = this.arrowMesh
-    if (am) {
-      am.visible = this.style.arrows
-      if (this.style.arrows) {
-        const ap = am.geometry.positions
-        for (let i = 0; i < edges.length; i++) {
-          const e = edges[i]!
-          const x1 = p[e.s * 2]!
-          const y1 = p[e.s * 2 + 1]!
-          const x2 = p[e.t * 2]!
-          const y2 = p[e.t * 2 + 1]!
-          const dx = x2 - x1
-          const dy = y2 - y1
-          const len = Math.hypot(dx, dy) || 1
-          const ux = dx / len
-          const uy = dy / len
-          const r = this.radiusOf(e.t) + 1 / k
-          const tipx = x2 - ux * r
-          const tipy = y2 - uy * r
-          const size = 7 / k
-          const o = i * 6
-          ap[o] = tipx
-          ap[o + 1] = tipy
-          ap[o + 2] = tipx - ux * size + -uy * size * 0.45
-          ap[o + 3] = tipy - uy * size + ux * size * 0.45
-          ap[o + 4] = tipx - ux * size - -uy * size * 0.45
-          ap[o + 5] = tipy - uy * size - ux * size * 0.45
+  private updateEdges(): void {
+    this.updateCtrl()
+    const k = this.cam.k
+    const hw = Math.max(0.3, this.style.linkWidth * 0.9) / k / 2
+    const c = this.ctrl
+    for (const b of this.buckets) {
+      const out = b.mesh.geometry.positions
+      let o = 0
+      for (let n = 0; n < b.entries.length; n++) {
+        const code = b.entries[n]!
+        const e = code >> 1
+        const half = code & 1
+        const q = e * 6
+        const ax = c[q]!
+        const ay = c[q + 1]!
+        const bx = c[q + 2]!
+        const by = c[q + 3]!
+        const cx = c[q + 4]!
+        const cy = c[q + 5]!
+        for (let s = 0; s <= SEGMENTS; s++) {
+          const t = half * 0.5 + (s / SEGMENTS) * 0.5
+          const u = 1 - t
+          const px = u * u * ax + 2 * u * t * cx + t * t * bx
+          const py = u * u * ay + 2 * u * t * cy + t * t * by
+          let tx = 2 * u * (cx - ax) + 2 * t * (bx - cx)
+          let ty = 2 * u * (cy - ay) + 2 * t * (by - cy)
+          const len = Math.hypot(tx, ty) || 1
+          tx = (tx / len) * hw
+          ty = (ty / len) * hw
+          out[o++] = px - ty
+          out[o++] = py + tx
+          out[o++] = px + ty
+          out[o++] = py - tx
         }
-        am.geometry.getBuffer('aPosition').update()
-        am.alpha = this.hover >= 0 ? 0.07 : Math.min(0.8, this.edgeAlpha + 0.2)
+      }
+      b.mesh.geometry.getBuffer('aPosition').update()
+      b.mesh.alpha = this.hover >= 0 ? 0.06 : this.edgeAlpha
+    }
+  }
+
+  private quad(e: number, t: number): [number, number] {
+    const c = this.ctrl
+    const q = e * 6
+    const u = 1 - t
+    return [u * u * c[q]! + 2 * u * t * c[q + 4]! + t * t * c[q + 2]!, u * u * c[q + 1]! + 2 * u * t * c[q + 5]! + t * t * c[q + 3]!]
+  }
+
+  /** The synapse dots where a link ends, and the highlighted links of the neuron under the pointer. */
+  private drawLinkDetails(): void {
+    const k = this.cam.k
+    const { w, h } = this.size
+    const syn = this.synGfx
+    syn.clear()
+    const edges = this.graph.edges
+    const nodes = this.graph.nodes
+    if ((k > 1.1 || this.style.arrows) && edges.length > 0) {
+      let drawn = 0
+      const dim = this.hover >= 0
+      for (let i = 0; i < edges.length && drawn < MAX_SYNAPSES; i++) {
+        const q = i * 6
+        const sx = this.ctrl[q + 2]! * k + this.cam.x
+        const sy = this.ctrl[q + 3]! * k + this.cam.y
+        if (sx < -10 || sy < -10 || sx > w + 10 || sy > h + 10) continue
+        const e = edges[i]!
+        const col = this.colorOf(nodes[e.t]!)
+        const a = dim ? 0.08 : 0.8
+        syn.circle(this.ctrl[q + 2]!, this.ctrl[q + 3]!, 2.3).fill({ color: col, alpha: a })
+        for (const t of [0.9, 0.95]) {
+          const p = this.quad(i, t)
+          syn.circle(p[0], p[1], 1.1).fill({ color: col, alpha: a })
+        }
+        drawn++
+      }
+    }
+    const hl = this.hiLines
+    hl.clear()
+    if (this.hover >= 0) {
+      const col = ACCENT
+      for (const i of this.adjE[this.hover]!) {
+        const q = i * 6
+        hl.moveTo(this.ctrl[q]!, this.ctrl[q + 1]!).quadraticCurveTo(this.ctrl[q + 4]!, this.ctrl[q + 5]!, this.ctrl[q + 2]!, this.ctrl[q + 3]!)
+      }
+      hl.stroke({ width: 1.6 / k, color: col, alpha: 0.95 })
+      for (const i of this.adjE[this.hover]!) {
+        const q = i * 6
+        hl.circle(this.ctrl[q + 2]!, this.ctrl[q + 3]!, 2.6).fill({ color: col, alpha: 0.95 })
       }
     }
   }
+
+  // ---- signals and firing -------------------------------------------------
+
+  private updateSignals(dt: number): void {
+    const S = this.signals
+    const f = this.fireV
+    for (let i = 0; i < f.length; i++) if (f[i]! > 0) f[i] = Math.max(0, f[i]! - dt)
+    for (let i = S.length - 1; i >= 0; i--) {
+      const s = S[i]!
+      s.t += s.sp * dt
+      if (s.t < 1) continue
+      const e = this.graph.edges[s.e]!
+      const to = e.s === s.from ? e.t : e.s
+      f[to] = 1
+      if (s.hops > 0 && Math.random() < 0.8) {
+        const next = this.adjE[to]!.filter((x) => x !== s.e).sort(() => Math.random() - 0.5).slice(0, 2)
+        for (const x of next) if (S.length < MAX_SIGNALS) S.push({ e: x, from: to, t: 0, sp: 0.55 + Math.random() * 0.4, hops: s.hops - 1 })
+      }
+      S[i] = S[S.length - 1]!
+      S.pop()
+    }
+    if (this.style.motion && this.graph.nodes.length > 0) {
+      this.ambientT -= dt
+      if (this.ambientT <= 0) {
+        this.ambientT = 0.5 + Math.random() * 0.7
+        const pool = this.recent.length && Math.random() < 0.6 ? this.recent : this.graph.nodes.map((n, i) => (n.degree > 0 ? i : -1)).filter((i) => i >= 0)
+        if (pool.length) this.fire(pool[Math.floor(Math.random() * pool.length)]!, 4)
+      }
+    }
+  }
+
+  private drawSignals(): void {
+    let used = 0
+    const k = this.cam.k
+    for (const s of this.signals) {
+      const e = this.graph.edges[s.e]!
+      const col = this.colorOf(this.graph.nodes[s.from]!)
+      const t = e.s === s.from ? s.t : 1 - s.t
+      for (let q = 0; q < 4; q++) {
+        const tt = t - (e.s === s.from ? 1 : -1) * q * 0.018
+        if (tt < 0 || tt > 1) continue
+        let sp = this.sigSprites[used]
+        if (!sp) {
+          sp = new Sprite(this.glowTexture(col))
+          sp.anchor.set(0.5)
+          sp.blendMode = 'add'
+          this.signalLayer.addChild(sp)
+          this.sigSprites.push(sp)
+        }
+        used++
+        const p = this.quad(s.e, tt)
+        const size = Math.max(14, 7 / k) * (1 - q * 0.2)
+        sp.texture = this.glowTexture(col)
+        sp.visible = true
+        sp.alpha = 1 - q * 0.25
+        sp.position.set(p[0], p[1])
+        sp.scale.set(size / GLOW)
+      }
+    }
+    for (let i = used; i < this.sigSprites.length; i++) this.sigSprites[i]!.visible = false
+  }
+
+  // ---- nodes --------------------------------------------------------------
 
   private updateNodes(): void {
     const k = this.cam.k
     const p = this.pos
     const nodes = this.graph.nodes
+    const dimOn = this.hover >= 0
     for (let i = 0; i < nodes.length; i++) {
-      const s = this.sprites[i]!
-      s.position.set(p[i * 2]!, p[i * 2 + 1]!)
-      if (this.dirtyStyle || this.dirtyCam) {
-        const r = Math.max(this.radiusOf(i), 1.1 / k)
-        s.scale.set((r * 2) / TEX)
-      }
-      if (this.dirtyStyle) {
-        s.tint = this.nodeColor(nodes[i]!)
-      }
+      const n = nodes[i]!
+      const f = this.fireV[i]!
+      const color = this.colorOf(n)
+      const rs = Math.max(this.somaOf(i), 1.1 / k)
+      const dim = dimOn ? (this.hoverSet.has(i) ? 1 : 0.22) : n.kind === 'ghost' ? 0.7 : 1
+      const note = n.kind === 'note'
+      const glow = this.glows[i]!
+      const disc = this.discs[i]!
+      const core = this.cores[i]!
+      const x = p[i * 2]!
+      const y = p[i * 2 + 1]!
+      glow.position.set(x, y)
+      disc.position.set(x, y)
+      core.position.set(x, y)
+      const gs = Math.max(rs * ((note ? 6 : 4.5) + f * 5), 5 / k)
+      glow.scale.set(gs / GLOW)
+      glow.alpha = dim * (0.8 + f * 0.2)
+      const dr = rs * (1 + f * 0.25)
+      disc.scale.set((dr * 2) / TEX)
+      disc.tint = i === this.hover ? ACCENT : color
+      disc.alpha = dim
+      core.scale.set((dr * 0.84) / TEX)
+      core.alpha = dim * clamp(0.5 + f * 0.5, 0, 1)
+      if (this.dirtyStyle) glow.texture = this.glowTexture(color)
     }
   }
 
-  private updateHighlight(): void {
-    const nodes = this.graph.nodes
-    const dim = this.hover >= 0
-    for (let i = 0; i < nodes.length; i++) {
-      const base = nodes[i]!.kind === 'ghost' ? 0.7 : 1
-      const s = this.sprites[i]!
-      s.alpha = dim ? (this.hoverSet.has(i) ? 1 : 0.1) : base
-      // the node under the pointer takes the accent colour; its neighbours keep their own
-      s.tint = i === this.hover ? COLORS.accent : this.nodeColor(nodes[i]!)
+  private updateRecent(now: number): boolean {
+    const g = this.recentGfx
+    g.clear()
+    if (this.recent.length === 0) return false
+    const { k, x, y } = this.cam
+    const { w, h } = this.size
+    let any = false
+    const t = now / 1000
+    for (const i of this.recent) {
+      const sx = this.pos[i * 2]! * k + x
+      const sy = this.pos[i * 2 + 1]! * k + y
+      if (sx < -30 || sy < -30 || sx > w + 30 || sy > h + 30) continue
+      const dim = this.hover >= 0 ? (this.hoverSet.has(i) ? 1 : 0.22) : 1
+      const rs = Math.max(this.somaOf(i), 1.1 / k)
+      g.circle(this.pos[i * 2]!, this.pos[i * 2 + 1]!, rs * (1.9 + 0.5 * Math.sin(t * 2.2 + i))).stroke({ width: 1 / k, color: this.colorOf(this.graph.nodes[i]!), alpha: 0.55 * dim })
+      any = true
     }
+    return any
   }
 
-  private drawOverlays(): void {
-    const k = this.cam.k
-    const hl = this.hiLines
-    hl.clear()
-    if (this.hover >= 0) {
-      const w = 1.3 / k
-      for (const e of this.graph.edges) {
-        if (e.s !== this.hover && e.t !== this.hover) continue
-        hl.moveTo(this.pos[e.s * 2]!, this.pos[e.s * 2 + 1]!).lineTo(this.pos[e.t * 2]!, this.pos[e.t * 2 + 1]!)
-      }
-      hl.stroke({ width: w, color: COLORS.accent, alpha: 0.95 })
-    }
+  private drawSelection(): void {
     const sr = this.selRing
     sr.clear()
     if (this.selected >= 0) {
-      const r = Math.max(this.radiusOf(this.selected), 1.1 / k) + 3 / k
-      sr.circle(this.pos[this.selected * 2]!, this.pos[this.selected * 2 + 1]!, r).stroke({ width: 1.1 / k, color: COLORS.hi })
+      const r = Math.max(this.somaOf(this.selected), 1.1 / this.cam.k) * 1.6 + 3 / this.cam.k
+      sr.circle(this.pos[this.selected * 2]!, this.pos[this.selected * 2 + 1]!, r).stroke({ width: 1.3 / this.cam.k, color: WHITE })
     }
   }
 
@@ -430,9 +765,9 @@ export class GraphRenderer {
         r.g.destroy()
         return false
       }
-      const base = Math.max(this.radiusOf(r.i), 1.1 / k)
+      const base = Math.max(this.somaOf(r.i), 1.1 / k)
       r.g.clear()
-      r.g.circle(this.pos[r.i * 2]!, this.pos[r.i * 2 + 1]!, base * (1 + age * 3.5)).stroke({ width: 2 / k, color: COLORS.pulse, alpha: 1 - age })
+      r.g.circle(this.pos[r.i * 2]!, this.pos[r.i * 2 + 1]!, base * (1.5 + age * 5)).stroke({ width: 2 / k, color: this.colorOf(this.graph.nodes[r.i]!), alpha: 1 - age })
       live = true
       return true
     })
@@ -443,14 +778,11 @@ export class GraphRenderer {
     const { k, x, y } = this.cam
     const { w, h } = this.size
     const threshold = 0.25 + this.style.labelFade * 1.6
-    const base = Math.max(0, Math.min(1, (k - threshold * 0.6) / (threshold * 0.8)))
+    const base = clamp((k - threshold * 0.6) / (threshold * 0.8), 0, 1)
     const wanted: { i: number; a: number; hot?: boolean }[] = []
     const seen = new Set<number>()
-    // Under the pointer only that node is named, in white; its neighbours stay lit and everything else is dimmed.
-    if (this.hover >= 0) {
-      wanted.push({ i: this.hover, a: 1, hot: true })
-      seen.add(this.hover)
-    } else if (this.selected >= 0) {
+    // While the pointer is on a neuron the card names it, so no other label competes with it.
+    if (this.hover < 0 && this.selected >= 0) {
       wanted.push({ i: this.selected, a: 1, hot: true })
       seen.add(this.selected)
     }
@@ -458,7 +790,7 @@ export class GraphRenderer {
       let scanned = 0
       for (const i of this.order) {
         if (wanted.length >= MAX_LABELS || scanned++ > 2500) break
-        if (seen.has(i)) continue
+        if (seen.has(i) || this.graph.nodes[i]!.degree < 4) continue
         const sx = this.pos[i * 2]! * k + x
         const sy = this.pos[i * 2 + 1]! * k + y
         if (sx < -20 || sy < -20 || sx > w + 20 || sy > h + 20) continue
@@ -466,7 +798,7 @@ export class GraphRenderer {
       }
     }
     while (this.labels.length < wanted.length) {
-      const t = new Text({ text: '', style: { fill: 0xf8f8f2, fontSize: 11, fontFamily: 'JetBrains Mono, monospace' } })
+      const t = new Text({ text: '', style: { fill: 0xffffff, fontSize: 11, fontFamily: 'JetBrains Mono, monospace' } })
       t.anchor.set(0.5, 0)
       this.labelLayer.addChild(t)
       this.labels.push(t)
@@ -479,33 +811,53 @@ export class GraphRenderer {
         continue
       }
       const n = this.graph.nodes[wnt.i]!
-      if (t.text !== n.label) t.text = n.label.length > 36 ? n.label.slice(0, 35) + '…' : n.label
+      const text = n.label.length > 30 ? n.label.slice(0, 29) + '…' : n.label
+      if (t.text !== text) t.text = text
       t.visible = true
       t.alpha = wnt.a
-      t.tint = wnt.hot ? 0xffffff : this.hover >= 0 ? 0xb4b9d6 : 0xf8f8f2
-      t.scale.set(wnt.hot ? 1.15 : 1)
-      const r = Math.max(this.radiusOf(wnt.i), 1.1 / k) * k
-      t.position.set(this.pos[wnt.i * 2]! * k + x, this.pos[wnt.i * 2 + 1]! * k + y + r + 2)
+      t.tint = wnt.hot ? 0xffffff : 0xcdd2e8
+      const r = Math.max(this.somaOf(wnt.i), 1.1 / k) * k
+      t.position.set(this.pos[wnt.i * 2]! * k + x, this.pos[wnt.i * 2 + 1]! * k + y + r + 4)
     }
   }
 
-  private frame(): void {
+  // ---- frame --------------------------------------------------------------
+
+  private request(): void {
+    if (this.destroyed || this.scheduled) return
+    this.scheduled = requestAnimationFrame((t) => {
+      this.scheduled = 0
+      this.frame(t)
+    })
+  }
+
+  private frame(now: number): void {
     if (this.destroyed || !this.app) return
-    const t0 = performance.now()
+    const dirty = this.dirtyPos || this.dirtyCam || this.dirtyStyle || this.dirtyHi
+    const animating = this.signals.length > 0 || this.rings.length > 0 || this.recent.length > 0 || (this.style.motion && this.graph.nodes.length > 0)
+    // idle animation runs at about 30 fps; anything the reader does is drawn at once
+    if (!dirty && now - this.lastFrame < FRAME_MS) {
+      if (animating) this.request()
+      return
+    }
+    const dt = this.lastFrame ? Math.min(0.05, (now - this.lastFrame) / 1000) : 0.016
+    this.lastFrame = now
     this.world.position.set(this.cam.x, this.cam.y)
     this.world.scale.set(this.cam.k)
-    if (this.dirtyPos || this.dirtyCam || this.dirtyStyle) {
-      this.updateEdges()
-      this.updateNodes()
-    }
-    if (this.dirtyHi || this.dirtyStyle || this.dirtyPos || this.dirtyCam) this.updateHighlight()
-    this.drawOverlays()
-    const live = this.updateRings(t0)
+    this.updateSignals(dt)
+    if (this.dirtyPos || this.dirtyCam || this.dirtyStyle) this.updateEdges()
+    this.drawLinkDetails()
+    this.drawSignals()
+    this.updateArbors()
+    this.updateNodes()
+    const recentLive = this.updateRecent(now)
+    const ringsLive = this.updateRings(now)
+    this.drawSelection()
     this.updateLabels()
     this.dirtyPos = this.dirtyCam = this.dirtyStyle = this.dirtyHi = false
     this.app.render()
     this.frames++
-    if (live) this.request()
+    if (this.signals.length > 0 || ringsLive || recentLive || this.fireV.some((v) => v > 0) || (this.style.motion && this.graph.nodes.length > 0)) this.request()
   }
 
   // ---- input --------------------------------------------------------------
@@ -525,11 +877,11 @@ export class GraphRenderer {
       this.treeStale = false
     }
     const [wx, wy] = this.toWorld(sx, sy)
-    const slack = 4 / this.cam.k
-    const i = this.tree.find(wx, wy, 24 + slack)
+    const slack = 5 / this.cam.k
+    const i = this.tree.find(wx, wy, 40 + slack)
     if (i === undefined) return -1
     const d = Math.hypot(this.pos[i * 2]! - wx, this.pos[i * 2 + 1]! - wy)
-    return d <= Math.max(this.radiusOf(i), 1.6 / this.cam.k) + slack ? i : -1
+    return d <= Math.max(this.somaOf(i), 1.1 / this.cam.k) + slack ? i : -1
   }
 
   private bindEvents(el: HTMLCanvasElement): void {
@@ -549,7 +901,7 @@ export class GraphRenderer {
       if (m.kind === 'pan') {
         m.moved += Math.abs(sx - m.x) + Math.abs(sy - m.y)
         if (m.moved > 4) this.userMoved = true
-      this.cam.x += sx - m.x
+        this.cam.x += sx - m.x
         this.cam.y += sy - m.y
         m.x = sx
         m.y = sy
@@ -565,9 +917,8 @@ export class GraphRenderer {
         }
       } else {
         const i = this.hit(sx, sy)
-        const id = i >= 0 ? this.graph.nodes[i]!.id : null
         el.style.cursor = i >= 0 ? 'pointer' : 'grab'
-        this.h.onHover(id)
+        this.h.onHover(i >= 0 ? this.graph.nodes[i]!.id : null, { x: sx, y: sy })
       }
     }
     const up = (e: PointerEvent): void => {
@@ -576,17 +927,19 @@ export class GraphRenderer {
       if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId)
       if (m.kind === 'node') {
         this.sink?.release(m.i)
-        if (m.moved <= 4) this.h.onSelect(this.graph.nodes[m.i]!.id)
+        if (m.moved <= 4) {
+          this.fire(m.i, 5)
+          this.h.onSelect(this.graph.nodes[m.i]!.id)
+        }
       } else if (m.kind === 'pan' && m.moved <= 4) this.h.onSelect(null)
     }
     const leave = (): void => {
       if (this.mode.kind === 'none') this.h.onHover(null)
     }
     const wheel = (e: WheelEvent): void => {
-      if (this.opts.mini) return
       e.preventDefault()
       const [sx, sy] = local(e)
-      const k = Math.min(MAX_K, Math.max(MIN_K, this.cam.k * Math.exp(-e.deltaY * 0.0015)))
+      const k = clamp(this.cam.k * Math.exp(-e.deltaY * 0.0015), MIN_K, MAX_K)
       const [wx, wy] = this.toWorld(sx, sy)
       this.userMoved = true
       this.cam = { k, x: sx - wx * k, y: sy - wy * k }
