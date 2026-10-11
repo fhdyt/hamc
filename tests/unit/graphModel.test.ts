@@ -45,6 +45,11 @@ describe('buildGraph', () => {
     expect(g.edges).toHaveLength(5)
   })
 
+  it('labels a missing note by the last part of its path', () => {
+    const g = buildGraph([sampleNote({ id: 'a.md', title: 'a', links: [], ghosts: ['panduan/masalah-yang-sering-ditanya'], tags: [] })], opts())
+    expect(g.nodes.find((n) => n.kind === 'ghost')!.label).toBe('masalah-yang-sering-ditanya')
+  })
+
   it('drops ghosts with existingOnly', () => {
     const g = buildGraph(notes, opts({ existingOnly: true }))
     expect(ids(g)).toEqual(['Alpha.md', 'Index.md', 'folder/Gamma.md'])

@@ -130,7 +130,7 @@ export function buildGraph(notes: Iterable<BrainNote>, opts: GraphOptions): Grap
     for (const t of n.links) if (byId.has(t)) edges.push([n.id, t])
     if (!opts.existingOnly) {
       for (const g of n.ghosts) {
-        addNode({ id: ghostId(g), label: g, kind: 'ghost', mtime: 0 })
+        addNode({ id: ghostId(g), label: g.split('/').pop() || g, kind: 'ghost', mtime: 0 })
         edges.push([n.id, ghostId(g)])
       }
     }

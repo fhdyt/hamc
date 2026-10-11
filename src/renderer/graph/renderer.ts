@@ -29,7 +29,6 @@ export interface DragSink {
 
 const COLORS = { note: 0xa4abc9, ghost: 0x6b7089, tag: 0x50fa7b, attachment: 0xffb86c, edge: 0x8b95bd, hi: 0xf8f8f2, accent: 0xbd93f9, pulse: 0x50fa7b, bg: 0x191a21 }
 const MAX_LABELS = 70
-const MAX_NEIGHBOUR_LABELS = 160
 const TEX = 32
 const MIN_K = 0.03
 const MAX_K = 10
@@ -447,18 +446,10 @@ export class GraphRenderer {
     const base = Math.max(0, Math.min(1, (k - threshold * 0.6) / (threshold * 0.8)))
     const wanted: { i: number; a: number; hot?: boolean }[] = []
     const seen = new Set<number>()
-    // Under the pointer: the node in white and its neighbours in grey, so the names read clearly against the dimmed rest.
+    // Under the pointer only that node is named, in white; its neighbours stay lit and everything else is dimmed.
     if (this.hover >= 0) {
       wanted.push({ i: this.hover, a: 1, hot: true })
       seen.add(this.hover)
-      for (const i of this.hoverSet) {
-        if (seen.has(i) || wanted.length >= MAX_NEIGHBOUR_LABELS) continue
-        const sx = this.pos[i * 2]! * k + x
-        const sy = this.pos[i * 2 + 1]! * k + y
-        if (sx < -20 || sy < -20 || sx > w + 20 || sy > h + 20) continue
-        wanted.push({ i, a: 1 })
-        seen.add(i)
-      }
     } else if (this.selected >= 0) {
       wanted.push({ i: this.selected, a: 1, hot: true })
       seen.add(this.selected)
