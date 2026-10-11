@@ -4,7 +4,7 @@ import { SETTINGS_DEFAULTS, type SettingsMap } from '@shared/settings'
 export type Route =
   | 'connect' | 'launch' | 'dashboard' | 'chat' | 'feed' | 'sessions' | 'kanban' | 'usage' | 'skills' | 'logs' | 'brain' | 'server'
 
-export type SettingsTab = 'general' | 'connection' | 'notifications' | 'alerts' | 'agents' | 'workspace' | 'data' | 'about'
+export type SettingsTab = 'general' | 'connection' | 'notifications' | 'alerts' | 'agents' | 'workspace' | 'uploads' | 'data' | 'about'
 
 interface UiState {
   route: Route

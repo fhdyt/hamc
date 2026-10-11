@@ -94,3 +94,10 @@
 .hm-row[aria-current='true'] { background: #44475a; }
 .hm-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hm-sub { color: #8b95bd; font-size: 11px; }
+
+.up-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; border: 1px solid #44475a; border-radius: 8px; }
+.up-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid #343746; font-size: 12px; }
+.up-row:last-child { border-bottom: 0; }
+.up-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.up-meta { flex: none; color: #8b95bd; font-size: 11px; }
+.up-ask { display: inline-flex; gap: 6px; }
