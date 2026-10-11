@@ -7,6 +7,7 @@ import datetime
 import hashlib
 import json
 import sqlite3
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -121,6 +122,44 @@ def make_multiplex(fx) -> None:
     (fx.home / "profiles" / "scout" / "gateway_state.json").unlink(missing_ok=True)
 
 
+def real_job(**over) -> dict:
+    """A job shaped like the ones observed on a real Hermes v0.21.0 install (see the M2 spec, section 3)."""
+    job = {
+        "id": "09358c101c91", "name": "second-brain-daily-sync", "prompt": "p" * 835, "skills": [], "skill": None,
+        "model": "deepseek-v4-flash", "provider": "deepseek", "provider_snapshot": None, "model_snapshot": None,
+        "base_url": None, "script": None, "no_agent": False, "monitor_script": None, "monitor_url": None,
+        "monitor_state": None, "context_from": None,
+        "schedule": {"kind": "cron", "expr": "0 23 * * *", "display": "0 23 * * *"}, "schedule_display": "0 23 * * *",
+        "repeat": {"times": None, "completed": 39}, "enabled": True, "state": "scheduled",
+        "paused_at": None, "paused_reason": None, "created_at": "2026-09-02T13:56:42.774959+07:00",
+        "next_run_at": "2026-10-11T23:00:00+07:00", "last_run_at": "2026-10-10T23:00:25.600238+07:00",
+        "last_status": "ok", "last_error": None, "last_delivery_error": None, "failure_streak": 0,
+        "deliver": "local", "origin": None, "enabled_toolsets": None, "workdir": None,
+        "last_dispatch": {"scheduled_at": "2026-10-10T23:00:00+07:00", "dispatched_at": "2026-10-10T23:00:22.431462+07:00",
+                          "lateness_seconds": 22.4, "kind": "on_time"},
+        "fire_claim": None,
+    }
+    job.update(over)
+    return job
+
+
+def add_cron_jobs(pdir: Path, jobs, as_list: bool = False, raw: str | None = None) -> None:
+    if raw is not None:
+        w(pdir / "cron" / "jobs.json", raw)
+        return
+    payload = jobs if as_list else {"jobs": jobs, "updated_at": "2026-10-10T23:00:25.600932+07:00"}
+    w(pdir / "cron" / "jobs.json", json.dumps(payload))
+
+
+def add_output(pdir: Path, job_id: str, name: str, text: str = "out\n", loose: bool = False, mtime: float | None = None) -> Path:
+    base = pdir / "cron" / "output"
+    path = base / name if loose else base / job_id / name
+    w(path, text)
+    if mtime is not None:
+        os.utime(path, (mtime, mtime))
+    return path
+
+
 def advance(fx: Fixture, step: int) -> None:
     write_cpu(fx.proc, step)
     write_net(fx.proc, step)
@@ -195,6 +234,16 @@ def make_fixture(root: Path, now: float | None = None) -> Fixture:
     scout = add_profile(home, "scout", display_name="Scout", markers=("config.yaml",))
     write_gateway_state(scout, SCOUT_GATEWAY_PID, updated_at=now, platforms={"telegram": {"state": "connected"}})
     make_db(scout / "state.db", messages=[(now - 10, 1), (now - 1, 0)]).close()
+    add_cron_jobs(home, [real_job(last_status="error", last_error="x" * 95, failure_streak=10)])
+    add_output(home, "09358c101c91", "2026-10-09_23-00-45.md", "older run\n", mtime=now - 90000)
+    add_output(home, "09358c101c91", "2026-10-10_23-00-25.md", "latest run\nline two\n", mtime=now - 3600)
+    add_cron_jobs(scout, [
+        real_job(id="aaaaaaaaaaaa", name="never-ran", last_status=None, last_run_at=None, failure_streak=0,
+                 repeat={"times": None, "completed": 0}),
+        real_job(id="bbbbbbbbbbbb", name="Pantau pembaruan", deliver="telegram:744164478",
+                 monitor_script="watch.py", monitor_state={"last_output_hash": "43e7d505d58f", "last_changed_at": "2026-10-10T21:03:30+07:00"}),
+    ])
+    add_output(scout, "bbbbbbbbbbbb", "bbbbbbbbbbbb_20260920_190257.txt", "legacy loose file\n", loose=True, mtime=now - 5000)
     add_profile(home, "atlas", markers=("SOUL.md",))
     (home / "profiles" / "empty").mkdir(parents=True, exist_ok=True)
     return fx

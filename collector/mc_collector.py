@@ -5,8 +5,10 @@ Read-only, stdlib only, ASCII only. The desktop app streams this file over SSH
 stdin (`python -u - <hermes_home>`); nothing is ever written to the VPS.
 Emits one JSON object per line on stdout.
 """
+import calendar
 import datetime
 import glob
+import hashlib
 import json
 import os
 import re
@@ -506,6 +508,186 @@ def collect_agents(home, now):
     return data, errors
 
 
+CRON_MAX_JOBS = 500
+CRON_MAX_PER_PROFILE = 200
+CRON_REL = re.compile(r"[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)?")
+ISO_RE = re.compile(r"^(\d{4})-(\d\d)-(\d\d)[T ](\d\d):(\d\d):(\d\d)(\.\d+)?(Z|[+-]\d\d:?\d\d)?$")
+
+
+def iso_to_epoch(v):
+    """Returns (epoch_seconds, utc_offset_minutes); (None, None) when unreadable."""
+    if v is None or isinstance(v, bool):
+        return None, None
+    if isinstance(v, (int, float)):
+        return to_epoch(v), None
+    if not isinstance(v, str):
+        return None, None
+    m = ISO_RE.match(v.strip())
+    if not m:
+        return None, None
+    y, mo, d, h, mi, s = (int(m.group(i)) for i in range(1, 7))
+    if not (1 <= mo <= 12 and 1 <= d <= 31 and h < 24 and mi < 60 and s < 60):
+        return None, None
+    frac = float(m.group(7)) if m.group(7) else 0.0
+    tz = m.group(8)
+    off = None
+    if tz == "Z":
+        off = 0
+    elif tz:
+        digits = tz[1:].replace(":", "")
+        off = (1 if tz[0] == "+" else -1) * (int(digits[:2]) * 60 + int(digits[2:4]))
+    try:
+        base = calendar.timegm((y, mo, d, h, mi, s, 0, 0, 0))
+    except (ValueError, OverflowError):
+        return None, None
+    return round(base + frac - (off or 0) * 60, 3), off
+
+
+def _text(v, limit=None):
+    if v is None:
+        return None
+    s = v if isinstance(v, str) else str(v)
+    return s[:limit] if limit else s
+
+
+def _int(v, default=0):
+    if isinstance(v, bool):
+        return default
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str) and v.strip().lstrip("-").isdigit():
+        return int(v.strip())
+    return default
+
+
+def normalize_job(profile, raw):
+    if not isinstance(raw, dict):
+        return None
+    jid = raw.get("id")
+    if isinstance(jid, bool) or not isinstance(jid, (str, int)) or str(jid) == "":
+        return None
+    jid = str(jid)
+    sched = raw.get("schedule") if isinstance(raw.get("schedule"), dict) else {}
+    expr = _text(sched.get("expr"))
+    display = _text(sched.get("display")) or _text(raw.get("schedule_display")) or expr or ""
+    rep = raw.get("repeat") if isinstance(raw.get("repeat"), dict) else {}
+    times = rep.get("times") if isinstance(rep.get("times"), int) and not isinstance(rep.get("times"), bool) else None
+    completed = _int(rep.get("completed"), 0)
+    next_ts, off_next = iso_to_epoch(raw.get("next_run_at"))
+    last_ts, off_last = iso_to_epoch(raw.get("last_run_at"))
+    raw_state = str(raw.get("state") or "").lower()
+    if raw_state == "completed" or (times is not None and times > 0 and completed >= times):
+        state = "completed"
+    elif raw_state == "paused" or raw.get("enabled") is False:
+        state = "paused"
+    elif raw_state == "running" or raw.get("fire_claim"):
+        state = "running"
+    else:
+        state = "scheduled"
+    status = raw.get("last_status")
+    skills = []
+    raw_skills = raw.get("skills")
+    for s in (raw_skills if isinstance(raw_skills, list) else []) + [raw.get("skill")]:
+        if isinstance(s, str) and s and s not in skills:
+            skills.append(s)
+    return {
+        "profile": profile,
+        "id": jid,
+        "name": _text(raw.get("name"), 200) or jid,
+        "schedule": {"kind": _text(sched.get("kind")) or "unknown", "expr": expr, "display": display},
+        "state": state,
+        "enabled": raw.get("enabled") is not False,
+        "nextRunTs": next_ts,
+        "lastRunTs": last_ts,
+        "tzOffsetMin": off_next if off_next is not None else off_last,
+        "lastStatus": status.lower() if isinstance(status, str) and status else None,
+        "lastError": _text(raw.get("last_error"), 500),
+        "lastDeliveryError": _text(raw.get("last_delivery_error"), 500),
+        "failureStreak": max(0, _int(raw.get("failure_streak"), 0)),
+        "deliver": _text(raw.get("deliver")) or "",
+        "model": _text(raw.get("model")) or _text(raw.get("model_snapshot")),
+        "provider": _text(raw.get("provider")) or _text(raw.get("provider_snapshot")),
+        "skills": skills,
+        "repeat": {"times": times, "completed": completed},
+        "prompt": _text(raw.get("prompt"), 4000) or "",
+        "lastOutput": None,
+    }
+
+
+def find_last_output(pdir, job_id):
+    if not CRON_REL.fullmatch(job_id) or "/" in job_id:
+        return None
+    base = os.path.join(pdir, "cron", "output")
+    try:
+        names = os.listdir(base)
+    except OSError:
+        return None
+    best = None
+    candidates = []
+    for name in names:
+        path = os.path.join(base, name)
+        if name == job_id and os.path.isdir(path):
+            try:
+                inner = os.listdir(path)
+            except OSError:
+                inner = []
+            candidates += [(name + "/" + f, os.path.join(path, f)) for f in inner]
+        elif name.startswith(job_id + "_") or name.startswith(job_id + "."):
+            candidates.append((name, path))
+    for rel, path in candidates:
+        if not CRON_REL.fullmatch(rel) or not os.path.isfile(path):
+            continue
+        try:
+            mtime = os.stat(path).st_mtime
+        except OSError:
+            continue
+        if best is None or mtime > best["mtime"]:
+            best = {"rel": rel, "mtime": mtime}
+    return best
+
+
+def collect_cron(home):
+    jobs, profiles = [], []
+    for name, pdir in list_profiles(home):
+        path = os.path.join(pdir, "cron", "jobs.json")
+        if not os.path.isfile(path):
+            profiles.append({"profile": name, "ok": True, "error": None})
+            continue
+        text = read_text(path)
+        if text is None:
+            profiles.append({"profile": name, "ok": False, "error": "unreadable"})
+            continue
+        try:
+            doc = json.loads(text)
+        except ValueError:
+            profiles.append({"profile": name, "ok": False, "error": "invalid_json"})
+            continue
+        raw_jobs = doc.get("jobs") if isinstance(doc, dict) else doc
+        if not isinstance(raw_jobs, list):
+            profiles.append({"profile": name, "ok": False, "error": "unexpected_shape"})
+            continue
+        note = None
+        if len(raw_jobs) > CRON_MAX_PER_PROFILE:
+            note = "too many jobs (kept %d)" % CRON_MAX_PER_PROFILE
+            raw_jobs = raw_jobs[:CRON_MAX_PER_PROFILE]
+        for raw in raw_jobs:
+            if len(jobs) >= CRON_MAX_JOBS:
+                note = note or "too many jobs (kept %d in total)" % CRON_MAX_JOBS
+                break
+            job = normalize_job(name, raw)
+            if job is None:
+                continue
+            job["lastOutput"] = find_last_output(pdir, job["id"])
+            jobs.append(job)
+        profiles.append({"profile": name, "ok": True, "error": note})
+    return {"jobs": jobs, "profiles": profiles}
+
+
+def cron_digest(data):
+    blob = json.dumps(data, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+
 def emit(kind, data, profile=None):
     line = json.dumps(
         {"type": kind, "ts": round(time.time(), 3), "profile": profile, "data": data},
@@ -547,6 +729,7 @@ def main(argv):
     next_metrics = clock() + min(args["interval"], 0.5)
     next_agents = clock()
     reported = set()
+    last_cron = None
     done = 0
     while True:
         now = clock()
@@ -563,6 +746,14 @@ def main(argv):
                 reported = current
             except Exception as ex:  # noqa: BLE001
                 emit("error", {"code": "agents_failed", "message": type(ex).__name__})
+            try:
+                cron = collect_cron(args["home"])
+                digest = cron_digest(cron)
+                if digest != last_cron:
+                    emit("cron", cron)
+                    last_cron = digest
+            except Exception as ex:  # noqa: BLE001
+                emit("error", {"code": "cron_failed", "message": type(ex).__name__})
             next_agents = clock() + args["agents_interval"]
         if now >= next_metrics:
             try:
