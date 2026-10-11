@@ -29,12 +29,16 @@ const api: MissionApi = {
     setZoom: (f) => ipcRenderer.invoke(IPC.setZoom, f),
     info: () => ipcRenderer.invoke(IPC.appInfo)
   },
+  cron: {
+    output: (profile, jobId) => ipcRenderer.invoke(IPC.cronOutput, { profile, jobId })
+  },
   onEvent: (cb) => on(IPC.evEvent, cb),
   onStatus: (cb) => on(IPC.evStatus, cb),
   onStartup: (cb) => on(IPC.evStartup, cb),
   onPreflight: (cb) => on(IPC.evPreflight, cb),
   onCapabilities: (cb) => on(IPC.evCapabilities, cb),
-  onModels: (cb) => on(IPC.evModels, cb)
+  onModels: (cb) => on(IPC.evModels, cb),
+  onOpenCron: (cb) => on(IPC.evOpenCron, cb)
 }
 
 contextBridge.exposeInMainWorld('mc', api)

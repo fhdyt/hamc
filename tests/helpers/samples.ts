@@ -1,4 +1,4 @@
-import type { AgentsData, MetricsData } from '@shared/events'
+import type { AgentsData, CronData, CronJob, MetricsData } from '@shared/events'
 
 export function sampleMetrics(over: Partial<MetricsData> = {}): MetricsData {
   return {
@@ -20,5 +20,46 @@ export function sampleAgents(): AgentsData {
       { profile: 'scout', displayName: 'Scout', status: 'working', platforms: [], lastActivityTs: 1_760_000_100, configMtime: null, hasSoul: false, hasMemory: false, hasUser: false }
     ],
     gateway: { up: true, heartbeatAgeS: 4, served: ['default', 'scout'] }
+  }
+}
+
+export function sampleJob(over: Partial<CronJob> = {}): CronJob {
+  return {
+    profile: 'default',
+    id: '09358c101c91',
+    name: 'second-brain-daily-sync',
+    schedule: { kind: 'cron', expr: '0 23 * * *', display: '0 23 * * *' },
+    state: 'scheduled',
+    enabled: true,
+    nextRunTs: 1_791_734_400,
+    lastRunTs: 1_791_648_025,
+    tzOffsetMin: 420,
+    lastStatus: 'error',
+    lastError: 'boom',
+    lastDeliveryError: null,
+    failureStreak: 10,
+    deliver: 'local',
+    model: 'deepseek-v4-flash',
+    provider: 'deepseek',
+    skills: [],
+    repeat: { times: null, completed: 39 },
+    prompt: 'do the thing',
+    lastOutput: { rel: '09358c101c91/2026-10-10_23-00-25.md', mtime: 1_791_648_025 },
+    ...over
+  }
+}
+
+export function sampleCron(): CronData {
+  return {
+    jobs: [
+      sampleJob(),
+      sampleJob({ profile: 'scout', id: 'aaaaaaaaaaaa', name: 'never-ran', lastStatus: null, lastRunTs: null, failureStreak: 0, lastError: null, lastOutput: null }),
+      sampleJob({ profile: 'scout', id: 'bbbbbbbbbbbb', name: 'Pantau pembaruan', lastStatus: 'ok', failureStreak: 0, lastError: null, deliver: 'telegram:744164478' })
+    ],
+    profiles: [
+      { profile: 'default', ok: true, error: null },
+      { profile: 'scout', ok: true, error: null },
+      { profile: 'atlas', ok: true, error: null }
+    ]
   }
 }

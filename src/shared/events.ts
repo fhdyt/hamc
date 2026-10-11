@@ -72,11 +72,45 @@ export const ErrorData = z.object({
 })
 export type ErrorData = z.infer<typeof ErrorData>
 
+export const CronState = z.enum(['scheduled', 'paused', 'running', 'completed'])
+export type CronState = z.infer<typeof CronState>
+
+export const CronJob = z.object({
+  profile: z.string(),
+  id: z.string(),
+  name: z.string(),
+  schedule: z.object({ kind: z.string(), expr: z.string().nullable(), display: z.string() }),
+  state: CronState,
+  enabled: z.boolean(),
+  nextRunTs: z.number().nullable(),
+  lastRunTs: z.number().nullable(),
+  tzOffsetMin: z.number().int().nullable(),
+  lastStatus: z.string().nullable(),
+  lastError: z.string().nullable(),
+  lastDeliveryError: z.string().nullable(),
+  failureStreak: z.number().int().nonnegative(),
+  deliver: z.string(),
+  model: z.string().nullable(),
+  provider: z.string().nullable(),
+  skills: z.array(z.string()),
+  repeat: z.object({ times: z.number().int().nullable(), completed: z.number().int() }),
+  prompt: z.string(),
+  lastOutput: z.object({ rel: z.string(), mtime: z.number() }).nullable()
+})
+export type CronJob = z.infer<typeof CronJob>
+
+export const CronData = z.object({
+  jobs: z.array(CronJob),
+  profiles: z.array(z.object({ profile: z.string(), ok: z.boolean(), error: z.string().nullable() }))
+})
+export type CronData = z.infer<typeof CronData>
+
 const envelope = { ts: z.number(), profile: z.string().nullable() }
 
 export const CollectorEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('metrics'), ...envelope, data: MetricsData }),
   z.object({ type: z.literal('agents'), ...envelope, data: AgentsData }),
+  z.object({ type: z.literal('cron'), ...envelope, data: CronData }),
   z.object({ type: z.literal('error'), ...envelope, data: ErrorData })
 ])
 export type CollectorEvent = z.infer<typeof CollectorEvent>

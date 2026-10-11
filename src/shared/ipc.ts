@@ -104,6 +104,15 @@ export interface AppInfo {
   platform: string
 }
 
+export type CronOutputResult =
+  | { ok: true; text: string; truncated: boolean; name: string; mtime: number }
+  | { ok: false; reason: 'no-output' | 'not-found' | 'unreadable' | 'not-connected' }
+
+export interface OpenCronTarget {
+  profile: string
+  jobId: string
+}
+
 type Unsub = () => void
 
 export interface MissionApi {
@@ -127,10 +136,14 @@ export interface MissionApi {
     setZoom(factor: number): Promise<void>
     info(): Promise<AppInfo>
   }
+  cron: {
+    output(profile: string, jobId: string): Promise<CronOutputResult>
+  }
   onEvent(cb: (e: CollectorEvent) => void): Unsub
   onStatus(cb: (s: ConnStatus) => void): Unsub
   onStartup(cb: (p: StartupProgress) => void): Unsub
   onPreflight(cb: (p: PreflightResult) => void): Unsub
   onCapabilities(cb: (c: Capabilities) => void): Unsub
   onModels(cb: (m: AgentModels) => void): Unsub
+  onOpenCron(cb: (t: OpenCronTarget) => void): Unsub
 }

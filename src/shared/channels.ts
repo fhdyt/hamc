@@ -11,10 +11,12 @@ export const IPC = {
   pinsSet: 'mc:agents:pins-set',
   setZoom: 'mc:app:set-zoom',
   appInfo: 'mc:app:info',
+  cronOutput: 'mc:cron:output',
   evEvent: 'mc:ev:event',
   evStatus: 'mc:ev:status',
   evStartup: 'mc:ev:startup',
   evPreflight: 'mc:ev:preflight',
   evCapabilities: 'mc:ev:capabilities',
-  evModels: 'mc:ev:models'
+  evModels: 'mc:ev:models',
+  evOpenCron: 'mc:ev:open-cron'
 } as const

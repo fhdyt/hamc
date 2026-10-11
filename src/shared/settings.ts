@@ -13,6 +13,7 @@ export interface SettingsMap {
   'ui.reduceMotion': boolean
   'ui.sidebarCollapsed': boolean
   'agents.panelCollapsed': boolean
+  'dashboard.cronOpen': boolean
   'window.bounds': WindowBounds | null
 }
 
@@ -22,6 +23,7 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'ui.reduceMotion': false,
   'ui.sidebarCollapsed': false,
   'agents.panelCollapsed': false,
+  'dashboard.cronOpen': true,
   'window.bounds': null
 }
 
@@ -31,6 +33,7 @@ export const SETTINGS_SCHEMA = {
   'ui.reduceMotion': z.boolean(),
   'ui.sidebarCollapsed': z.boolean(),
   'agents.panelCollapsed': z.boolean(),
+  'dashboard.cronOpen': z.boolean(),
   'window.bounds': z
     .object({ x: z.number().optional(), y: z.number().optional(), width: z.number(), height: z.number() })
     .nullable()
