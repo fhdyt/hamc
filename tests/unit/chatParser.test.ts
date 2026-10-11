@@ -107,6 +107,7 @@ describe('chat commands', () => {
     expect(cmd).toEqual(['/h/hermes', '-p', 'scout', 'chat', '-q', msg, '-Q', '--source', 'mission-control'])
     expect(buildCommand(cmd)).toContain("'it'\\''s $(whoami); rm -rf ~ `x` \"q\"'")
     expect(chatPlainCmd('/h/hermes', 'default', 'hi', false, false)).toEqual(['/h/hermes', 'chat', '-q', 'hi'])
+    expect(chatPlainCmd('/h/hermes', 'default', 'hi', true, false, 's-1')).toEqual(['/h/hermes', 'chat', '-q', 'hi', '-Q', '--resume', 's-1'])
   })
 })
 

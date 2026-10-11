@@ -118,6 +118,10 @@ export class MissionSession {
         if (id !== undefined) this.d.store.setChatSession(id, profile, sessionId)
       },
       emit: (e) => d.send(IPC.evChat, e),
+      recentSessions: async (profile, anySource) => {
+        const res = await this.queries.run('chat_sessions', { profile, ...(anySource ? { any: true } : {}) }, ChatSessions)
+        return res.ok ? res.data.sessions.map((x) => ({ id: x.id, startedAt: x.startedAt })) : []
+      },
       log: (m) => d.log?.(m),
       ...(d.chatStopGraceMs !== undefined ? { stopGraceMs: d.chatStopGraceMs } : {})
     })

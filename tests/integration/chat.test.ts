@@ -165,9 +165,23 @@ describe('a chat turn', () => {
     await waitFor(() => ended(), { label: 'end', timeout: 20_000 })
     expect(chat[0]).toMatchObject({ kind: 'start', mode: 'plain', note: expect.stringContaining('plain text') })
     expect(text()).toContain('Here is **what I found**')
-    expect(chat.some((e) => e.kind === 'session' || e.kind === 'tool')).toBe(false)
+    expect(chat.some((e) => e.kind === 'tool')).toBe(false)
     const cmd = chatCommands()[0]!
     expect(cmd.slice(cmd.indexOf('chat'))).toEqual(['chat', '-q', 'plain question', '-Q'])
+  })
+
+  it('finds the session of a plain turn in state.db and continues it with --resume', async () => {
+    const { session, chat, ended, chatCommands } = await setup({ chatHelp: 'usage: hermes chat [-q QUERY] [-Q] [--resume ID]\n' })
+    await session.chatSend({ profile: 'default', text: 'first plain', attachmentIds: [] })
+    await waitFor(() => ended(1), { label: 'first', timeout: 20_000 })
+    await waitFor(() => session.chatGetSession('default') !== null, { label: 'session found', timeout: 15_000 })
+    const sid = session.chatGetSession('default')!
+    expect(chat.find((e) => e.kind === 'session')).toMatchObject({ kind: 'session', sessionId: sid })
+    await session.chatSend({ profile: 'default', text: 'second plain', attachmentIds: [] })
+    await waitFor(() => ended(2), { label: 'second', timeout: 20_000 })
+    const second = chatCommands()[1]!
+    expect(second.slice(second.indexOf('chat'))).toEqual(['chat', '-q', 'second plain', '-Q', '--resume', sid])
+    expect(session.chatGetSession('default')).toBe(sid)
   })
 
   it('rejects bad requests without touching the server', async () => {

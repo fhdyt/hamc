@@ -25,6 +25,8 @@ export interface ChatDeps {
   getSession: (profile: string) => string | null
   setSession: (profile: string, sessionId: string | null) => void
   emit: (e: ChatEvent) => void
+  /** The sessions of this app for an agent, newest first, read from its state.db (used when the stream names no session). */
+  recentSessions?: (profile: string, anySource: boolean) => Promise<{ id: string; startedAt: number | null }[]>
   uploads?: UploadPort
   log?: (msg: string) => void
   /** How long a stopped turn may take to end on its own before the channel is closed. */
@@ -131,8 +133,8 @@ export class ChatService {
       }
       const flags = await this.flags(hermes)
       const stream = canStream(flags)
-      const resume = stream && flags.resume ? this.d.getSession(profile) : null
-      const argv = stream ? chatStreamCmd(hermes, profile, resume) : chatPlainCmd(hermes, profile, message, flags.quiet, flags.source)
+      const resume = flags.resume ? this.d.getSession(profile) : null
+      const argv = stream ? chatStreamCmd(hermes, profile, resume) : chatPlainCmd(hermes, profile, message, flags.quiet, flags.source, resume)
       let ch: ClientChannel
       try {
         ch = await this.d.conn.openStream(argv, stream ? message : '')
@@ -142,7 +144,7 @@ export class ChatService {
       const turn = randomUUID()
       const act: Active = { turn, ch, stopped: false, timer: null }
       this.active.set(profile, act)
-      this.run(profile, act, stream)
+      this.run(profile, act, stream, resume !== null)
       this.d.emit({
         turn,
         profile,
@@ -156,8 +158,10 @@ export class ChatService {
     }
   }
 
-  private run(profile: string, act: Active, stream: boolean): void {
+  private run(profile: string, act: Active, stream: boolean, resumed: boolean): void {
     const { turn, ch } = act
+    const startedAt = Date.now() / 1000
+    let sawSession = resumed
     const emit = (e: { kind: ChatEvent['kind'] } & Record<string, unknown>): void => this.d.emit({ turn, profile, ...e } as ChatEvent)
     const parser = new ChatLineParser()
     const lines = new LineSplitter()
@@ -174,7 +178,10 @@ export class ChatService {
       }
       for (const line of lines.push(chunk)) {
         for (const ev of parser.parse(line)) {
-          if (ev.kind === 'session') this.d.setSession(profile, ev.sessionId)
+          if (ev.kind === 'session') {
+            sawSession = true
+            this.d.setSession(profile, ev.sessionId)
+          }
           if (ev.kind === 'result') sawResult = true
           if (ev.kind === 'error') sawError = true
           emit(ev)
@@ -195,7 +202,26 @@ export class ChatService {
         emit({ kind: 'error', message: (tail || `Hermes ended with exit code ${exitCode ?? 'unknown'}`).slice(0, 500) })
       }
       emit({ kind: 'end', exitCode, stopped: act.stopped })
+      if (!sawSession) void this.adoptSession(profile, startedAt, emit)
     })
+  }
+
+  /**
+   * Plain output and some stream formats name no session. The new conversation is then found in the agent's own
+   * state.db (newest session of this app that started with this turn), so the next message can continue it.
+   */
+  private async adoptSession(profile: string, startedAt: number, emit: (e: { kind: ChatEvent['kind'] } & Record<string, unknown>) => void): Promise<void> {
+    if (!this.d.recentSessions || this.d.getSession(profile) !== null || !this.d.conn.isConnected()) return
+    try {
+      const list = await this.d.recentSessions(profile, this.flagsCache?.source === false)
+      // the server clock may differ from this one, so the window is wide
+      const mine = list.find((s) => s.startedAt !== null && s.startedAt >= startedAt - 300 && SESSION.test(s.id))
+      if (!mine || this.d.getSession(profile) !== null) return
+      this.d.setSession(profile, mine.id)
+      emit({ kind: 'session', sessionId: mine.id })
+    } catch (e) {
+      this.d.log?.(`chat: could not find the session of the turn: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
 
   /** Interrupts the running turn: INT first, and the channel is closed if Hermes does not finish on its own. */

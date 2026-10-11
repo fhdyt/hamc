@@ -1062,9 +1062,11 @@ def q_chat_sessions(home, a):
             return {"sessions": []}
         order = "started_at DESC" if "started_at" in scols else "id DESC"
         cols = ["id"] + [c for c in ("started_at", "title") if c in scols]
+        # "any" is for a Hermes whose chat has no --source flag: its sessions then carry another source
+        where, params = ("", ()) if a.get("any") is True else (" WHERE source = ?", (CHAT_SOURCE,))
         rows = con.execute(
-            "SELECT %s FROM sessions WHERE source = ? ORDER BY %s LIMIT %d" % (", ".join(cols), order, CHAT_SESSIONS_MAX),
-            (CHAT_SOURCE,),
+            "SELECT %s FROM sessions%s ORDER BY %s LIMIT %d" % (", ".join(cols), where, order, CHAT_SESSIONS_MAX),
+            params,
         ).fetchall()
         mcols = table_columns(con, "messages")
         out = []

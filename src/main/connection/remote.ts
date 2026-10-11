@@ -69,12 +69,13 @@ export const chatStreamCmd = (hermes: string, profile: string, resume: string | 
 ]
 
 /** Fallback for a Hermes without stream-json: the message is one individually quoted argument. */
-export const chatPlainCmd = (hermes: string, profile: string, message: string, quiet: boolean, source: boolean): string[] => [
+export const chatPlainCmd = (hermes: string, profile: string, message: string, quiet: boolean, source: boolean, resume: string | null = null): string[] => [
   hermes,
   ...profileArgs(profile),
   'chat',
   '-q',
   message,
   ...(quiet ? ['-Q'] : []),
-  ...(source ? ['--source', 'mission-control'] : [])
+  ...(source ? ['--source', 'mission-control'] : []),
+  ...(resume ? ['--resume', resume] : [])
 ]

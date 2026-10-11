@@ -35,6 +35,12 @@ def test_lists_only_sessions_started_by_the_app_newest_first(fx):
     assert new["startedAt"] == pytest.approx(fx.now - 100, abs=1)
 
 
+def test_any_source_also_lists_sessions_of_other_sources(fx):
+    app_session(fx, "s-app", fx.now - 100, "from the app")
+    ids = [s["id"] for s in q(fx, "chat_sessions", {"profile": "default", "any": True})["data"]["sessions"]]
+    assert "s-app" in ids and len(ids) > 1  # the fixture's own telegram sessions are included
+
+
 def test_preview_is_cut_and_other_profiles_are_separate(fx):
     app_session(fx, "s-long", fx.now - 10, "x" * 300)
     r = q(fx, "chat_sessions", {"profile": "default"})
