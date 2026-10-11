@@ -9,7 +9,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tests/e2e/tsconfig.json",
     "test": "node scripts/run-vitest.mjs run",
     "test:py": "python -m pytest tests/collector -q",
     "test:e2e": "npm run build && playwright test",

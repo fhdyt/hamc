@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.node.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "paths": { "@shared/*": ["../../src/shared/*"], "@renderer/*": ["../../src/renderer/*"] }
+  },
+  "include": ["./**/*.ts", "../helpers/**/*.ts"]
+}

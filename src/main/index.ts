@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, safeStorage, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, Menu, safeStorage, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { loadCollectorScript } from './collector/channel'
@@ -18,8 +18,11 @@ const target: AppTarget = devUrl ? { devUrl } : { indexFileUrl: pathToFileURL(in
 
 let win: BrowserWindow | null = null
 
+// Unpackaged, __dirname is <project>/out/main whether started by electron-vite or `electron out/main/index.js`.
+const projectRoot = join(__dirname, '..', '..')
+
 function collectorPath(): string {
-  return app.isPackaged ? join(process.resourcesPath, 'mc_collector.py') : join(app.getAppPath(), 'collector', 'mc_collector.py')
+  return app.isPackaged ? join(process.resourcesPath, 'mc_collector.py') : join(projectRoot, 'collector', 'mc_collector.py')
 }
 
 function buildMenu(): Menu {
@@ -39,7 +42,7 @@ function createWindow(store: SettingsStore): BrowserWindow {
     show: false,
     backgroundColor: '#282A36',
     title: 'Hermes Agent Mission Control',
-    icon: join(app.getAppPath(), 'assets', 'brand', 'icon-1024.png'),
+    icon: join(projectRoot, 'assets', 'brand', 'icon-1024.png'),
     webPreferences: { ...WEB_PREFERENCES, preload: join(__dirname, '../preload/index.js') }
   })
   hardenWebContents(w.webContents, target)
@@ -68,6 +71,15 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   void app.whenReady().then(() => {
+    try {
+      start()
+    } catch (e) {
+      dialog.showErrorBox('Hermes Agent Mission Control could not start', e instanceof Error ? e.message : String(e))
+      app.quit()
+    }
+  })
+
+  function start(): void {
     const userData = app.getPath('userData')
     const log = createLogger(userData)
     const store = new SettingsStore(join(userData, 'app.db'))
@@ -88,7 +100,7 @@ if (!app.requestSingleInstanceLock()) {
     win = createWindow(store)
     win.on('closed', () => (win = null))
     app.on('before-quit', () => void session.disconnect())
-  })
+  }
 
   app.on('window-all-closed', () => app.quit())
 }
