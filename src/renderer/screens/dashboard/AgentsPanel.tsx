@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { reorderAgentPin, saveSetting, toggleAgentPin } from '../../actions'
 import { Avatar } from '../../components/Avatar'
 import { Icon } from '../../components/Icon'
@@ -7,8 +7,10 @@ import { useLiveSetting } from '../../hooks/useLiveSetting'
 import { EmptyState, Skeleton } from '../../components/States'
 import { activeCount, buildRoster, railAgents } from '../../lib/roster'
 import { useAgents } from '../../stores/agents'
+import { useChat } from '../../stores/chat'
 import { useConn } from '../../stores/conn'
 import { useUi } from '../../stores/ui'
+import { ChatRoom } from '../chat/ChatRoom'
 import { AgentDetail, STATUS_COLOR, STATUS_LABEL } from './AgentDetail'
 
 export function AgentsPanel({ width }: { width: number }) {
@@ -22,7 +24,11 @@ export function AgentsPanel({ width }: { width: number }) {
   const setQuery = useAgents((s) => s.setQuery)
   const collapsed = useUi((s) => s.settings['agents.panelCollapsed'])
   const connState = useConn((s) => s.status.state)
+  const navigate = useUi((s) => s.navigate)
+  const setCurrent = useChat((s) => s.setCurrent)
   const [dragFrom, setDragFrom] = useState<string | null>(null)
+  const [details, setDetails] = useState(false)
+  useEffect(() => setDetails(false), [selected])
   const { rows, showSearch } = useMemo(() => buildRoster(agents, pins, query), [agents, pins, query])
   const online = activeCount(agents)
 
@@ -154,9 +160,43 @@ export function AgentsPanel({ width }: { width: number }) {
       {selected && (
         <Resizer orientation="horizontal" value={roster.value} min={60} max={480} label="Resize agent list and chat" onChange={roster.onChange} onCommit={roster.onCommit} />
       )}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        <AgentDetail />
-      </div>
+      {selected && !details ? (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <ChatRoom
+            key={selected}
+            profile={selected}
+            compact
+            extra={
+              <>
+                <button type="button" className="ib sm" onClick={() => setDetails(true)} aria-label="Show agent details" title="Details">
+                  <Icon name="info" size={14} />
+                </button>
+                <button
+                  type="button"
+                  className="ib sm"
+                  onClick={() => {
+                    setCurrent(selected)
+                    navigate('chat')
+                  }}
+                  aria-label="Open full chat"
+                  title="Open full chat"
+                >
+                  <Icon name="maximize" size={13} />
+                </button>
+              </>
+            }
+          />
+        </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          <AgentDetail />
+          {selected && (
+            <button type="button" className="cb" style={{ margin: '0 8px 8px' }} onClick={() => setDetails(false)}>
+              <Icon name="message" size={12} /> Back to chat
+            </button>
+          )}
+        </div>
+      )}
     </section>
   )
 }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /// <reference lib="dom" />
 import { describe, expect, it } from 'vitest'
-import { prepare, renderNote, stripFrontmatter } from '../../src/renderer/lib/brain/markdown'
+import { prepare, renderMarkdown, renderNote, stripFrontmatter } from '../../src/renderer/lib/brain/markdown'
 import { resolveNoteId } from '../../src/renderer/lib/brain/graphModel'
 import { sampleNote } from '../helpers/samples'
 
@@ -81,5 +81,44 @@ describe('resolveNoteId', () => {
     expect(resolveNoteId(notes, 'Nope')).toBeNull()
     expect(resolveNoteId(notes, '  ')).toBeNull()
     expect(resolveNoteId([], 'Alpha')).toBeNull()
+  })
+})
+
+describe('renderMarkdown (chat replies)', () => {
+  const view = (md: string): HTMLElement => {
+    const d = document.createElement('div')
+    d.innerHTML = renderMarkdown(md)
+    return d
+  }
+
+  it('marks fenced code with its language and keeps the code as text', () => {
+    const d = view('```python\nprint("<b>hi</b>")\n```')
+    const pre = d.querySelector('pre.md-pre')!
+    expect(pre.getAttribute('data-lang')).toBe('python')
+    expect(pre.textContent).toContain('print("<b>hi</b>")')
+    expect(d.querySelector('code b')).toBeNull()
+    expect(view('```\nplain\n```').querySelector('pre.md-pre')!.hasAttribute('data-lang')).toBe(false)
+    expect(view('```x"onload="alert(1)\nz\n```').querySelector('pre')!.getAttribute('data-lang')).toBe('xonloadalert1')
+  })
+
+  it('renders tables, lists and emphasis', () => {
+    const d = view('| a | b |\n|---|---|\n| 1 | 2 |\n\n- one\n- two\n\n**bold** and *it*')
+    expect(d.querySelectorAll('table th')).toHaveLength(2)
+    expect(d.querySelectorAll('li')).toHaveLength(2)
+    expect(d.querySelector('strong')?.textContent).toBe('bold')
+  })
+
+  it('leaves [[wikilinks]] as text and makes every link inert', () => {
+    const d = view('[[Note]] [web](https://example.com) [bad](javascript:alert(1)) [mc](mc-note:x)')
+    expect(d.querySelector('a.wikilink')).toBeNull()
+    expect(d.textContent).toContain('[[Note]]')
+    for (const a of d.querySelectorAll('a')) expect(a.hasAttribute('href') && a.getAttribute('href') !== '#').toBe(false)
+    expect(d.querySelector('a[title="https://example.com"]')).not.toBeNull()
+  })
+
+  it('drops scripts, handlers, images and raw html', () => {
+    const d = view('<script>alert(1)</script><img src=x onerror=alert(1)>\n\n![alt](http://x/y.png) <b onclick="x()">t</b>')
+    expect(d.querySelector('script, img, [onclick], b')).toBeNull()
+    expect(d.textContent).toContain('[image: alt]')
   })
 })

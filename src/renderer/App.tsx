@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { Chat } from './screens/Chat'
 import { ComingSoon } from './screens/ComingSoon'
 import { CronModal } from './screens/cron/CronModal'
 import { Brain } from './screens/Brain'
@@ -33,7 +34,7 @@ export function App() {
 
   return (
     <>
-      <Shell>{route === 'dashboard' ? <Dashboard /> : route === 'server' ? <Server /> : route === 'feed' ? <Feed /> : route === 'brain' ? <Brain /> : <ComingSoon route={route} />}</Shell>
+      <Shell>{route === 'dashboard' ? <Dashboard /> : route === 'server' ? <Server /> : route === 'chat' ? <Chat /> : route === 'feed' ? <Feed /> : route === 'brain' ? <Brain /> : <ComingSoon route={route} />}</Shell>
       <CronModal />
       <FeedModal />
       <SessionModal />

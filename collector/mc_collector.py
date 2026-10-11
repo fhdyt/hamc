@@ -1043,6 +1043,92 @@ def q_session(home, a):
     }
 
 
+# ---- chat ----------------------------------------------------------------
+
+CHAT_SOURCE = "mission-control"
+CHAT_SESSIONS_MAX = 30
+UPLOADS_MAX = 500
+
+
+def q_chat_sessions(home, a):
+    """Sessions started from this app (source = mission-control), newest first, with a short preview."""
+    name = a.get("profile")
+    if not valid_profile(name):
+        raise QueryError("bad_args")
+    con = open_profile(home, name)
+    try:
+        scols = table_columns(con, "sessions")
+        if "id" not in scols or "source" not in scols:
+            return {"sessions": []}
+        order = "started_at DESC" if "started_at" in scols else "id DESC"
+        cols = ["id"] + [c for c in ("started_at", "title") if c in scols]
+        rows = con.execute(
+            "SELECT %s FROM sessions WHERE source = ? ORDER BY %s LIMIT %d" % (", ".join(cols), order, CHAT_SESSIONS_MAX),
+            (CHAT_SOURCE,),
+        ).fetchall()
+        mcols = table_columns(con, "messages")
+        out = []
+        for r in rows:
+            info = dict(zip(cols, r))
+            preview = None
+            count = 0
+            if "session_id" in mcols and "content" in mcols and "role" in mcols:
+                act = " AND active = 1" if "active" in mcols else ""
+                first = con.execute(
+                    "SELECT content FROM messages WHERE session_id = ? AND role = 'user'%s ORDER BY id LIMIT 1" % act, (info["id"],)
+                ).fetchone()
+                preview = _text(as_text(first[0]), 80) if first else None
+                count = con.execute("SELECT COUNT(*) FROM messages WHERE session_id = ?%s" % act, (info["id"],)).fetchone()[0]
+            out.append({
+                "id": info["id"],
+                "startedAt": to_epoch(info.get("started_at")),
+                "title": _text(info.get("title"), 120),
+                "preview": preview,
+                "messages": count,
+            })
+    finally:
+        con.close()
+    return {"sessions": out}
+
+
+def q_uploads_list(home, a):
+    """Files below <dir>/<agent>/<date>/, as written by the app's uploads. Read only, never follows links."""
+    root = expand_path(a.get("dir"))
+    files = []
+    truncated = False
+    if os.path.isdir(root):
+        try:
+            agents = sorted(e.name for e in os.scandir(root) if e.is_dir(follow_symlinks=False) and not e.name.startswith("."))
+        except OSError:
+            raise QueryError("unreadable")
+        for agent in agents:
+            adir = os.path.join(root, agent)
+            try:
+                dates = sorted(e.name for e in os.scandir(adir) if e.is_dir(follow_symlinks=False))
+            except OSError:
+                continue
+            for date in dates:
+                ddir = os.path.join(adir, date)
+                try:
+                    entries = sorted((e for e in os.scandir(ddir) if e.is_file(follow_symlinks=False)), key=lambda e: e.name)
+                except OSError:
+                    continue
+                for e in entries:
+                    if len(files) >= UPLOADS_MAX:
+                        truncated = True
+                        break
+                    try:
+                        st = e.stat(follow_symlinks=False)
+                    except OSError:
+                        continue
+                    files.append({"agent": agent, "date": date, "name": e.name, "size": st.st_size, "mtime": int(st.st_mtime), "path": e.path})
+                if truncated:
+                    break
+            if truncated:
+                break
+    return {"dir": root, "exists": os.path.isdir(root), "files": files, "truncated": truncated}
+
+
 # ---- second brain (vault) -------------------------------------------------
 
 VAULT_MAX_NOTES = 20000
@@ -1427,6 +1513,7 @@ def run_query(home, cmd, raw):
     handler = {
         "message": q_message, "history": q_history, "session": q_session,
         "vault_check": q_vault_check, "browse": q_browse, "note": q_note,
+        "chat_sessions": q_chat_sessions, "uploads_list": q_uploads_list,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}

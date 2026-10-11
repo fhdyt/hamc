@@ -1,9 +1,10 @@
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Server, utils, type Connection, type ServerChannel } from 'ssh2'
 import { pythonExe, type FixtureDirs } from './fixture'
+import { attachSftp, type SftpOp } from './fakeSftp'
 import { shSplit } from './shellSplit'
 
 export interface HostKeyPair {
@@ -43,6 +44,10 @@ export interface FakeSshOptions {
   models?: Record<string, { provider: string; default: string }>
   hasHermes?: boolean
   hasHome?: boolean
+  /** What `hermes chat --help` prints (the default lists every option the chat needs). */
+  chatHelp?: string
+  /** What `hermes config get terminal.backend` prints. */
+  backend?: string
 }
 
 export interface FakeSsh {
@@ -50,12 +55,14 @@ export interface FakeSsh {
   fingerprint: string
   hostKey: HostKeyPair
   execLog: string[][]
+  /** Every SFTP operation the client made (mkdir, open with its mode, remove). */
+  sftpLog: SftpOp[]
   dropConnections(): void
   close(): Promise<void>
 }
 
-type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models'>> &
-  Pick<FakeSshOptions, 'capabilities' | 'models'>
+type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend'>> &
+  Pick<FakeSshOptions, 'capabilities' | 'models' | 'chatHelp' | 'backend'>
 
 const MARKERS = ['config.yaml', '.env', 'SOUL.md', 'profile.yaml', 'state.db']
 
@@ -77,21 +84,113 @@ function countProfiles(home: string): number {
   }
 }
 
+const REMOTE_HOME_DIR = '/home/hermes'
+
+/** The local folder that stands for the remote home of the SSH user. */
+export const localHomeDir = (o: { fixture: FixtureDirs }): string => join(o.fixture.root, 'home')
+
+const toLocalPath = (o: { fixture: FixtureDirs }, remote: string): string =>
+  remote === REMOTE_HOME_DIR ? localHomeDir(o) : remote.startsWith(REMOTE_HOME_DIR + '/') ? join(localHomeDir(o), ...remote.slice(REMOTE_HOME_DIR.length + 1).split('/')) : remote
+
+/** Arguments that name remote paths (also inside the JSON of a query) are turned into local ones. */
+function mapArg(a: string, o: Resolved): string {
+  if (a === o.remoteHome) return o.fixture.home
+  if (a.startsWith('{')) {
+    try {
+      const walk = (v: unknown): unknown => (typeof v === 'string' ? toLocalPath(o, v) : Array.isArray(v) ? v.map(walk) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)])) : v)
+      return JSON.stringify(walk(JSON.parse(a)))
+    } catch {
+      return a
+    }
+  }
+  return a
+}
+
+/** Local paths in a query answer are shown as the remote paths they stand for. */
+function mapBack(text: string, o: Resolved): string {
+  const local = localHomeDir(o)
+  const walk = (v: unknown): unknown => {
+    if (typeof v === 'string') return v.startsWith(local) ? REMOTE_HOME_DIR + v.slice(local.length).split('\\').join('/') : v
+    if (Array.isArray(v)) return v.map(walk)
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]))
+    return v
+  }
+  try {
+    return JSON.stringify(walk(JSON.parse(text)))
+  } catch {
+    return text
+  }
+}
+
 function runCollector(argv: string[], stream: ServerChannel, o: Resolved): void {
-  const args = ['-u', '-', ...argv.slice(3).map((a) => (a === o.remoteHome ? o.fixture.home : a)), '--agents-interval', '0.5']
+  const isQuery = argv.includes('uploads_list') // only the uploads list speaks in remote paths
+  const args = ['-u', '-', ...argv.slice(3).map((a) => mapArg(a, o)), '--agents-interval', '0.5']
   const child = spawn(pythonExe, args, {
     env: { ...process.env, MC_PROC_ROOT: o.fixture.proc, MC_SYS_ROOT: o.fixture.sysfs },
     stdio: ['pipe', 'pipe', 'pipe']
   })
   child.stdin.on('error', () => {})
   stream.pipe(child.stdin)
+  // a query answers with one line; its local paths are shown as the remote ones they stand for
+  if (isQuery) {
+    let out = ''
+    child.stdout.on('data', (d: Buffer) => (out += d.toString('utf8')))
+    child.on('close', (code) => {
+      stream.write(out.split('\n').map((l) => (l.trim() ? mapBack(l, o) : l)).join('\n'))
+      stream.exit(code ?? 0)
+      stream.end()
+    })
+  } else {
+    child.stdout.pipe(stream, { end: false })
+    child.on('close', (code) => {
+      stream.exit(code ?? 0)
+      stream.end()
+    })
+  }
+  child.stderr.on('data', (d: Buffer) => stream.stderr.write(d))
+  stream.on('close', () => child.kill())
+}
+
+export const FULL_CHAT_HELP = `usage: hermes chat [options]
+  -q, --query TEXT      single query
+  -Q, --quiet           only print the answer
+  --oneshot             run one turn and exit
+  --query-file FILE     read the message from FILE ('-' is stdin)
+  --format FORMAT       output format: text, json, stream-json
+  --resume SESSION_ID   continue a session
+  --source TAG          tag the session source
+`
+
+const chats = new WeakMap<ServerChannel, ChildProcess>()
+
+function runChat(argv: string[], stream: ServerChannel, o: Resolved): void {
+  const child = spawn(pythonExe, [resolve('tests/fixtures/fake_hermes.py'), ...argv.slice(1)], {
+    env: { ...process.env, MC_FAKE_HOME: o.fixture.home },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  chats.set(stream, child)
+  child.stdin.on('error', () => {})
+  stream.pipe(child.stdin)
   child.stdout.pipe(stream, { end: false })
   child.stderr.on('data', (d: Buffer) => stream.stderr.write(d))
   child.on('close', (code) => {
+    if (!stream.writable) return
     stream.exit(code ?? 0)
     stream.end()
   })
   stream.on('close', () => child.kill())
+}
+
+/** A signal request (Stop) ends the fake chat the way Hermes does: a result with exit code 130. */
+function interruptChat(stream: ServerChannel): void {
+  const child = chats.get(stream)
+  if (!child) return
+  chats.delete(stream)
+  child.removeAllListeners('close')
+  child.kill()
+  stream.write(JSON.stringify({ type: 'result', exit_code: 130, duration_ms: 10 }) + '\n')
+  stream.exit(130)
+  stream.end()
 }
 
 function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
@@ -100,6 +199,7 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
   if (cmd === '__echo__') return reply(stream, JSON.stringify(rest))
   if (cmd === 'sh' && rest[0] === '-c') {
     const script = rest[1] ?? ''
+    if (script === 'printf %s "$HOME"') return reply(stream, REMOTE_HOME_DIR)
     if (script.includes('HERMES_HOME')) return reply(stream, o.remoteHome)
     if (script.includes('command -v hermes')) return o.hasHermes ? reply(stream, o.hermesPath) : reply(stream, '', 1)
     if (script.includes('profiles')) return reply(stream, String(countProfiles(o.fixture.home)))
@@ -115,6 +215,8 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
   }
   if (cmd === 'head') return reply(stream, `#!${o.pythonPath}\n`)
   if (cmd === o.hermesPath) {
+    if (rest.includes('chat')) return rest.includes('--help') ? reply(stream, o.chatHelp ?? FULL_CHAT_HELP) : runChat(argv, stream, o)
+    if (rest.includes('terminal.backend')) return reply(stream, `${o.backend ?? 'local'}\n`)
     if (rest[0] === '--version') return reply(stream, `Hermes Agent v${o.version}\n`)
     if (rest[rest.length - 1] === '--help') {
       const key = rest.slice(0, -1).join(' ')
@@ -150,6 +252,7 @@ export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {
   const hostKey = opts.hostKey ?? makeHostKey()
   const clients = new Set<Connection>()
   const execLog: string[][] = []
+  const sftpLog: SftpOp[] = []
 
   const server = new Server({ hostKeys: [hostKey.private] }, (client) => {
     clients.add(client)
@@ -161,11 +264,17 @@ export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {
     })
     client.on('ready', () => {
       client.on('session', (accept) => {
-        accept().on('exec', (acceptExec, _reject, info) => {
+        const sess = accept()
+        sess.on('sftp', (acceptSftp) => attachSftp(acceptSftp(), (remote) => toLocalPath(o, remote), sftpLog))
+        sess.on('exec', (acceptExec, _reject, info) => {
           const stream = acceptExec()
           const argv = shSplit(info.command)
           execLog.push(argv)
           handle(argv, stream, o)
+          sess.once('signal', (acceptSignal, _rej, sig) => {
+            acceptSignal?.()
+            if (sig.name === 'INT') interruptChat(stream)
+          })
         })
       })
     })
@@ -181,6 +290,7 @@ export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {
         fingerprint: fingerprintOfPublic(hostKey.public),
         hostKey,
         execLog,
+        sftpLog,
         dropConnections: () => clients.forEach((c) => c.end()),
         close: () =>
           new Promise<void>((done) => {

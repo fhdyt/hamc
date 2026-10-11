@@ -7,6 +7,7 @@ import { UnsupportedState } from '../components/States'
 import { zoomPercent } from '../lib/zoom'
 import { EditConnectionDialogBody } from '../screens/EditConnectionDialog'
 import { useUi, type SettingsTab } from '../stores/ui'
+import { UploadsTab } from './UploadsTab'
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -15,6 +16,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'alerts', label: 'Alerts' },
   { id: 'agents', label: 'Agents' },
   { id: 'workspace', label: 'Workspace' },
+  { id: 'uploads', label: 'Uploads' },
   { id: 'data', label: 'Data' },
   { id: 'about', label: 'About' }
 ]
@@ -103,7 +105,8 @@ export function SettingsModal() {
           {tab === 'general' && <General />}
           {tab === 'connection' && <EditConnectionDialogBody onDone={close} />}
           {tab === 'about' && <About />}
-          {tab !== 'general' && tab !== 'connection' && tab !== 'about' && <UnsupportedState why="This section arrives in a later release." />}
+          {tab === 'uploads' && <UploadsTab />}
+          {tab !== 'general' && tab !== 'connection' && tab !== 'about' && tab !== 'uploads' && <UnsupportedState why="This section arrives in a later release." />}
         </div>
       </div>
     </Modal>

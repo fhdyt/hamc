@@ -213,6 +213,27 @@ export type BrowseResult = z.infer<typeof BrowseResult>
 export const NoteText = z.object({ id: z.string(), text: z.string(), truncated: z.boolean(), mtime: z.number() })
 export type NoteText = z.infer<typeof NoteText>
 
+export const ChatSessions = z.object({
+  sessions: z.array(
+    z.object({
+      id: z.string(),
+      startedAt: z.number().nullable(),
+      title: z.string().nullable(),
+      preview: z.string().nullable(),
+      messages: z.number().int().nonnegative()
+    })
+  )
+})
+export type ChatSessions = z.infer<typeof ChatSessions>
+
+export const UploadsList = z.object({
+  dir: z.string(),
+  exists: z.boolean(),
+  files: z.array(z.object({ agent: z.string(), date: z.string(), name: z.string(), size: z.number().nonnegative(), mtime: z.number(), path: z.string() })),
+  truncated: z.boolean()
+})
+export type UploadsList = z.infer<typeof UploadsList>
+
 const envelope = { ts: z.number(), profile: z.string().nullable() }
 
 export const CollectorEvent = z.discriminatedUnion('type', [

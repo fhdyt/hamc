@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { BrowseResult, CollectorEvent, FeedHistory, FeedMessageText, NoteText, SessionDetail, VaultCheck } from './events'
+import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, NoteText, SessionDetail, UploadsList, VaultCheck } from './events'
 import type { SettingsMap } from './settings'
 
 export { IPC } from './channels'
@@ -121,6 +121,43 @@ export type QueryError =
 
 export type QueryResult<T> = { ok: true; data: T } | { ok: false; error: QueryError; detail?: string }
 
+/** One thing that happens during a chat turn, as the main process sees it on the server. */
+export type ChatEvent = { turn: string; profile: string } & (
+  | { kind: 'start'; mode: 'stream-json' | 'plain'; note?: string }
+  | { kind: 'session'; sessionId: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'tool'; id: string; name: string; state: 'running' | 'ok' | 'error'; ms?: number }
+  | { kind: 'result'; exitCode: number | null; durationMs?: number; inputTokens?: number; outputTokens?: number }
+  | { kind: 'notice'; code: 'blocked'; message: string }
+  | { kind: 'error'; message: string }
+  | { kind: 'end'; exitCode: number | null; stopped: boolean }
+)
+
+export type ChatSendError = 'not-connected' | 'busy' | 'empty' | 'too-long' | 'bad-profile' | 'hermes-missing' | 'upload-failed' | 'attachment-missing' | 'failed-to-start'
+
+export type ChatSendResult = { ok: true; turn: string } | { ok: false; error: ChatSendError; detail?: string }
+
+/** A local file the user chose to send with a message. The path stays in the main process. */
+export interface Attachment {
+  id: string
+  name: string
+  size: number
+  mime: string
+  /** A small data: URL for images. */
+  thumb?: string
+  /** Why the file cannot be sent (too large, unreadable). */
+  problem?: string
+}
+
+export interface UploadProgress {
+  id: string
+  state: 'uploading' | 'done' | 'error' | 'cancelled'
+  sent: number
+  total: number
+  remotePath?: string
+  error?: string
+}
+
 export interface OpenCronTarget {
   profile: string
   jobId: string
@@ -164,7 +201,28 @@ export interface MissionApi {
     browse(path: string): Promise<QueryResult<BrowseResult>>
     note(id: string): Promise<QueryResult<NoteText>>
   }
+  chat: {
+    send(req: { profile: string; text: string; attachmentIds: string[] }): Promise<ChatSendResult>
+    stop(turn: string): Promise<void>
+    getSession(profile: string): Promise<string | null>
+    setSession(profile: string, sessionId: string | null): Promise<void>
+    sessions(profile: string): Promise<QueryResult<ChatSessions>>
+    /** Opens the native file picker. */
+    pick(): Promise<Attachment[]>
+    /** Registers files that were dropped on the window (their paths are read in the preload). */
+    attach(files: File[]): Promise<Attachment[]>
+    detach(id: string): Promise<void>
+    /** The agent's `terminal.backend`, or null when it cannot be read. */
+    backend(profile: string): Promise<string | null>
+  }
+  uploads: {
+    list(): Promise<QueryResult<UploadsList>>
+    remove(path: string): Promise<{ ok: true } | { ok: false; error: string }>
+    cancel(id: string): Promise<void>
+  }
   onEvent(cb: (e: CollectorEvent) => void): Unsub
+  onChat(cb: (e: ChatEvent) => void): Unsub
+  onUpload(cb: (p: UploadProgress) => void): Unsub
   onStatus(cb: (s: ConnStatus) => void): Unsub
   onStartup(cb: (p: StartupProgress) => void): Unsub
   onPreflight(cb: (p: PreflightResult) => void): Unsub

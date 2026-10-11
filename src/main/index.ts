@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, Notification, safeStorage, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, Menu, nativeImage, Notification, safeStorage, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { IPC } from '@shared/channels'
@@ -118,7 +118,21 @@ if (!app.requestSingleInstanceLock()) {
         if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
       },
       log,
-      notify: showCronAlert
+      notify: showCronAlert,
+      pickFiles: async () => {
+        const r = await (win ? dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] }) : dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] }))
+        return r.canceled ? [] : r.filePaths
+      },
+      makeThumb: (path) => {
+        try {
+          const img = nativeImage.createFromPath(path)
+          if (img.isEmpty()) return undefined
+          const { width } = img.getSize()
+          return (width > 160 ? img.resize({ width: 160 }) : img).toDataURL()
+        } catch {
+          return undefined
+        }
+      }
     })
     registerIpc({ session, store, getWindow: () => win, target })
     Menu.setApplicationMenu(buildMenu())

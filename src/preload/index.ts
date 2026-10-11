@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/channels'
 import type { MissionApi } from '../shared/ipc'
 
@@ -44,7 +44,26 @@ const api: MissionApi = {
     browse: (path) => ipcRenderer.invoke(IPC.brainBrowse, path),
     note: (id) => ipcRenderer.invoke(IPC.brainNote, id)
   },
+  chat: {
+    send: (req) => ipcRenderer.invoke(IPC.chatSend, req),
+    stop: (turn) => ipcRenderer.invoke(IPC.chatStop, turn),
+    getSession: (profile) => ipcRenderer.invoke(IPC.chatGetSession, profile),
+    setSession: (profile, sessionId) => ipcRenderer.invoke(IPC.chatSetSession, { profile, sessionId }),
+    sessions: (profile) => ipcRenderer.invoke(IPC.chatSessions, profile),
+    pick: () => ipcRenderer.invoke(IPC.chatPick),
+    // The path of a dropped file is only known here; the renderer cannot make one up, because a File it builds itself has no path.
+    attach: (files) => ipcRenderer.invoke(IPC.chatAttach, files.map((f) => webUtils.getPathForFile(f)).filter((p) => p !== '')),
+    detach: (id) => ipcRenderer.invoke(IPC.chatDetach, id),
+    backend: (profile) => ipcRenderer.invoke(IPC.chatBackend, profile)
+  },
+  uploads: {
+    list: () => ipcRenderer.invoke(IPC.uploadsList),
+    remove: (path) => ipcRenderer.invoke(IPC.uploadsDelete, path),
+    cancel: (id) => ipcRenderer.invoke(IPC.uploadsCancel, id)
+  },
   onEvent: (cb) => on(IPC.evEvent, cb),
+  onChat: (cb) => on(IPC.evChat, cb),
+  onUpload: (cb) => on(IPC.evUpload, cb),
   onStatus: (cb) => on(IPC.evStatus, cb),
   onStartup: (cb) => on(IPC.evStartup, cb),
   onPreflight: (cb) => on(IPC.evPreflight, cb),

@@ -47,3 +47,34 @@ export async function runSafe(conn: Execer, argv: string[], timeoutMs = 15_000):
     return { code: -1, stdout: '', stderr: e instanceof Error ? e.message : String(e) }
   }
 }
+
+const profileArgs = (profile: string): string[] => (profile === 'default' ? [] : ['-p', profile])
+export const chatHelpCmd = (hermes: string): string[] => [hermes, 'chat', '--help']
+export const backendCmd = (hermes: string, profile: string): string[] => [hermes, ...profileArgs(profile), 'config', 'get', 'terminal.backend']
+export const homeDirCmd = (): string[] => ['sh', '-c', 'printf %s "$HOME"']
+
+/** The chat command of the PRD: the message goes over stdin, so nothing of it is ever part of a shell string. */
+export const chatStreamCmd = (hermes: string, profile: string, resume: string | null): string[] => [
+  hermes,
+  ...profileArgs(profile),
+  'chat',
+  '--oneshot',
+  '--query-file',
+  '-',
+  '--format',
+  'stream-json',
+  '--source',
+  'mission-control',
+  ...(resume ? ['--resume', resume] : [])
+]
+
+/** Fallback for a Hermes without stream-json: the message is one individually quoted argument. */
+export const chatPlainCmd = (hermes: string, profile: string, message: string, quiet: boolean, source: boolean): string[] => [
+  hermes,
+  ...profileArgs(profile),
+  'chat',
+  '-q',
+  message,
+  ...(quiet ? ['-Q'] : []),
+  ...(source ? ['--source', 'mission-control'] : [])
+]

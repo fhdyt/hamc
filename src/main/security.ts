@@ -41,5 +41,7 @@ export function hardenWebContents(wc: WebContents, target: AppTarget): void {
   wc.on('will-navigate', block)
   wc.on('will-redirect', block)
   wc.on('will-attach-webview', (e) => e.preventDefault())
-  wc.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+  // The only permission: writing text to the clipboard (the Copy button on code blocks). Reading it stays blocked.
+  wc.session.setPermissionRequestHandler((_wc, permission, callback) => callback(permission === 'clipboard-sanitized-write'))
+  wc.session.setPermissionCheckHandler((_wc, permission) => permission === 'clipboard-sanitized-write')
 }

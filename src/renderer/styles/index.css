@@ -5,6 +5,7 @@
 @import '@fontsource/vt323/400.css';
 @import './base.css';
 @import './app.css';
+@import './chat.css';
 
 @theme {
   --font-sans: 'JetBrains Mono', ui-monospace, monospace;

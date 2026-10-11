@@ -61,6 +61,8 @@ export interface SettingsMap {
   'ui.sidebarCollapsed': boolean
   'agents.panelCollapsed': boolean
   'dashboard.cronOpen': boolean
+  'chat.uploadDir': string
+  'chat.maxUploadMb': number
   'dashboard.activityOpen': boolean
   'dashboard.serverOpen': boolean
   'dashboard.chatW': number
@@ -78,6 +80,8 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'ui.sidebarCollapsed': false,
   'agents.panelCollapsed': false,
   'dashboard.cronOpen': true,
+  'chat.uploadDir': '~/hermes-uploads',
+  'chat.maxUploadMb': 50,
   'dashboard.activityOpen': true,
   'dashboard.serverOpen': true,
   'dashboard.chatW': 320,
@@ -95,6 +99,8 @@ export const SETTINGS_SCHEMA = {
   'ui.sidebarCollapsed': z.boolean(),
   'agents.panelCollapsed': z.boolean(),
   'dashboard.cronOpen': z.boolean(),
+  'chat.uploadDir': z.string().min(1).max(300),
+  'chat.maxUploadMb': z.number().int().min(1).max(2048),
   'dashboard.activityOpen': z.boolean(),
   'dashboard.serverOpen': z.boolean(),
   'dashboard.chatW': z.number().min(260).max(640),
