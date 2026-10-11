@@ -1,6 +1,7 @@
+import type { FeedItem } from '@shared/events'
 import type { ConnectRequest, ConnectResult } from '@shared/ipc'
 import type { SettingsMap } from '@shared/settings'
-import { oldestPerProfile } from './lib/feed'
+import { fullRequest, oldestPerProfile } from './lib/feed'
 import { defaultPins, reorderPins, togglePin } from './lib/roster'
 import { stepZoom } from './lib/zoom'
 import { useAgents } from './stores/agents'
@@ -115,4 +116,26 @@ export async function loadOlderFeed(profiles: readonly string[]): Promise<void> 
     return
   }
   useFeed.getState().mergeOlder(res.data.items, res.data.exhausted)
+}
+
+const FULL_ERRORS: Record<string, string> = {
+  not_found: 'This message is no longer in the database.',
+  timeout: 'The server took too long to answer.',
+  'not-connected': 'Not connected to the server.'
+}
+
+/** Fetches the complete text of a truncated item once; later calls reuse the result. */
+export async function loadFullText(it: FeedItem): Promise<void> {
+  const cur = useFeed.getState().full[it.id]
+  if (cur && cur.status !== 'error') return
+  useFeed.getState().setFull(it.id, { status: 'loading' })
+  const { field, index } = fullRequest(it)
+  const res = await window.mc.feed.message(it.profile, it.messageId, field, index)
+  useFeed.getState().setFull(it.id, res.ok ? { status: 'ok', text: res.data.text } : { status: 'error', message: FULL_ERRORS[res.error] ?? 'Could not load the full text.' })
+}
+
+/** Opens the Live feed filtered to one agent. */
+export function openFeedFor(profile: string): void {
+  useFeed.getState().soloAgent(profile, useAgents.getState().agents.map((a) => a.profile))
+  useUi.getState().navigate('feed')
 }

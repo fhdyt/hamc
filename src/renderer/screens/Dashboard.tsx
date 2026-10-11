@@ -2,6 +2,7 @@ import { Panel } from '../components/Panel'
 import { UnsupportedState } from '../components/States'
 import { useUi } from '../stores/ui'
 import { AgentsPanel } from './dashboard/AgentsPanel'
+import { ActivityPanel } from './dashboard/ActivityPanel'
 import { ServerStrip } from './dashboard/ServerStrip'
 import { CronPanel } from './dashboard/CronPanel'
 import { StatusBlock } from './dashboard/StatusBlock'
@@ -13,9 +14,7 @@ export function Dashboard() {
       <div className="col">
         <StatusBlock />
         <CronPanel />
-        <Panel variant="card" title="activity" className="grow">
-          <UnsupportedState why="The live feed of agent interactions arrives in a later release." />
-        </Panel>
+        <ActivityPanel />
       </div>
       <div className="col">
         <ServerStrip />

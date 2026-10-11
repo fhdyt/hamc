@@ -1,7 +1,10 @@
+import { openFeedFor } from '../../actions'
 import { Avatar } from '../../components/Avatar'
+import { Icon } from '../../components/Icon'
 import { EmptyState } from '../../components/States'
 import { useNow } from '../../hooks/useNow'
 import { agentColor } from '../../lib/agentColor'
+import { formatCost, formatTokens } from '../../lib/feed'
 import { formatAge } from '../../lib/format'
 import { useAgents } from '../../stores/agents'
 
@@ -36,6 +39,21 @@ export function AgentDetail() {
         <dd>{agent.platforms.length ? agent.platforms.map((p) => <span key={p} className="tag" style={{ marginRight: 4 }}>{p}</span>) : '–'}</dd>
         <dt>last activity</dt>
         <dd>{age}</dd>
+        <dt>today</dt>
+        <dd>
+          {agent.stats ? (
+            <span aria-label="Today's activity">
+              {agent.stats.sessions} session{agent.stats.sessions === 1 ? '' : 's'} · {agent.stats.messages} msg · {agent.stats.toolCalls} tool call{agent.stats.toolCalls === 1 ? '' : 's'}
+              <br />
+              <span title={`${agent.stats.inputTokens} in · ${agent.stats.outputTokens} out · ${agent.stats.reasoningTokens} reasoning`}>
+                {formatTokens(agent.stats.inputTokens)} in · {formatTokens(agent.stats.outputTokens)} out
+                {agent.stats.reasoningTokens > 0 ? ` · ${formatTokens(agent.stats.reasoningTokens)} reasoning` : ''} · {formatCost(agent.stats.costUsd)}
+              </span>
+            </span>
+          ) : (
+            '–'
+          )}
+        </dd>
         <dt>files</dt>
         <dd style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {([['SOUL.md', agent.hasSoul], ['MEMORY.md', agent.hasMemory], ['USER.md', agent.hasUser]] as const).map(([n, has]) => (
@@ -43,6 +61,9 @@ export function AgentDetail() {
           ))}
         </dd>
       </dl>
+      <button type="button" className="cb" onClick={() => openFeedFor(agent.profile)}>
+        <Icon name="activity" size={12} /> Open feed
+      </button>
     </div>
   )
 }

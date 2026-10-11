@@ -143,3 +143,22 @@ export function formatCost(usd: number): string {
   if (usd <= 0) return '$0'
   return usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`
 }
+
+export type FullField = 'content' | 'reasoning' | 'tool_calls'
+
+/** Which stored column (and which tool call inside it) holds the complete text of an item. */
+export function fullRequest(it: Pick<FeedItem, 'id' | 'kind'>): { field: FullField; index?: number } {
+  if (it.kind === 'thinking') return { field: 'reasoning' }
+  if (it.kind === 'tool') return { field: 'tool_calls', index: Math.max(0, sequenceOf(it.id) - 2) }
+  return { field: 'content' }
+}
+
+function sequenceOf(id: string): number {
+  const n = Number(id.slice(id.lastIndexOf(':') + 1))
+  return Number.isFinite(n) ? n : 0
+}
+
+/** Whether an item needs an expand control: cut off by the collector, long, or a thinking block that is clamped by default. */
+export function canExpand(it: FeedItem): boolean {
+  return it.truncated || isLong(it) || (it.kind === 'thinking' && it.text.length > 120)
+}
