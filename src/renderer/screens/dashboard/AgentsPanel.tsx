@@ -9,6 +9,7 @@ import { activeCount, buildRoster, railAgents } from '../../lib/roster'
 import { useAgents } from '../../stores/agents'
 import { useChat } from '../../stores/chat'
 import { useConn } from '../../stores/conn'
+import { useAgentCfg } from '../../stores/agentCfg'
 import { useUi } from '../../stores/ui'
 import { ChatRoom } from '../chat/ChatRoom'
 import { AgentDetail, STATUS_COLOR, STATUS_LABEL } from './AgentDetail'
@@ -71,7 +72,10 @@ export function AgentsPanel({ width }: { width: number }) {
         <h2>agents</h2>
         <span style={{ color: '#50FA7B', fontSize: 10 }}>{agents.length ? `${online}/${agents.length} online` : ''}</span>
         <span className="ph-actions">
-          <button type="button" className="ib sm" onClick={() => openSettings('agents')} aria-label="Agent settings" title="Agent settings">
+          <button type="button" className="ib sm" onClick={() => {
+              useAgentCfg.getState().selectProfile(selected)
+              openSettings('agents')
+            }} aria-label="Agent settings" title="Agent settings">
             <Icon name="settings" size={13} />
           </button>
           <button type="button" className="ib sm" onClick={() => void saveSetting('agents.panelCollapsed', true)} aria-label="Collapse agents panel" title="Collapse">
