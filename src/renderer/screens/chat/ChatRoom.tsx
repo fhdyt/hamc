@@ -30,8 +30,16 @@ export function ChatRoom({ profile, compact = false, extra }: { profile: string;
         <div className="cr-actions">
           {extra}
           <HistoryMenu profile={profile} />
-          <button type="button" className="ib" aria-label="New chat" title="New chat" disabled={busy} onClick={() => void newChat(profile)}>
-            <Icon name="plus" size={16} />
+          <button
+            type="button"
+            className={compact ? 'ib' : 'cb'}
+            aria-label="Clear chat"
+            title={`Clears this conversation and starts a new one with ${name}. The old one stays in History and on the server.`}
+            disabled={busy}
+            onClick={() => void newChat(profile)}
+          >
+            <Icon name="trash" size={compact ? 15 : 13} />
+            {!compact && 'Clear chat'}
           </button>
         </div>
       </div>

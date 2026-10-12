@@ -1,5 +1,5 @@
-import { useMemo, type CSSProperties } from 'react'
-import { saveSetting } from '../../actions'
+import { useMemo, useState, type CSSProperties } from 'react'
+import { openFeedFor, saveSetting } from '../../actions'
 import { Icon } from '../../components/Icon'
 import { Panel } from '../../components/Panel'
 import { EmptyState } from '../../components/States'
@@ -15,23 +15,31 @@ import { FeedWaiting } from '../feed/FeedWaiting'
 
 const MAX_ROWS = 14
 
-/** Latest feed items and alerts at a glance; a click opens the full Live feed in a dialog. */
-export function ActivityPanel({ style }: { style?: CSSProperties }) {
+/**
+ * Latest feed items and alerts at a glance; a click opens the full Live feed in a dialog. With `profile` it shows only
+ * that agent (the Chat screen), keeps its own tab, and cannot be collapsed.
+ */
+export function ActivityPanel({ style, profile }: { style?: CSSProperties; profile?: string }) {
   const items = useFeed((s) => s.items)
   const receivedAt = useFeed((s) => s.receivedAt)
   const openModal = useFeed((s) => s.openModal)
   const jobs = useCron((s) => s.jobs)
   const openCron = useCron((s) => s.openModal)
-  const tab = useUi((s) => s.settings['dashboard.activityTab'])
-  const open = useUi((s) => s.settings['dashboard.activityOpen'])
+  const sharedTab = useUi((s) => s.settings['dashboard.activityTab'])
+  const sharedOpen = useUi((s) => s.settings['dashboard.activityOpen'])
+  const [ownTab, setOwnTab] = useState<'activity' | 'alerts'>('activity')
+  const tab = profile ? ownTab : sharedTab
+  const open = profile ? true : sharedOpen
+  const showTab = (t: 'activity' | 'alerts'): void => (profile ? setOwnTab(t) : void saveSetting('dashboard.activityTab', t))
+  const openFeed = profile ? () => openFeedFor(profile) : openModal
   const agents = useAgents((s) => s.agents)
   const now = useNow()
   const names = useMemo(() => Object.fromEntries(agents.map((a) => [a.profile, a.displayName])), [agents])
-  const rows = useMemo(() => items.filter((i) => i.kind !== 'result').slice(0, MAX_ROWS), [items])
-  const alerts = useMemo(() => jobs.filter((j) => isFailure(j.lastStatus)), [jobs])
+  const rows = useMemo(() => items.filter((i) => i.kind !== 'result' && (!profile || i.profile === profile)).slice(0, MAX_ROWS), [items, profile])
+  const alerts = useMemo(() => jobs.filter((j) => isFailure(j.lastStatus) && (!profile || j.profile === profile)), [jobs, profile])
 
   const tabBtn = (id: 'activity' | 'alerts', label: string, extra?: React.ReactNode) => (
-    <button type="button" role="tab" aria-selected={tab === id} className="d-tab" onClick={() => void saveSetting('dashboard.activityTab', id)}>
+    <button type="button" role="tab" aria-selected={tab === id} className="d-tab" onClick={() => showTab(id)}>
       {label} {extra}
     </button>
   )
@@ -43,12 +51,12 @@ export function ActivityPanel({ style }: { style?: CSSProperties }) {
   )
   const actions = (
     <>
-      <button type="button" className="ib sm" onClick={openModal} aria-label="Open the live feed" title="Open the live feed">
+      <button type="button" className="ib sm" onClick={openFeed} aria-label="Open the live feed" title="Open the live feed">
         <Icon name="maximize" size={13} />
       </button>
-      <button type="button" className="ib sm" aria-expanded={open} aria-label={open ? 'Hide activity' : 'Show activity'} title={open ? 'Hide' : 'Show'} onClick={() => void saveSetting('dashboard.activityOpen', !open)}>
+      {!profile && <button type="button" className="ib sm" aria-expanded={open} aria-label={open ? 'Hide activity' : 'Show activity'} title={open ? 'Hide' : 'Show'} onClick={() => void saveSetting('dashboard.activityOpen', !open)}>
         <Icon name={open ? 'chev-up' : 'chev-down'} size={14} />
-      </button>
+      </button>}
     </>
   )
 
@@ -56,7 +64,7 @@ export function ActivityPanel({ style }: { style?: CSSProperties }) {
   if (tab === 'alerts') {
     body =
       alerts.length === 0 ? (
-        <EmptyState title="No alerts" why="Failed cron runs show up here." />
+        <EmptyState title="No alerts" why={profile ? `Failed cron runs of ${names[profile] ?? profile} show up here.` : 'Failed cron runs show up here.'} />
       ) : (
         <div role="list" aria-label="Alerts" className="d-scroll">
           {alerts.map((j) => (
@@ -79,12 +87,12 @@ export function ActivityPanel({ style }: { style?: CSSProperties }) {
   } else if (receivedAt === null) {
     body = <FeedWaiting />
   } else if (rows.length === 0) {
-    body = <EmptyState title="No activity yet" why="When an agent talks, thinks or runs a tool, it shows up here." />
+    body = <EmptyState title="No activity yet" why={profile ? `When ${names[profile] ?? profile} talks, thinks or runs a tool, it shows up here.` : 'When an agent talks, thinks or runs a tool, it shows up here.'} />
   } else {
     body = (
       <div role="list" aria-label="Latest activity" className="d-scroll">
         {rows.map((it) => (
-          <button key={it.id} type="button" role="listitem" className="dash-row" onClick={openModal} aria-label={`${names[it.profile] ?? it.profile}, ${KIND_LABEL[it.kind]}: ${it.text.slice(0, 80)}`}>
+          <button key={it.id} type="button" role="listitem" className="dash-row" onClick={openFeed} aria-label={`${names[it.profile] ?? it.profile}, ${KIND_LABEL[it.kind]}: ${it.text.slice(0, 80)}`}>
             <span className="dr-top">
               <span className="dr-time num">{clock(it.ts)}</span>
               <span style={{ color: agentColor(it.profile), fontWeight: 600 }}>{names[it.profile] ?? it.profile}</span>

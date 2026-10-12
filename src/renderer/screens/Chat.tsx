@@ -7,6 +7,7 @@ import { useAgents } from '../stores/agents'
 import { useChat } from '../stores/chat'
 import { useConn } from '../stores/conn'
 import { ChatRoom } from './chat/ChatRoom'
+import { ActivityPanel } from './dashboard/ActivityPanel'
 import { STATUS_COLOR, STATUS_LABEL } from './dashboard/AgentDetail'
 
 export function Chat() {
@@ -53,6 +54,11 @@ export function Chat() {
         })}
       </aside>
       <main className="chat-main">{selected && <ChatRoom key={selected.profile} profile={selected.profile} />}</main>
+      {selected && (
+        <aside className="chat-activity" aria-label={`Activity of ${selected.displayName}`}>
+          <ActivityPanel key={selected.profile} profile={selected.profile} style={{ flex: 1, minHeight: 0 }} />
+        </aside>
+      )}
     </div>
   )
 }

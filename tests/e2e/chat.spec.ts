@@ -78,14 +78,31 @@ test('a failing run shows the error instead of an endless spinner', async () => 
   await expect(conv().getByRole('alert')).toContainText(/authentication|failed/i, { timeout: 20_000 })
 })
 
-test('New chat starts empty and History brings an earlier conversation back', async () => {
-  await page.getByRole('button', { name: 'New chat' }).click()
+test('Clear chat starts empty and History brings an earlier conversation back', async () => {
+  await page.getByRole('button', { name: 'Clear chat' }).click()
   await expect(page.getByText('Say hello to Scout')).toBeVisible()
   await page.getByRole('button', { name: 'Chat history' }).click()
   const pop = page.getByRole('dialog', { name: 'Chat history' })
   await expect(pop.getByRole('button').first()).toBeVisible({ timeout: 15_000 })
   await pop.getByRole('button').filter({ hasText: /hello scout/ }).first().click()
   await expect(conv().getByText('hello scout')).toBeVisible({ timeout: 15_000 })
+})
+
+test('the Chat screen has an Activity panel with only this agent, and it follows the agent you pick', async () => {
+  const panel = page.getByRole('complementary', { name: 'Activity of Scout' })
+  await expect(panel).toBeVisible()
+  const rows = panel.getByRole('list', { name: 'Latest activity' }).getByRole('listitem')
+  await expect(rows.first()).toBeVisible({ timeout: 15_000 })
+  const labels = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''))
+  expect(labels.length).toBeGreaterThan(0)
+  expect(labels.every((l) => l.startsWith('Scout,'))).toBe(true)
+  await page.screenshot({ path: 'tests/e2e/shots/chat-activity.png' })
+  await page.locator('.dm-row').filter({ hasText: 'default' }).click()
+  const other = page.getByRole('complementary', { name: 'Activity of default' })
+  await expect(other).toBeVisible()
+  const otherLabels = await other.getByRole('listitem').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label') ?? ''))
+  expect(otherLabels.every((l) => l.startsWith('default,'))).toBe(true)
+  await page.locator('.dm-row').filter({ hasText: 'Scout' }).click()
 })
 
 test('files can be attached, are uploaded to the server when sent, and show in the message', async () => {
