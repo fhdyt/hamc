@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { Server, utils, type Connection, type ServerChannel } from 'ssh2'
 import { pythonExe, type FixtureDirs } from './fixture'
 import { attachSftp, type SftpOp } from './fakeSftp'
+import { newHermesState, runConfigCommands, runFetchScript, type FakeHermesState } from './fakeHermes'
 import { shSplit } from './shellSplit'
 
 export interface HostKeyPair {
@@ -50,6 +51,10 @@ export interface FakeSshOptions {
   backend?: string
   /** `hermes acp` is installed (`--check` passes and a fake ACP agent answers). Off by default. */
   acp?: boolean
+  /** What `hermes config set --help` prints. The default offers `--stdin`; pass a text without it to make the key travel as an argument. */
+  configSetHelp?: string
+  /** Providers that start with a credential (shown by `hermes status`). Default: openrouter. */
+  credentials?: string[]
 }
 
 export interface FakeSsh {
@@ -59,12 +64,14 @@ export interface FakeSsh {
   execLog: string[][]
   /** Every SFTP operation the client made (mkdir, open with its mode, remove). */
   sftpLog: SftpOp[]
+  /** The state of the fake `hermes config` / `status` / `gateway` commands. */
+  hermes: FakeHermesState
   dropConnections(): void
   close(): Promise<void>
 }
 
-type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp'>> &
-  Pick<FakeSshOptions, 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp'>
+type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp' | 'configSetHelp' | 'credentials'>> &
+  Pick<FakeSshOptions, 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp' | 'configSetHelp' | 'credentials'> & { st: FakeHermesState }
 
 const MARKERS = ['config.yaml', '.env', 'SOUL.md', 'profile.yaml', 'state.db']
 
@@ -242,19 +249,16 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
     if (rest.includes('chat')) return rest.includes('--help') ? reply(stream, o.chatHelp ?? FULL_CHAT_HELP) : runChat(argv, stream, o)
     if (rest.includes('terminal.backend')) return reply(stream, `${o.backend ?? 'local'}\n`)
     if (rest[0] === '--version') return reply(stream, `Hermes Agent v${o.version}\n`)
+    if (rest.includes('config') && rest.includes('set') && rest[rest.length - 1] === '--help') return void runConfigCommands(rest, stream, o)
     if (rest[rest.length - 1] === '--help') {
       const key = rest.slice(0, -1).join(' ')
       return o.capabilities?.[key] === false ? reply(stream, '', 2, 'unknown command\n') : reply(stream, 'usage\n')
     }
-    const gi = rest.indexOf('config')
-    if (gi >= 0 && rest[gi + 1] === 'get' && rest[gi + 2] === 'model') {
-      const profile = rest[0] === '-p' ? (rest[1] ?? 'default') : 'default'
-      const m = o.models?.[profile] ?? { provider: 'openrouter', default: 'anthropic/claude-sonnet' }
-      return reply(stream, JSON.stringify(m) + '\n')
-    }
+    if (runConfigCommands(rest, stream, o)) return
   }
   if (cmd === o.pythonPath || cmd === 'python3') {
     if (rest[0] === '--version') return reply(stream, 'Python 3.11.9\n')
+    if (rest[0] === '-c' && (rest[1] ?? '').includes('urlopen')) return runFetchScript(rest, stream)
     if (rest[0] === '-c') return reply(stream, 'ok 31\n')
     if (rest[0] === '-u' && rest[1] === '-') return runCollector(argv, stream, o)
   }
@@ -262,7 +266,9 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
 }
 
 export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {
+  const st = newHermesState()
   const o: Resolved = {
+    st,
     username: 'tester',
     password: 'test-pass-123',
     remoteHome: '/home/hermes/.hermes',
@@ -315,6 +321,7 @@ export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {
         hostKey,
         execLog,
         sftpLog,
+        hermes: st,
         dropConnections: () => clients.forEach((c) => c.end()),
         close: () =>
           new Promise<void>((done) => {
