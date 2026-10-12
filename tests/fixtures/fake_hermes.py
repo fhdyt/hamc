@@ -55,6 +55,8 @@ def main(argv):
         sys.stderr.write("Error: provider authentication failed\n")
         return 2
     mf.add_message(db, sid, "user", message, now)
+    if "silent" in message:
+        return 0  # exits cleanly without saying anything
     if not plain:
         emit({"type": "system", "session_id": sid, "model": "fake-model"})
     if "slow" in message:

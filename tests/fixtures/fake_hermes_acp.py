@@ -24,6 +24,7 @@ DB = HOME / "state.db" if profile == "default" else HOME / "profiles" / profile 
 
 inbox = queue.Queue()
 turns = {}
+known = set()
 
 
 def reader():
@@ -87,6 +88,8 @@ def wait_response(req_id, timeout=60):
 def prompt(msg):
     p = msg["params"]
     sid = p["sessionId"]
+    if sid not in known:
+        return respond(msg, {"stopReason": "refusal"})
     text = " ".join(b.get("text", "") for b in p.get("prompt", []))
     turns[sid] = turns.get(sid, 0) + 1
     mf.add_message(DB, sid, "user", text, time.time())
@@ -121,8 +124,17 @@ def prompt(msg):
         reply = "Done, I ran it." if allowed else "I was not allowed to run that."
     else:
         reply = "Here is **what I found** (turn %d)." % turns[sid]
+    if "silent" in text:
+        # the agent thinks and then ends the turn without a message (what a mismatch of formats looks like)
+        update(sid, {"sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": "hmm"}})
+        return respond(msg, {"stopReason": "end_turn"})
     for part in (reply[:10], reply[10:]):
-        update(sid, {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": part}})
+        if "arrayshape" in text:
+            update(sid, {"sessionUpdate": "agent_message_chunk", "content": [{"type": "text", "text": part}]})
+        elif "bareshape" in text:
+            update(sid, {"sessionUpdate": "agent_message_chunk", "content": {"text": part}})
+        else:
+            update(sid, {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": part}})
         time.sleep(0.03)
     mf.add_message(DB, sid, "assistant", reply, time.time())
     respond(msg, {"stopReason": "end_turn"})
@@ -140,9 +152,17 @@ def main():
         elif method == "session/new":
             sid = "s-acp-%d" % int(time.time() * 1000)
             mf.add_session(DB, sid, "acp", time.time())
+            known.add(sid)
             respond(msg, {"sessionId": sid})
         elif method == "session/load":
-            respond(msg, None)
+            # like Hermes: only a session that ACP made can be loaded; any other id answers null, and a prompt on it is a refusal
+            sid = (msg.get("params") or {}).get("sessionId", "")
+            if sid.startswith("s-acp-"):
+                if not sid.startswith("s-acp-ghost"):  # a ghost loads fine but cannot be prompted (its agent cannot be rebuilt)
+                    known.add(sid)
+                respond(msg, {})
+            else:
+                respond(msg, None)
         elif method == "session/prompt":
             prompt(msg)
         elif "id" in msg and method:

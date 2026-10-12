@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentInfo, AgentStatus } from '@shared/events'
 import {
-  activeCount, buildRoster, defaultPins, railAgents, reorderPins, sortAgents, togglePin, type RosterRow
+  activeCount, buildRoster, defaultPins, railAgents, reorderPins, sortAgents, togglePin, withBusy, type RosterRow
 } from '../../src/renderer/lib/roster'
 
 const label = (x: RosterRow): string => (x.kind === 'agent' ? x.agent.profile : x.title)
@@ -86,5 +86,18 @@ describe('railAgents', () => {
   })
   it('does not duplicate a selected pinned agent', () => {
     expect(railAgents(many(3), ['a00'], 'a00').shown).toHaveLength(1)
+  })
+})
+
+describe('withBusy', () => {
+  it('shows an agent that is answering a chat as working, whatever the server says', () => {
+    const list = [agent('a', 'idle'), agent('b', 'offline'), agent('c', 'parked'), agent('d', 'idle')]
+    const r = withBusy(list, ['a', 'b', 'c'])
+    expect(r.map((x) => x.status)).toEqual(['working', 'working', 'parked', 'idle'])
+    expect(list[0]!.status).toBe('idle')
+  })
+  it('changes nothing when no chat is running', () => {
+    const list = [agent('a', 'idle')]
+    expect(withBusy(list, [])).toEqual(list)
   })
 })

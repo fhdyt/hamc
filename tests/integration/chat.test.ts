@@ -150,6 +150,14 @@ describe('a chat turn', () => {
     expect(chat.at(-1)).toMatchObject({ kind: 'end', exitCode: 2 })
   })
 
+  it('says so when Hermes exits cleanly without any reply', async () => {
+    const { session, chat, ended } = await setup()
+    await session.chatSend({ profile: 'default', text: 'silent', attachmentIds: [] })
+    await waitFor(() => ended(), { label: 'end', timeout: 20_000 })
+    expect(chat.find((e) => e.kind === 'error')).toMatchObject({ message: expect.stringMatching(/finished without a reply/) })
+    expect(chat.at(-1)).toMatchObject({ kind: 'end', exitCode: 0, stopped: false })
+  })
+
   it('reports a command refused by the approval policy, and never adds --yolo', async () => {
     const { session, chat, ended, chatCommands } = await setup()
     await session.chatSend({ profile: 'default', text: 'please run something blocked', attachmentIds: [] })

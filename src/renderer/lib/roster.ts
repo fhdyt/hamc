@@ -10,6 +10,13 @@ export type RosterRow =
   | { kind: 'empty'; key: string; title: string }
   | { kind: 'agent'; key: string; agent: AgentInfo; pinned: boolean; draggable: boolean }
 
+/**
+ * The server's status only reflects what `state.db` and the gateway show, so an agent that is answering a chat from
+ * this app can still look idle or offline. While a turn runs, the agent is shown as working (a parked one stays parked).
+ */
+export const withBusy = (agents: readonly AgentInfo[], busy: readonly string[]): AgentInfo[] =>
+  busy.length === 0 ? [...agents] : agents.map((a) => (busy.includes(a.profile) && a.status !== 'parked' && a.status !== 'working' ? { ...a, status: 'working' as const } : a))
+
 export const isActive = (s: AgentStatus): boolean => s === 'working' || s === 'idle'
 export const activeCount = (agents: readonly AgentInfo[]): number => agents.filter((a) => isActive(a.status)).length
 

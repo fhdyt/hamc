@@ -22,6 +22,17 @@ describe('metrics store', () => {
 })
 
 describe('agents store', () => {
+  it('shows a chatting agent as working, also for agents that arrive later, and releases it afterwards', () => {
+    useAgents.getState().applyAgents(sampleAgents(), 1)
+    const idle = useAgents.getState().agents.find((a) => a.profile === 'scout')!.status
+    useAgents.getState().setBusy(['scout'])
+    expect(useAgents.getState().agents.find((a) => a.profile === 'scout')!.status).toBe('working')
+    useAgents.getState().applyAgents(sampleAgents(), 2)
+    expect(useAgents.getState().agents.find((a) => a.profile === 'scout')!.status).toBe('working')
+    useAgents.getState().setBusy([])
+    expect(useAgents.getState().agents.find((a) => a.profile === 'scout')!.status).toBe(idle)
+  })
+
   it('stores agents with the receive time', () => {
     useAgents.getState().applyAgents(sampleAgents(), 5000)
     const s = useAgents.getState()
