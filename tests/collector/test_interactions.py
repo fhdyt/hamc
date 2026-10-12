@@ -121,3 +121,54 @@ def test_output_is_ascii_json(fx):
     mf.add_interactions(fx)
     _, data = poll(fx)
     json.dumps(data, ensure_ascii=True).encode("ascii")
+
+
+def run(fx, args):
+    return c.run_query(str(fx.home), "interaction", json.dumps(args))
+
+
+def test_query_interaction_message(fx):
+    mf.add_interactions(fx)
+    r = run(fx, {"kind": "message", "from": "atlas", "to": "scout"})
+    assert r["ok"] is True
+    d = r["data"]
+    assert d["text"].startswith("Message from Atlas") and "still waiting" in d["text"]
+    assert d["sessionId"] == "s-bot" and d["profile"] == "scout" and "Bot Chat" in d["source"]
+
+
+def test_query_interaction_kanban(fx):
+    mf.add_interactions(fx)
+    r = run(fx, {"kind": "kanban", "id": 42})
+    assert r["ok"] and r["data"]["title"] == "Draft the weekly digest" and "notes ready" in r["data"]["text"]
+    assert "kanban.db" in r["data"]["source"]
+
+
+def test_query_interaction_room_and_delegate(fx):
+    mf.add_interactions(fx)
+    r = run(fx, {"kind": "room", "id": "room:ops-room"})
+    assert r["ok"] and "disk alert cleared" in r["data"]["text"] and r["data"]["profile"] == "scout"
+    r = run(fx, {"kind": "delegate", "id": "sub:atlas:s-atlas-sub"})
+    assert r["ok"] and r["data"]["sessionId"] == "s-atlas-sub" and r["data"]["profile"] == "atlas" and r["data"]["text"] == "reading"
+    assert run(fx, {"kind": "room", "id": "room:no such room"}) == {"ok": False, "error": "not_found"}
+
+
+def test_query_interaction_errors(fx):
+    mf.add_interactions(fx)
+    assert run(fx, {"kind": "nope"})["error"] == "bad_args"
+    assert run(fx, {"kind": "message", "from": "../x", "to": "scout"})["error"] == "bad_args"
+    assert run(fx, {"kind": "kanban", "id": "1; drop"})["error"] == "bad_args"
+    assert run(fx, {"kind": "kanban", "id": 999})["error"] == "not_found"
+    assert run(fx, {"kind": "delegate", "id": "sub:atlas:" + "x" * 300})["error"] == "bad_args"
+    assert run(fx, {"kind": "room", "id": "ops-room"})["error"] == "bad_args"
+    assert run(fx, {"kind": "message", "from": "atlas", "to": "ghost"})["error"] == "not_found"
+
+
+def test_stream_emits_interactions_once_until_changed(tmp_path):
+    fx = mf.make_fixture(tmp_path / "live")  # the stream reads the real clock, so the data has to be recent
+    mf.add_interactions(fx)
+    env = dict(os.environ, MC_PROC_ROOT=str(fx.proc), MC_SYS_ROOT=str(fx.sysfs))
+    out = subprocess.run([sys.executable, str(SCRIPT), str(fx.home), "--ticks", "3", "--interval", "0.05", "--interactions-interval", "0.05"],
+                         capture_output=True, text=True, env=env, timeout=60).stdout
+    events = [json.loads(line) for line in out.splitlines() if line.strip()]
+    inter = [e for e in events if e["type"] == "interactions"]
+    assert len(inter) == 1 and inter[0]["data"]["edges"]

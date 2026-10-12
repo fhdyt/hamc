@@ -1299,6 +1299,109 @@ CHAT_SESSIONS_MAX = 30
 UPLOADS_MAX = 500
 
 
+def _last_text(con, sid):
+    row = con.execute("SELECT content, timestamp FROM messages WHERE session_id = ? AND role IN ('user','assistant') AND content IS NOT NULL "
+                      "ORDER BY id DESC LIMIT 1", (sid,)).fetchone()
+    return (as_text(row[0]), to_epoch(row[1])) if row else ("", None)
+
+
+def _inter_out(text, **meta):
+    out = cap_text(text)
+    out.update({"title": None, "ts": None, "source": "", "sessionId": None, "profile": None})
+    out.update(meta)
+    return out
+
+
+def q_interaction(home, a):
+    """The latest text behind one edge or node of the agent graph (a message, a task, a room line, a subagent's last turn)."""
+    kind = a.get("kind")
+    if kind not in INTER_KINDS:
+        raise QueryError("bad_args")
+    if kind == "message":
+        frm, to = a.get("from"), a.get("to")
+        if not valid_profile(frm) or not valid_profile(to):
+            raise QueryError("bad_args")
+        con = open_profile(home, to)
+        try:
+            fdir = profile_dir(home, frm)
+            who = {frm.lower(), (display_name(fdir, frm) if fdir else frm).lower()}
+            best = None
+            for (sid,) in con.execute("SELECT id FROM sessions WHERE title = 'Bot Chat' ORDER BY id").fetchall():
+                for mid, content, ts in con.execute("SELECT id, content, timestamp FROM messages WHERE session_id = ? AND role = 'user' ORDER BY id DESC LIMIT 200", (sid,)):
+                    hit = match_bot_message(as_text(content))
+                    if hit and (hit[1].lower() in who or hit[0].lower() in who):
+                        if best is None or (to_epoch(ts) or 0) > (best[2] or 0):
+                            best = (as_text(content), sid, to_epoch(ts))
+                        break
+        finally:
+            con.close()
+        if best is None:
+            raise QueryError("not_found")
+        return _inter_out(best[0], ts=best[2], source="%s/state.db - session \"Bot Chat\"" % to, sessionId=best[1], profile=to)
+    ident = a.get("id")
+    if kind == "kanban":
+        if not valid_int(ident):
+            raise QueryError("bad_args")
+        for path in _kanban_paths(home):
+            if not os.path.isfile(path):
+                continue
+            con = open_ro(path)
+            try:
+                tcols = table_columns(con, "tasks")
+                icol, tcol = _pick_col(tcols, TASK_COLS["id"]), _pick_col(tcols, TASK_COLS["title"])
+                if not icol:
+                    continue
+                row = con.execute("SELECT %s FROM tasks WHERE %s = ?" % (tcol or "NULL", icol), (ident,)).fetchone()
+                if row is None:
+                    continue
+                text, ts = "", None
+                ecols = table_columns(con, "task_events")
+                bcol = _pick_col(ecols, ("body", "text", "comment", "message", "kind"))
+                if {"id", "task_id", "ts"} <= ecols and bcol:
+                    ev = con.execute("SELECT %s, ts FROM task_events WHERE task_id = ? ORDER BY id DESC LIMIT 1" % bcol, (ident,)).fetchone()
+                    if ev:
+                        text, ts = as_text(ev[0]), to_epoch(ev[1])
+            finally:
+                con.close()
+            rel = os.path.relpath(path, home).replace(os.sep, "/")
+            return _inter_out(text, title=_text(row[0], 200), ts=ts, source="%s - task #%d" % (rel, ident))
+        raise QueryError("not_found")
+    if kind == "delegate":
+        parts = ident.split(":", 2) if isinstance(ident, str) else []
+        if len(parts) != 3 or parts[0] != "sub" or not valid_profile(parts[1]) or not ID_RE.match(parts[2]):
+            raise QueryError("bad_args")
+        con = open_profile(home, parts[1])
+        try:
+            row = con.execute("SELECT title FROM sessions WHERE id = ?", (parts[2],)).fetchone()
+            if row is None:
+                raise QueryError("not_found")
+            text, ts = _last_text(con, parts[2])
+        finally:
+            con.close()
+        return _inter_out(text, title=_text(row[0], 200), ts=ts, source="%s/state.db - source=subagent" % parts[1], sessionId=parts[2], profile=parts[1])
+    if not isinstance(ident, str) or not ROOM_ID_RE.match(ident):
+        raise QueryError("bad_args")
+    room, best = ident[5:], None
+    for name, pdir in list_profiles(home):
+        db = os.path.join(pdir, "state.db")
+        if not os.path.isfile(db):
+            continue
+        con = open_ro(db)
+        try:
+            for sid, title in con.execute("SELECT id, title FROM sessions WHERE title LIKE 'Group:%' LIMIT 200").fetchall():
+                grp = match_group_title(title or "")
+                if not grp or grp[0] != room:
+                    continue
+                text, ts = _last_text(con, sid)
+                if text and (best is None or (ts or 0) > (best[1] or 0)):
+                    best = (text, ts, name, sid, title)
+        finally:
+            con.close()
+    if best is None:
+        raise QueryError("not_found")
+    return _inter_out(best[0], title=room, ts=best[1], source="%s/state.db - session \"%s\"" % (best[2], best[4]), sessionId=best[3], profile=best[2])
+
+
 def q_chat_sessions(home, a):
     """Sessions started from this app (source = mission-control), newest first, with a short preview."""
     name = a.get("profile")
@@ -1764,7 +1867,7 @@ def run_query(home, cmd, raw):
     handler = {
         "message": q_message, "history": q_history, "session": q_session,
         "vault_check": q_vault_check, "browse": q_browse, "note": q_note,
-        "chat_sessions": q_chat_sessions, "uploads_list": q_uploads_list,
+        "chat_sessions": q_chat_sessions, "uploads_list": q_uploads_list, "interaction": q_interaction,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}
@@ -1792,7 +1895,7 @@ def emit(kind, data, profile=None):
 
 
 def parse_args(argv):
-    args = {"home": None, "ticks": 0, "interval": 1.0, "agents_interval": 10.0, "cursors": {}, "history": FEED_HISTORY_ROWS, "query": None, "vault": None, "vault_interval": VAULT_POLL_S}
+    args = {"home": None, "ticks": 0, "interval": 1.0, "agents_interval": 10.0, "cursors": {}, "history": FEED_HISTORY_ROWS, "query": None, "vault": None, "vault_interval": VAULT_POLL_S, "inter_interval": 2.0}
     it = iter(argv)
     for a in it:
         if a == "--cursors":
@@ -1809,6 +1912,8 @@ def parse_args(argv):
             args["vault"] = next(it)
         elif a == "--vault-interval":
             args["vault_interval"] = float(next(it))
+        elif a == "--interactions-interval":
+            args["inter_interval"] = float(next(it))
         elif a == "--ticks":
             args["ticks"] = int(next(it))
         elif a == "--interval":
@@ -1843,6 +1948,9 @@ def main(argv):
     next_agents = clock()
     reported = set()
     last_cron = None
+    inter = InteractionState()
+    next_inter = clock()
+    last_inter = None
     done = 0
     while True:
         now = clock()
@@ -1868,6 +1976,16 @@ def main(argv):
             except Exception as ex:  # noqa: BLE001
                 emit("error", {"code": "cron_failed", "message": type(ex).__name__})
             next_agents = clock() + args["agents_interval"]
+        if now >= next_inter:
+            try:
+                data = inter.poll(args["home"], time.time())
+                digest = inter.digest(data)
+                if digest != last_inter:
+                    emit("interactions", data)
+                    last_inter = digest
+            except Exception as ex:  # noqa: BLE001
+                emit("error", {"code": "interactions_failed", "message": type(ex).__name__})
+            next_inter = clock() + args["inter_interval"]
         if now >= next_metrics:
             try:
                 emit("metrics", sampler.sample())
@@ -1895,7 +2013,7 @@ def main(argv):
             done += 1
             if args["ticks"] and done >= args["ticks"]:
                 return 0
-        time.sleep(max(0.0, min(next_metrics, next_agents) - clock()))
+        time.sleep(max(0.0, min(next_metrics, next_agents, next_inter) - clock()))
 
 
 if __name__ == "__main__":
