@@ -110,7 +110,7 @@ export class ChatService {
 
   /** One message through the persistent `hermes acp` process. Null when it cannot start, so the caller falls back. */
   private async sendAcp(hermes: string, profile: string, message: string): Promise<ChatSendResult | null> {
-    this.hub ??= new AcpHub({ conn: this.d.conn, hermes, cwd: () => this.d.acpCwd?.() ?? '/', ...(this.d.log ? { log: this.d.log } : {}), ...(this.d.stopGraceMs !== undefined ? { stopGraceMs: this.d.stopGraceMs } : {}) })
+    this.hub ??= new AcpHub({ conn: this.d.conn, hermes, cwd: () => this.d.acpCwd?.() ?? '/', forgetSession: (p, id) => { if (this.d.getSession(p) === id) this.d.setSession(p, null) }, ...(this.d.log ? { log: this.d.log } : {}), ...(this.d.stopGraceMs !== undefined ? { stopGraceMs: this.d.stopGraceMs } : {}) })
     let agent
     try {
       agent = await this.hub.agent(profile)

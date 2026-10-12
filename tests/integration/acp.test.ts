@@ -216,4 +216,28 @@ describe('chat through hermes acp', () => {
     await waitFor(() => ended(2), { label: 'second', timeout: 20_000 })
     expect(text().match(/what I found/g)).toHaveLength(2)
   })
+
+  it('starts a new ACP session when the saved one came from the one-shot chat (session/load answers null)', async () => {
+    const { session, chat, ended, text } = await setup()
+    session.chatSetSession('default', '20261012_125043_47a566') // a session id the one-shot chat saved
+    await session.chatSend({ profile: 'default', text: 'hello', attachmentIds: [] })
+    await waitFor(() => ended(), { label: 'end', timeout: 20_000 })
+    expect(chat.some((e) => e.kind === 'error')).toBe(false)
+    expect(text()).toContain('what I found')
+    expect(session.chatGetSession('default')).toMatch(/^s-acp-/)
+  })
+
+  it('forgets a conversation Hermes refuses, so the next message starts a new one', async () => {
+    const { session, chat, ended, text } = await setup()
+    await session.chatSend({ profile: 'default', text: 'one', attachmentIds: [] })
+    await waitFor(() => ended(1), { label: 'first', timeout: 20_000 })
+    session.chatSetSession('default', 's-acp-ghost-1') // loads, but Hermes refuses to prompt it
+    await session.chatSend({ profile: 'default', text: 'two', attachmentIds: [] })
+    await waitFor(() => ended(2), { label: 'second', timeout: 20_000 })
+    expect(chat.filter((e) => e.kind === 'error')).toHaveLength(1)
+    await session.chatSend({ profile: 'default', text: 'three', attachmentIds: [] })
+    await waitFor(() => ended(3), { label: 'third', timeout: 20_000 })
+    expect(chat.filter((e) => e.kind === 'error')).toHaveLength(1)
+    expect(text()).toContain('(turn 1)')
+  })
 })

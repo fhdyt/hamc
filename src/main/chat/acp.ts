@@ -11,6 +11,8 @@ export interface AcpDeps {
   /** The folder the agent works in (ACP wants one): the home of the server user. */
   cwd: () => string
   log?: (msg: string) => void
+  /** Hermes refused to prompt the saved conversation: forget it, so the next message starts a new one. */
+  forgetSession?: (profile: string, sessionId: string) => void
   /** How long a cancelled turn may take to end on its own before the process is closed. */
   stopGraceMs?: number
 }
@@ -124,9 +126,13 @@ export class AcpAgent {
     const cwd = this.d.cwd()
     if (saved && this.loadSession) {
       try {
-        await rpc.request('session/load', { sessionId: saved, cwd, mcpServers: [] }, 25_000)
-        this.sessionId = saved
-        return { id: saved, fresh: false }
+        // Hermes answers null for a session it cannot restore (for one the one-shot chat made, for instance); only an object means it loaded
+        const loaded = await rpc.request('session/load', { sessionId: saved, cwd, mcpServers: [] }, 25_000)
+        if (isObj(loaded)) {
+          this.sessionId = saved
+          return { id: saved, fresh: false }
+        }
+        this.d.log?.(`acp: session/load did not restore ${saved}, starting a new session`)
       } catch (e) {
         this.d.log?.(`acp: session/load failed (${e instanceof Error ? e.message : String(e)}), starting a new session`)
       }
@@ -166,6 +172,11 @@ export class AcpAgent {
       const stopped = run.cancelled || stopReason === 'cancelled'
       const kinds = [...run.updates].map(([k, n]) => `${k}:${n}`).join(',') || 'none'
       this.d.log?.(`acp: turn ended (${this.profile}) stopReason=${stopReason || '-'} text=${run.textChars} updates=${kinds} ms=${Date.now() - run.startedAt}`)
+      if (stopReason === 'refusal' && run.updates.size === 0) {
+        // Hermes does not know this session (or could not rebuild its agent): drop it here and in the saved mapping
+        this.sessionId = null
+        this.d.forgetSession?.(this.profile, id)
+      }
       if (!stopped && !run.errored && run.textChars === 0) {
         emit({ kind: 'error', message: `Hermes ended the turn without a reply${stopReason ? ` (${stopReason})` : ''}. It sent: ${kinds === 'none' ? 'nothing' : kinds}. Try again, or turn off “Ask before risky actions” in Settings → Chat to use the one-shot chat.` })
       }
