@@ -15,6 +15,7 @@ export const IPC = {
   feedMessage: 'mc:feed:message',
   feedHistory: 'mc:feed:history',
   feedSession: 'mc:feed:session',
+  interactionDetail: 'mc:interactions:detail',
   brainGet: 'mc:brain:get',
   brainSetVault: 'mc:brain:set-vault',
   brainValidate: 'mc:brain:validate',

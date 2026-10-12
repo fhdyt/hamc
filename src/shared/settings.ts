@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { InteractionKind } from './events'
 
 export interface WindowBounds {
   x?: number
@@ -6,6 +7,13 @@ export interface WindowBounds {
   width: number
   height: number
 }
+
+export interface AgentGraphSettings {
+  kinds: z.infer<typeof InteractionKind>[]
+  range: '1h' | '24h' | '7d'
+}
+
+export const AGENT_GRAPH_DEFAULTS: AgentGraphSettings = { kinds: ['kanban', 'message', 'room', 'delegate'], range: '24h' }
 
 export interface BrainGroup {
   id: string
@@ -68,6 +76,10 @@ export interface SettingsMap {
   'dashboard.cronH': number
   'dashboard.rosterH': number
   'dashboard.activityTab': 'activity' | 'alerts'
+  /** Which graph the Dashboard graph panel shows. */
+  'dashboard.graphTab': 'brain' | 'agents'
+  /** Kinds and time range of the agent interaction graph. */
+  'dashboard.agentGraph': AgentGraphSettings
   'brain.graph': BrainGraphSettings
   'window.bounds': WindowBounds | null
 }
@@ -88,6 +100,8 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'dashboard.cronH': 200,
   'dashboard.rosterH': 150,
   'dashboard.activityTab': 'activity',
+  'dashboard.graphTab': 'brain',
+  'dashboard.agentGraph': AGENT_GRAPH_DEFAULTS,
   'brain.graph': BRAIN_GRAPH_DEFAULTS,
   'window.bounds': null
 }
@@ -108,6 +122,8 @@ export const SETTINGS_SCHEMA = {
   'dashboard.cronH': z.number().min(90).max(560),
   'dashboard.rosterH': z.number().min(60).max(480),
   'dashboard.activityTab': z.enum(['activity', 'alerts']),
+  'dashboard.graphTab': z.enum(['brain', 'agents']),
+  'dashboard.agentGraph': z.object({ kinds: z.array(InteractionKind).max(4), range: z.enum(['1h', '24h', '7d']) }),
   'brain.graph': z.object({
     showTags: z.boolean(),
     showAttachments: z.boolean(),

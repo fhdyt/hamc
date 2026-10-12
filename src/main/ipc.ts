@@ -21,6 +21,13 @@ const FeedHistoryArgs = z.object({
 })
 const FeedSessionArgs = z.object({ profile: ProfileName, sessionId: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/) })
 
+const InteractionArgs = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('message'), from: ProfileName, to: ProfileName }),
+  z.object({ kind: z.literal('kanban'), id: z.number().int().min(0) }),
+  z.object({ kind: z.literal('room'), id: z.string().regex(/^room:[^\u0000]{1,80}$/) }),
+  z.object({ kind: z.literal('delegate'), id: z.string().regex(/^sub:[A-Za-z0-9._-]{1,64}:[A-Za-z0-9._:-]{1,128}$/) })
+])
+
 const VaultPath = z.string().min(1).max(4096).refine((s) => !s.includes('\u0000'))
 const BrowsePath = z.string().max(4096).refine((s) => !s.includes('\u0000'))
 const NoteId = z.string().min(1).max(4096).refine((s) => !s.includes('\u0000'))
@@ -108,6 +115,7 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.feedMessage, (a) => d.session.feedMessage(FeedMessageArgs.parse(a)))
   handle(IPC.feedHistory, (a) => d.session.feedHistory(FeedHistoryArgs.parse(a)))
   handle(IPC.feedSession, (a) => d.session.feedSession(FeedSessionArgs.parse(a)))
+  handle(IPC.interactionDetail, (a) => d.session.interactionDetail(InteractionArgs.parse(a)))
   handle(IPC.brainGet, () => d.session.brainGet())
   handle(IPC.brainSetVault, (a) => d.session.brainSetVault(a === null ? null : VaultPath.parse(a)))
   handle(IPC.brainValidate, (a) => d.session.brainValidate(VaultPath.parse(a)))

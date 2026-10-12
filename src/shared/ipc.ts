@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult, ModelReadResult, ModelSaveRequest, RestartResult, SaveModelResult, TestModelResult } from './agentCfg'
-import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, NoteText, SessionDetail, UploadsList, VaultCheck } from './events'
+import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, SessionDetail, UploadsList, VaultCheck } from './events'
 import type { SettingsMap } from './settings'
 
 export { IPC } from './channels'
@@ -109,6 +109,12 @@ export type CronOutputResult =
   | { ok: true; text: string; truncated: boolean; name: string; mtime: number }
   | { ok: false; reason: 'no-output' | 'not-found' | 'unreadable' | 'not-connected' }
 
+/** What the renderer may ask about one edge or node of the agent graph; the main process checks it again. */
+export type InteractionDetailArgs =
+  | { kind: 'message'; from: string; to: string }
+  | { kind: 'kanban'; id: number }
+  | { kind: Exclude<InteractionKind, 'message' | 'kanban'>; id: string }
+
 export type QueryError =
   | 'bad_args'
   | 'not_found'
@@ -192,6 +198,9 @@ export interface MissionApi {
   }
   cron: {
     output(profile: string, jobId: string): Promise<CronOutputResult>
+  }
+  interactions: {
+    detail(args: InteractionDetailArgs): Promise<QueryResult<InteractionDetail>>
   }
   feed: {
     message(profile: string, messageId: number, field: 'content' | 'reasoning' | 'tool_calls', index?: number): Promise<QueryResult<FeedMessageText>>

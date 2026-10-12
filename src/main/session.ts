@@ -1,8 +1,8 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
-import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, NoteText, SessionDetail, VaultCheck } from '@shared/events'
+import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, VaultCheck } from '@shared/events'
 import type {
-  ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, QueryResult, SavedConnection
+  ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, InteractionDetailArgs, QueryResult, SavedConnection
 } from '@shared/ipc'
 import { BrainService } from './brain/service'
 import { AgentFileService } from './agentcfg/files'
@@ -464,6 +464,10 @@ export class MissionSession {
 
   feedSession(args: { profile: string; sessionId: string }): Promise<QueryResult<SessionDetail>> {
     return this.queries.run('session', args, SessionDetail)
+  }
+
+  interactionDetail(args: InteractionDetailArgs): Promise<QueryResult<InteractionDetail>> {
+    return this.queries.run('interaction', args, InteractionDetail)
   }
 
   chatSend(req: { profile: string; text: string; attachmentIds: string[] }): ReturnType<ChatService['send']> {

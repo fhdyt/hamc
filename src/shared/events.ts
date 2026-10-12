@@ -234,6 +234,53 @@ export const UploadsList = z.object({
 })
 export type UploadsList = z.infer<typeof UploadsList>
 
+export const InteractionKind = z.enum(['kanban', 'message', 'room', 'delegate'])
+export type InteractionKind = z.infer<typeof InteractionKind>
+
+export const InteractionEdge = z.object({
+  id: z.string(),
+  kind: InteractionKind,
+  from: z.string(),
+  to: z.string(),
+  count: z.number().int().nonnegative(),
+  firstTs: z.number(),
+  lastTs: z.number(),
+  label: z.string().nullable(),
+  status: z.string().nullable()
+})
+export type InteractionEdge = z.infer<typeof InteractionEdge>
+
+export const InteractionRoom = z.object({ id: z.string(), name: z.string(), members: z.array(z.string()), lastTs: z.number() })
+export type InteractionRoom = z.infer<typeof InteractionRoom>
+
+export const InteractionSub = z.object({ id: z.string(), parent: z.string(), status: z.enum(['running', 'done']), lastTs: z.number(), title: z.string().nullable() })
+export type InteractionSub = z.infer<typeof InteractionSub>
+
+export const InteractionSource = z.object({ state: z.enum(['ok', 'absent', 'unreadable']), unresolved: z.number().int().nonnegative() })
+export type InteractionSource = z.infer<typeof InteractionSource>
+
+/** A snapshot of who interacts with whom in the last 7 days; the renderer applies kinds and range itself. */
+export const InteractionsData = z.object({
+  since: z.number(),
+  edges: z.array(InteractionEdge),
+  rooms: z.array(InteractionRoom),
+  subagents: z.array(InteractionSub),
+  sources: z.object({ kanban: InteractionSource, message: InteractionSource, room: InteractionSource, delegate: InteractionSource })
+})
+export type InteractionsData = z.infer<typeof InteractionsData>
+
+export const InteractionDetail = z.object({
+  text: z.string(),
+  truncated: z.boolean(),
+  fullLen: z.number().int().nonnegative(),
+  title: z.string().nullable(),
+  ts: z.number().nullable(),
+  source: z.string(),
+  sessionId: z.string().nullable(),
+  profile: z.string().nullable()
+})
+export type InteractionDetail = z.infer<typeof InteractionDetail>
+
 const envelope = { ts: z.number(), profile: z.string().nullable() }
 
 export const CollectorEvent = z.discriminatedUnion('type', [
@@ -242,6 +289,7 @@ export const CollectorEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('cron'), ...envelope, data: CronData }),
   z.object({ type: z.literal('feed'), ...envelope, data: FeedData }),
   z.object({ type: z.literal('brain'), ...envelope, data: BrainData }),
+  z.object({ type: z.literal('interactions'), ...envelope, data: InteractionsData }),
   z.object({ type: z.literal('error'), ...envelope, data: ErrorData })
 ])
 export type CollectorEvent = z.infer<typeof CollectorEvent>
