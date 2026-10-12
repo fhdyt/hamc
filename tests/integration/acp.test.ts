@@ -38,6 +38,7 @@ async function setup(opts: Partial<FakeSshOptions> = {}) {
   srv = await startFakeSsh({ fixture: fx, acp: true, ...opts })
   const store = new SettingsStore(':memory:')
   const chat: ChatEvent[] = []
+  const logs: string[] = []
   const manager = new ConnectionManager({ getKnownHost: (h, p) => store.getKnownHost(h, p) }, 5000)
   const session = new MissionSession({
     manager,
@@ -49,6 +50,7 @@ async function setup(opts: Partial<FakeSshOptions> = {}) {
     },
     backoff: () => 50,
     latencyIntervalMs: 500,
+    log: (m) => logs.push(m),
     chatStopGraceMs: 600
   })
   live.push(session)
@@ -59,7 +61,7 @@ async function setup(opts: Partial<FakeSshOptions> = {}) {
   const text = (): string => chat.flatMap((e) => (e.kind === 'text' ? [e.text] : [])).join('')
   const approvals = () => chat.flatMap((e) => (e.kind === 'approval' ? [e] : []))
   const acpStarts = (): number => srv.execLog.filter((a) => a.includes('acp') && !a.includes('--check')).length
-  return { session, store, chat, ended, text, approvals, acpStarts }
+  return { session, store, chat, logs, ended, text, approvals, acpStarts }
 }
 
 describe('chat through hermes acp', () => {
@@ -181,5 +183,37 @@ describe('chat through hermes acp', () => {
     const flat = srv.execLog.flat()
     expect(flat).not.toContain('--yolo')
     expect(srv.execLog.some((a) => a.includes('config') && a.includes('set'))).toBe(false)
+  })
+
+  it('says so when the agent ends a turn without any reply, and logs what it did send', async () => {
+    const { session, chat, logs, ended } = await setup()
+    await session.chatSend({ profile: 'default', text: 'silent please', attachmentIds: [] })
+    await waitFor(() => ended(), { label: 'end', timeout: 20_000 })
+    const err = chat.find((e) => e.kind === 'error')
+    expect(err).toMatchObject({ kind: 'error', message: expect.stringMatching(/without a reply/) })
+    expect(chat.at(-1)).toMatchObject({ kind: 'end', stopped: false })
+    const line = logs.find((l) => l.startsWith('acp: turn ended'))
+    expect(line).toMatch(/stopReason=end_turn/)
+    expect(line).toMatch(/text=0/)
+    expect(line).toMatch(/agent_thought_chunk:1/)
+    expect(line).toMatch(/tool_call:1/)
+  })
+
+  it('does not report an error for a normal reply, and logs its size', async () => {
+    const { session, chat, logs, ended } = await setup()
+    await session.chatSend({ profile: 'default', text: 'hello', attachmentIds: [] })
+    await waitFor(() => ended(), { label: 'end', timeout: 20_000 })
+    expect(chat.some((e) => e.kind === 'error')).toBe(false)
+    expect(logs.find((l) => l.startsWith('acp: turn ended'))).toMatch(/text=[1-9]\d*/)
+  })
+
+  it('reads text sent as a list of blocks or as a bare object', async () => {
+    const { session, ended, text } = await setup()
+    await session.chatSend({ profile: 'default', text: 'arrayshape', attachmentIds: [] })
+    await waitFor(() => ended(1), { label: 'first', timeout: 20_000 })
+    expect(text()).toContain('what I found')
+    await session.chatSend({ profile: 'default', text: 'bareshape', attachmentIds: [] })
+    await waitFor(() => ended(2), { label: 'second', timeout: 20_000 })
+    expect(text().match(/what I found/g)).toHaveLength(2)
   })
 })

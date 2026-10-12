@@ -121,8 +121,17 @@ def prompt(msg):
         reply = "Done, I ran it." if allowed else "I was not allowed to run that."
     else:
         reply = "Here is **what I found** (turn %d)." % turns[sid]
+    if "silent" in text:
+        # the agent thinks and then ends the turn without a message (what a mismatch of formats looks like)
+        update(sid, {"sessionUpdate": "agent_thought_chunk", "content": {"type": "text", "text": "hmm"}})
+        return respond(msg, {"stopReason": "end_turn"})
     for part in (reply[:10], reply[10:]):
-        update(sid, {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": part}})
+        if "arrayshape" in text:
+            update(sid, {"sessionUpdate": "agent_message_chunk", "content": [{"type": "text", "text": part}]})
+        elif "bareshape" in text:
+            update(sid, {"sessionUpdate": "agent_message_chunk", "content": {"text": part}})
+        else:
+            update(sid, {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": part}})
         time.sleep(0.03)
     mf.add_message(DB, sid, "assistant", reply, time.time())
     respond(msg, {"stopReason": "end_turn"})

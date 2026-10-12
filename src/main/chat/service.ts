@@ -231,7 +231,11 @@ export class ChatService {
     const { turn } = act
     const startedAt = Date.now() / 1000
     let sawSession = resumed
-    const emit = (e: { kind: ChatEvent['kind'] } & Record<string, unknown>): void => this.d.emit({ turn, profile, ...e } as ChatEvent)
+    let textChars = 0
+    const emit = (e: { kind: ChatEvent['kind'] } & Record<string, unknown>): void => {
+      if (e.kind === 'text' && typeof e['text'] === 'string') textChars += e['text'].length
+      this.d.emit({ turn, profile, ...e } as ChatEvent)
+    }
     const parser = new ChatLineParser()
     const lines = new LineSplitter()
     let stderr = ''
@@ -296,7 +300,11 @@ export class ChatService {
       if (!act.stopped && !sawResult && !sawError && (exitCode === null || exitCode !== 0)) {
         const tail = stderr.trim().split('\n').filter(Boolean).slice(-3).join(' ') || parser.noise.slice(-2).join(' ')
         emit({ kind: 'error', message: (tail || `Hermes ended with exit code ${exitCode ?? 'unknown'}`).slice(0, 500) })
+      } else if (!act.stopped && !sawError && textChars === 0) {
+        const note = stderr.trim().split('\n').filter(Boolean).slice(-2).join(' ') || parser.noise.slice(-2).join(' ')
+        emit({ kind: 'error', message: `Hermes finished without a reply.${note ? ` It said: ${note}` : ''}`.slice(0, 500) })
       }
+      this.d.log?.(`chat: turn ended (${profile}) mode=${stream ? 'stream-json' : 'plain'} exit=${exitCode ?? '-'} text=${textChars} stopped=${act.stopped}`)
       emit({ kind: 'end', exitCode, stopped: act.stopped })
       if (!sawSession) void this.adoptSession(profile, startedAt, emit)
     })

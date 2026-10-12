@@ -28,6 +28,14 @@ export interface AcpTurn {
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined)
 
+/** Text of a content block as ACP sends it: `{type:'text', text}`, a bare `{text}`, a plain string, or a list of those. */
+function textOf(c: unknown): string {
+  if (typeof c === 'string') return c
+  if (Array.isArray(c)) return c.map(textOf).join('')
+  if (isObj(c) && (c['type'] === undefined || c['type'] === 'text') && typeof c['text'] === 'string') return c['text']
+  return ''
+}
+
 /** The command or arguments of a tool call, short enough to read in a card. */
 function describe(raw: unknown): string | undefined {
   if (typeof raw === 'string') return raw.slice(0, 800)
@@ -54,6 +62,10 @@ interface Running {
   tools: Map<string, { at: number; name: string }>
   approvals: Map<string, Pending>
   cancelled: boolean
+  /** What came in, for the log and for noticing a turn that ended without a reply. */
+  textChars: number
+  errored: boolean
+  updates: Map<string, number>
 }
 
 /** One `hermes acp` process, kept open between messages of one agent. */
@@ -101,6 +113,8 @@ export class AcpAgent {
     )
     const caps = isObj(res) && isObj(res['agentCapabilities']) ? res['agentCapabilities'] : {}
     this.loadSession = caps['loadSession'] === true
+    const info = isObj(res) && isObj(res['agentInfo']) ? res['agentInfo'] : {}
+    this.d.log?.(`acp: initialized (${this.profile}) protocol=${isObj(res) ? String(res['protocolVersion'] ?? '?') : '?'} agent=${str(info['name']) ?? '?'} ${str(info['version']) ?? ''} loadSession=${this.loadSession}`)
   }
 
   /** Makes sure there is a session to talk in: the saved one if it can be loaded, a new one otherwise. */
@@ -129,7 +143,7 @@ export class AcpAgent {
     if (!this.alive) throw new Error('Hermes ACP is not running.')
     const { id } = await this.ensureSession(saved)
     begin(id)
-    const run: Running = { turn, emit, startedAt: Date.now(), tools: new Map(), approvals: new Map(), cancelled: false }
+    const run: Running = { turn, emit, startedAt: Date.now(), tools: new Map(), approvals: new Map(), cancelled: false, textChars: 0, errored: false, updates: new Map() }
     this.running = run
     const rpc = this.rpc!
     const done = (async () => {
@@ -138,7 +152,10 @@ export class AcpAgent {
         const res = await rpc.request('session/prompt', { sessionId: id, prompt: [{ type: 'text', text: message }] }, 0)
         stopReason = isObj(res) ? (str(res['stopReason']) ?? '') : ''
       } catch (e) {
-        if (!run.cancelled) emit({ kind: 'error', message: (e instanceof Error ? e.message : String(e)).slice(0, 500) })
+        if (!run.cancelled) {
+          run.errored = true
+          emit({ kind: 'error', message: (e instanceof Error ? e.message : String(e)).slice(0, 500) })
+        }
       }
       this.settle(run)
       if (this.killTimer) {
@@ -147,6 +164,11 @@ export class AcpAgent {
       }
       if (this.running === run) this.running = null
       const stopped = run.cancelled || stopReason === 'cancelled'
+      const kinds = [...run.updates].map(([k, n]) => `${k}:${n}`).join(',') || 'none'
+      this.d.log?.(`acp: turn ended (${this.profile}) stopReason=${stopReason || '-'} text=${run.textChars} updates=${kinds} ms=${Date.now() - run.startedAt}`)
+      if (!stopped && !run.errored && run.textChars === 0) {
+        emit({ kind: 'error', message: `Hermes ended the turn without a reply${stopReason ? ` (${stopReason})` : ''}. It sent: ${kinds === 'none' ? 'nothing' : kinds}. Try again, or turn off “Ask before risky actions” in Settings → Chat to use the one-shot chat.` })
+      }
       if (!stopped) emit({ kind: 'result', exitCode: 0, durationMs: Date.now() - run.startedAt })
       emit({ kind: 'end', exitCode: stopped ? null : 0, stopped })
     })()
@@ -202,9 +224,13 @@ export class AcpAgent {
     if (typeof params['sessionId'] === 'string' && this.sessionId && params['sessionId'] !== this.sessionId) return
     const u = params['update']
     const kind = str(u['sessionUpdate'])
+    run.updates.set(kind ?? '?', (run.updates.get(kind ?? '?') ?? 0) + 1)
     if (kind === 'agent_message_chunk') {
-      const c = u['content']
-      if (isObj(c) && c['type'] === 'text' && typeof c['text'] === 'string') run.emit({ kind: 'text', text: c['text'] })
+      const t = textOf(u['content'])
+      if (t !== '') {
+        run.textChars += t.length
+        run.emit({ kind: 'text', text: t })
+      }
     } else if (kind === 'tool_call' || kind === 'tool_call_update') {
       const id = str(u['toolCallId'])
       if (!id) return
