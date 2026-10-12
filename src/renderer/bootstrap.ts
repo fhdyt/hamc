@@ -5,6 +5,7 @@ import { useChat } from './stores/chat'
 import { useConn } from './stores/conn'
 import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
+import { useInteractions } from './stores/interactions'
 import { useMetrics } from './stores/metrics'
 import { useUi } from './stores/ui'
 
@@ -18,6 +19,7 @@ export async function bootstrap(): Promise<void> {
     } else if (ev.type === 'cron') useCron.getState().applyCron(ev.data)
     else if (ev.type === 'feed') useFeed.getState().applyFeed(ev.data)
     else if (ev.type === 'brain') useBrain.getState().applyBrain(ev.data)
+    else if (ev.type === 'interactions') useInteractions.getState().apply(ev.data)
     else if (ev.type === 'error' && ev.data.code.startsWith('vault_')) useBrain.getState().setError(ev.data.message)
     else if (ev.type === 'error' && ['unsupported_schema', 'db_unreadable', 'feed_failed'].includes(ev.data.code)) useFeed.getState().setError(`${ev.data.message}${ev.data.profile ? ` (${ev.data.profile})` : ''}`)
   })

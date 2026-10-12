@@ -10,6 +10,7 @@ import { useBrain } from './stores/brain'
 import { useChat } from './stores/chat'
 import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
+import { useInteractions } from './stores/interactions'
 import { useMetrics } from './stores/metrics'
 import { useUi } from './stores/ui'
 
@@ -20,6 +21,7 @@ export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
   const prev = useConn.getState().saved
   if (prev && (prev.host !== req.host || prev.port !== req.port || prev.username !== req.username)) {
     useFeed.getState().reset()
+    useInteractions.getState().reset()
     useChat.getState().reset()
   }
   const res = await window.mc.connection.connect(req)
@@ -51,6 +53,7 @@ export async function forgetConnection(): Promise<void> {
   useMetrics.getState().reset()
   useCron.getState().reset()
   useFeed.getState().reset()
+  useInteractions.getState().reset()
   useBrain.getState().reset()
   useChat.getState().reset()
   useConn.setState({
