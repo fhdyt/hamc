@@ -1,5 +1,7 @@
 # Spike M6: format CLI Hermes asli
 
+> M6 sudah dibangun dengan parser toleran dan fake Hermes. Menjalankan skrip ini tetap dianjurkan: keluarannya dipakai untuk mencocokkan parser (`src/main/agentcfg/parse.ts`) dan fixture dengan format asli, terutama `config get model --json`, `status` dan opsi stdin di `config set`.
+
 Tujuan: mengetahui bentuk asli keluaran dan flag `hermes` yang dipakai bagian **Model** di M6 (F-CFG-1..9), sebelum desainnya ditulis. Semua perintah di bawah hanya **membaca**: tidak ada yang menulis berkas, mengubah konfigurasi, atau menjalankan model. Tidak ada yang membaca `.env` atau `auth.json`.
 
 ## Cara menjalankan

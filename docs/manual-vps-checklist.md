@@ -88,6 +88,20 @@ Berkas `/tmp/mc-start.txt` itu ulah Anda sendiri untuk pengukuran. Hapus setelah
 56. **Tanpa ACP.** Matikan saklar di Settings → Chat: chat kembali ke mode satu kali jalan (`hermes chat -Q`), dan tindakan berisiko ditolak menurut kebijakan Hermes. Aplikasi tidak pernah menambahkan `--yolo`, tidak mengubah `approvals.*`, dan tidak menjalankan `hermes config set` untuk chat.
 57. **Format nyata.** Bila kartu tidak muncul atau teks tool aneh, catat keluaran `hermes acp` yang sebenarnya (pesan `session/update` dan `session/request_permission`) dan kirim ke pengembang; bentuk pesan ACP Hermes belum diverifikasi.
 
+## Tambahan M6: pengaturan agent
+
+Sebelum menguji Model, jalankan skrip di `docs/spike-m6-hermes-cli.md` di VPS dan kirim keluarannya; parser untuk `config get model --json`, `status` dan opsi stdin dicocokkan dengan format asli.
+
+58. **Buka.** Klik ikon gear di panel Agents (Dashboard): Settings terbuka di **Agents** dengan agent yang dipilih. Tab: Model, SOUL.md, Memory, User profile.
+59. **Soul.** Buka SOUL.md: isi sama dengan `cat ~/.hermes/SOUL.md` (atau `profiles/<nama>/SOUL.md`). Ubah satu baris, tekan **Save**: dialog menampilkan diff. Simpan; di VPS `ls -la` menunjukkan izin berkas tetap sama dan tidak ada berkas `.SOUL.md.mc-*` tersisa. Untuk agent tanpa SOUL.md muncul **Create SOUL.md**.
+60. **Memory dan User.** Entri `§` tampil sebagai kartu (ubah, tambah, hapus, geser) dan ada mode Raw. Penghitung merah di atas 2.200 (Memory) atau 1.375 (User) karakter dan Save mati. Setelah simpan, `hermes` di sesi baru membaca isi yang baru.
+61. **Konflik.** Buka MEMORY.md, ubah teks di aplikasi, lalu di VPS tambahkan satu entri dengan `echo` ke berkas yang sama. Dalam ±5 detik muncul pita "changed on the server". Tekan Save: dialog konflik muncul dan tidak ada yang tertimpa. **Take theirs**, **Merge** dan **Keep mine** (dengan konfirmasi kedua) bekerja; Merge dengan edit yang bertabrakan memberi penanda `<<<<<<<` dan Save mati sampai diperbaiki.
+62. **Revert dan unsaved.** Setelah simpan, **Revert last save** mengembalikan teks lama ke editor (menyimpannya tetap lewat diff). Pindah agent atau tutup Settings dengan perubahan belum disimpan: muncul "You have unsaved changes". Menutup jendela aplikasi juga bertanya. Putuskan koneksi: editor tetap berisi, Save mati.
+63. **Model: baca.** Tab Model menampilkan provider, model dan reasoning yang sama dengan `hermes -p <p> config get model` dan `hermes status`. Catat jika provider yang punya key tidak bertanda "key saved ✓" (format `status` perlu dicocokkan).
+64. **Model: daftar dan simpan.** Pilih Custom atau OpenRouter, isi Base URL dan key, **Fetch models** (daftar tampil dengan ctx), pilih model, lihat pratinjau perintah (key tampil `••••`), Save. Di VPS: `hermes config get model --json` menunjukkan nilai baru, dan `ps aux` selama Save tidak memuat key (jika Hermes tidak punya `--stdin`, banner peringatan muncul dan key lewat argumen). Kolom key kosong setelah Save, dan key tidak pernah tampil lagi.
+65. **Test dan restart.** **Test saved model** menjawab ✓ dengan latensi. **Restart this agent's gateway** meminta konfirmasi lalu menjalankan `hermes -p <p> gateway restart` hanya untuk agent itu.
+66. **Zero-Change.** Yang berubah di VPS hanyalah berkas yang Anda simpan, hasil `hermes config set`, dan gateway yang Anda restart. `.env` dan `auth.json` tidak dibaca (tidak ada `cat` atau SFTP ke keduanya), tidak ada skrip atau berkas bantu baru.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.

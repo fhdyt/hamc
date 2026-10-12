@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { FILE_LABEL } from '@shared/agentCfg'
 import { Avatar } from '../../components/Avatar'
 import { EmptyState } from '../../components/States'
@@ -23,7 +23,9 @@ export function AgentsSettings() {
   const select = useAgentCfg((s) => s.selectProfile)
   const setTab = useAgentCfg((s) => s.setTab)
   const requestLeave = useAgentCfg((s) => s.requestLeave)
-  const dirty = useAgentCfg((s) => (profile ? unsavedKinds(s, profile) : new Set<AgentTab>()))
+  const drafts = useAgentCfg((s) => s.drafts)
+  const modelDirty = useAgentCfg((s) => s.modelDirty)
+  const dirty = useMemo(() => (profile ? unsavedKinds({ drafts, modelDirty }, profile) : new Set<AgentTab>()), [drafts, modelDirty, profile])
 
   // Opens on the agent that is selected on the Dashboard, else the first one.
   useEffect(() => {

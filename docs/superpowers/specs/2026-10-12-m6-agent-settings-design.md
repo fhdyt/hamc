@@ -55,7 +55,7 @@ shared    agentCfg.ts         kinds, limits, paths, presets, command plan, types
 
 ### Model
 
-State shown (F-CFG-1): provider, model, base URL, reasoning effort from `config get model --json` and `config get agent.reasoning_effort --json`; credential status per provider from `hermes status`; "last used" from the newest `sessions.model` the feed already holds (renderer side, no new query).
+State shown (F-CFG-1): provider, model, base URL, reasoning effort from `config get model --json` and `config get agent.reasoning_effort --json`; credential status per provider from `hermes status`. The "model used in the last session" of F-CFG-1 (`sessions.model`) is not shown: the feed items do not carry it and a new collector query for one line is left for later.
 
 Flow (F-CFG-2..5): provider choice (OpenRouter, Anthropic, Nous Portal (OAuth, info only), Ollama (no key, `http://localhost:11434/v1`), Custom) → Base URL (preset default, editable; Custom requires name and URL) → API key (password field; hidden when saved key exists unless the user wants to replace it; absent for Ollama and OAuth) → **Fetch models** → filter and pick (or type an ID) → reasoning effort → **Test** → **Save**.
 
