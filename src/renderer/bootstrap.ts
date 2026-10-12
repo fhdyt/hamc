@@ -22,6 +22,14 @@ export async function bootstrap(): Promise<void> {
     else if (ev.type === 'error' && ['unsupported_schema', 'db_unreadable', 'feed_failed'].includes(ev.data.code)) useFeed.getState().setError(`${ev.data.message}${ev.data.profile ? ` (${ev.data.profile})` : ''}`)
   })
   mc.onChat((ev) => useChat.getState().applyChat(ev))
+  // an agent that is answering a chat from this app shows as working, whatever state.db says yet
+  useChat.subscribe((s) => {
+    const busy = Object.entries(s.rooms)
+      .filter(([, r]) => r.sending || (r.turn !== null && !r.turn.ended))
+      .map(([p]) => p)
+      .sort()
+    useAgents.getState().setBusy(busy)
+  })
   mc.onUpload((p) => useChat.getState().applyUpload(p))
   mc.onStatus((status) => {
     const was = useConn.getState().status.state
