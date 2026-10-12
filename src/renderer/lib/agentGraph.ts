@@ -58,7 +58,7 @@ const INNER = 90
 export function buildGraph(agents: readonly RosterAgent[], data: InteractionsData, now: number): Graph {
   const n = agents.length
   const ar = n > 20 ? 18 : 26
-  const R = n <= 1 ? 0 : Math.max(230, (2 * ar + 16) / (2 * Math.sin(Math.PI / n)))
+  const R = n <= 1 ? 0 : Math.max(Math.min(230, 110 + n * 20), (2 * ar + 16) / (2 * Math.sin(Math.PI / n)))
   const angleOf = new Map<string, number>()
   const nodes: GNode[] = []
   agents.forEach((a, i) => {

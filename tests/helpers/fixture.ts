@@ -46,6 +46,11 @@ export function makeSyntheticVault(dir: string, n: number, links = 4): void {
   execFileSync(pythonExe, [script, 'synthetic-vault', dir, String(n), String(links)])
 }
 
+/** Adds Bot Chat, group room, subagent and kanban data between the fixture's profiles (pass the fixture root). */
+export function addInteractions(root: string): void {
+  execFileSync(pythonExe, [script, 'add-interactions', root])
+}
+
 export function snapshotTree(dir: string): Record<string, string> {
   const out: Record<string, string> = {}
   const walk = (d: string): void => {

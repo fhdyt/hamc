@@ -309,6 +309,28 @@ body {
 .d-gtab[aria-selected='true'] { background: #44475a; color: #f8f8f2; font-weight: 600; }
 .d-gtab[disabled] { opacity: 0.5; cursor: not-allowed; }
 .d-graph-meta { color: #8b95bd; font-size: 10px; }
+.d-graph.ag { flex-direction: column; }
+.ag .d-graph-bar { position: relative; top: auto; left: auto; right: auto; flex: none; padding: 8px 10px 0; }
+.ag .d-graph-state { position: relative; inset: auto; flex: 1; min-height: 0; padding: 8px 16px 16px; }
+.ag-stage { position: relative; flex: 1; min-height: 0; margin-top: 6px; }
+.ag-svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; }
+.ag-svg:active { cursor: grabbing; }
+.ag-node, .ag-label { cursor: pointer; outline: none; }
+.ag-node:focus-visible circle, .ag-node:focus-visible rect, .ag-label:focus-visible rect { stroke: #f8f8f2; stroke-width: 3; }
+.ag-label rect { stroke-width: 1; }
+.ag-label text { fill: #f8f8f2; font-size: 10px; }
+.ag-kinds { display: flex; flex-wrap: wrap; gap: 4px; }
+.ag-kind { display: flex; align-items: center; gap: 5px; min-height: 24px; padding: 0 8px; border: 1px solid #44475a; border-radius: 6px; background: #282a36; color: #a9b2d3; font: inherit; font-size: 10px; cursor: pointer; }
+.ag-kind[aria-pressed='false'] { opacity: 0.5; }
+.ag-kind[aria-pressed='true'] { color: #f8f8f2; }
+.ag-kind i, .ag-sources i, .ag-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.ag-range { min-height: 24px; border: 1px solid #44475a; border-radius: 6px; background: #282a36; color: #f8f8f2; font: inherit; font-size: 10px; padding: 0 6px; }
+.ag-sources { list-style: none; margin: 4px 0 0; padding: 0; text-align: left; color: #a9b2d3; font-size: 11px; display: flex; flex-direction: column; gap: 3px; }
+.ag-card { position: relative; z-index: 3; flex: none; margin: 0 10px 10px; max-height: 42%; overflow: auto; box-sizing: border-box; padding: 10px 12px; border: 1px solid #44475a; border-radius: 10px; background: #21222c; font-size: 11px; color: #f8f8f2; display: flex; flex-direction: column; gap: 6px; }
+.ag-route, .ag-meta { color: #a9b2d3; }
+.ag-title { font-weight: 600; }
+.ag-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #a9b2d3; max-height: 140px; overflow: auto; }
+.ag-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 10px; }
 .d-graph-actions { margin-left: auto; display: flex; gap: 2px; }
 .d-agents { padding: 6px 8px 8px; border-radius: 14px; gap: 6px; overflow-y: auto; }
 /* draggable dividers */

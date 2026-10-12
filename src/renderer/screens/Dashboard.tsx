@@ -4,7 +4,7 @@ import { useUi } from '../stores/ui'
 import { ActivityPanel } from './dashboard/ActivityPanel'
 import { AgentCount } from './dashboard/AgentCount'
 import { AgentsPanel } from './dashboard/AgentsPanel'
-import { BrainPanel } from './dashboard/BrainPanel'
+import { GraphPanel } from './dashboard/GraphPanel'
 import { CronPanel } from './dashboard/CronPanel'
 import { ServerPanel } from './dashboard/ServerPanel'
 
@@ -23,7 +23,7 @@ export function Dashboard() {
       {!collapsed && <Resizer orientation="vertical" value={chat.value} min={260} max={640} label="Resize chat panel" onChange={chat.onChange} onCommit={chat.onCommit} />}
       <div className="d-mid">
         <ServerPanel />
-        <BrainPanel />
+        <GraphPanel />
       </div>
       <div className="d-right">
         <AgentCount />

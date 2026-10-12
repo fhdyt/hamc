@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { Icon } from '../../components/Icon'
 import { EmptyState, ErrorState, Skeleton } from '../../components/States'
 import type { GraphEngine } from '../../graph/engine'
@@ -9,7 +9,7 @@ import { useConn } from '../../stores/conn'
 import { useUi } from '../../stores/ui'
 
 /** The graph panel of the Dashboard: the vault graph fills the panel, a click on a node reads that note in a dialog. */
-export function BrainPanel() {
+export function BrainPanel({ tabs }: { tabs: ReactNode }) {
   const loaded = useBrain((s) => s.loaded)
   const vault = useBrain((s) => s.vault)
   const phase = useBrain((s) => s.phase)
@@ -56,14 +56,7 @@ export function BrainPanel() {
         </ul>
       )}
       <div className="d-graph-bar">
-        <div role="tablist" aria-label="Graph" className="d-gtabs">
-          <button type="button" role="tab" aria-selected="true" className="d-gtab">
-            <Icon name="share" size={12} /> second brain
-          </button>
-          <button type="button" role="tab" aria-selected="false" className="d-gtab" disabled title="The agent interaction graph arrives in a later release">
-            <Icon name="users" size={12} /> agents
-          </button>
-        </div>
+        {tabs}
         {vault && !body && (
           <span className="d-graph-meta">
             {notes.size.toLocaleString('en-US')} notes · {graph.edges.length.toLocaleString('en-US')} links · <span style={{ color: live ? '#8BE9FD' : '#8B95BD' }}>● {live ? 'live' : 'paused'}</span>
