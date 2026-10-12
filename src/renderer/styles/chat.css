@@ -1,5 +1,7 @@
 /* chat (M5) */
 .chat-screen { flex: 1; min-height: 0; display: flex; }
+.chat-activity { flex: 0 0 320px; min-height: 0; display: flex; flex-direction: column; padding: 14px 14px 14px 0; }
+@media (max-width: 1100px) { .chat-activity { display: none; } }
 .chat-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .dm-list { flex: 0 0 240px; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; border-right: 1px solid #44475a; background: #21222c; }
 .dm-title { flex: none; padding: 16px 16px 8px; color: #8b95bd; font-size: 11px; }
