@@ -240,17 +240,12 @@ export function neighbours(g: Graph): number[][] {
 
 /** Radius of a neuron's cell body (soma) in world units: grows with the square root of the connections. */
 export function somaRadius(degree: number, scale: number): number {
-  return Math.min(26, (4.5 + Math.sqrt(degree) * 1.5) * scale)
+  return Math.min(20, (2.4 + Math.sqrt(degree) * 1.7) * scale)
 }
 
-/** How far the dendrites of a neuron reach from its centre: hubs branch one level deeper. */
-export function reachOf(degree: number, scale: number): number {
-  return (13 + 6.5 * Math.sqrt(degree + 1)) * (degree > 8 ? 2 : 1.75) * scale
-}
-
-/** Space a node keeps to itself in the layout, so neighbouring dendrites do not pile up. */
-export function collideRadius(n: Pick<GNode, 'kind' | 'degree'>, scale: number): number {
-  return n.kind === 'note' ? reachOf(n.degree, scale) * 0.62 : somaRadius(n.degree, scale) + 4
+/** Space a node keeps to itself in the layout, so neighbouring glows do not pile up. */
+export function collideRadius(n: Pick<GNode, 'degree'>, scale: number): number {
+  return somaRadius(n.degree, scale) + 6
 }
 
 /** Collision radius of every node of a graph, in the order of `g.nodes`. */

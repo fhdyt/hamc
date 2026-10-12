@@ -5,8 +5,11 @@ import type {
   ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, QueryResult, SavedConnection
 } from '@shared/ipc'
 import { BrainService } from './brain/service'
+import { AgentFileService } from './agentcfg/files'
+import { ModelService } from './agentcfg/model'
 import { ChatService } from './chat/service'
 import { UploadService } from './uploads/service'
+import type { AgentFileKind, ModelSaveRequest } from '@shared/agentCfg'
 import { FeedCursors } from './feed/cursors'
 import { QueryRunner } from './query'
 import { CollectorChannel } from './collector/channel'
@@ -88,6 +91,8 @@ export class MissionSession {
   private readonly brain: BrainService
   private readonly chat: ChatService
   private readonly uploads: UploadService
+  private readonly agentFiles: AgentFileService
+  private readonly agentModel: ModelService
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -104,6 +109,13 @@ export class MissionSession {
       emit: (p) => d.send(IPC.evUpload, p),
       ...(d.pickFiles ? { showOpen: d.pickFiles } : {}),
       ...(d.makeThumb ? { makeThumb: d.makeThumb } : {})
+    })
+    this.agentFiles = new AgentFileService({ conn: d.manager, home: () => this.hermes?.home ?? null, log: (m) => d.log?.(m) })
+    this.agentModel = new ModelService({
+      conn: d.manager,
+      hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath, python: this.hermes.python } : null),
+      isConnected: () => d.manager.isConnected(),
+      log: (m) => d.log?.(m)
     })
     this.chat = new ChatService({
       uploads: this.uploads,
@@ -418,6 +430,7 @@ export class MissionSession {
     this.brain.detach()
     this.chat.dispose()
     this.uploads.reset()
+    this.agentModel.reset()
     this.models = null
     this.hermes = null
     await this.d.manager.disconnect()
@@ -505,6 +518,38 @@ export class MissionSession {
 
   chatBackend(profile: string): Promise<string | null> {
     return this.chat.backend(profile)
+  }
+
+  agentReadFile(profile: string, kind: AgentFileKind): ReturnType<AgentFileService['read']> {
+    return this.agentFiles.read(profile, kind)
+  }
+
+  agentWriteFile(profile: string, kind: AgentFileKind, text: string, baseHash: string | null): ReturnType<AgentFileService['write']> {
+    return this.agentFiles.write(profile, kind, text, baseHash)
+  }
+
+  agentReadModel(profile: string): ReturnType<ModelService['read']> {
+    return this.agentModel.read(profile)
+  }
+
+  agentFetchModels(req: { baseUrl: string; apiKey?: string }): ReturnType<ModelService['fetchModels']> {
+    return this.agentModel.fetchModels(req)
+  }
+
+  agentSaveModel(req: ModelSaveRequest): ReturnType<ModelService['save']> {
+    return this.agentModel.save(req)
+  }
+
+  agentTestModel(profile: string): ReturnType<ModelService['test']> {
+    return this.agentModel.test(profile)
+  }
+
+  agentKeyAsArgument(): Promise<boolean> {
+    return this.agentModel.keyTravelsAsArgument()
+  }
+
+  agentRestartGateway(profile: string): ReturnType<ModelService['restartGateway']> {
+    return this.agentModel.restartGateway(profile)
   }
 
   brainGet(): { vault: string | null } {

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult, ModelReadResult, ModelSaveRequest, RestartResult, SaveModelResult, TestModelResult } from './agentCfg'
 import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, NoteText, SessionDetail, UploadsList, VaultCheck } from './events'
 import type { SettingsMap } from './settings'
 
@@ -224,6 +225,19 @@ export interface MissionApi {
     list(): Promise<QueryResult<UploadsList>>
     remove(path: string): Promise<{ ok: true } | { ok: false; error: string }>
     cancel(id: string): Promise<void>
+  }
+  agentCfg: {
+    /** SOUL.md, MEMORY.md or USER.md of a profile, with the hash the editor must send back when it saves. */
+    readFile(profile: string, kind: AgentFileKind): Promise<FileReadResult>
+    /** Writes only when the file on the server still has `baseHash` (null: it did not exist). */
+    writeFile(req: { profile: string; kind: AgentFileKind; text: string; baseHash: string | null }): Promise<FileWriteResult>
+    readModel(profile: string): Promise<ModelReadResult>
+    fetchModels(req: { baseUrl: string; apiKey?: string }): Promise<FetchModelsResult>
+    saveModel(req: ModelSaveRequest): Promise<SaveModelResult>
+    testModel(profile: string): Promise<TestModelResult>
+    /** True when an API key would have to travel as a command argument. */
+    keyAsArgument(): Promise<boolean>
+    restartGateway(profile: string): Promise<RestartResult>
   }
   onEvent(cb: (e: CollectorEvent) => void): Unsub
   onChat(cb: (e: ChatEvent) => void): Unsub

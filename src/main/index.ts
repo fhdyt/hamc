@@ -73,6 +73,19 @@ function createWindow(store: SettingsStore): BrowserWindow {
   w.setMenuBarVisibility(false)
   w.once('ready-to-show', () => w.show())
   w.webContents.on('did-finish-load', () => w.webContents.setZoomFactor(store.getSetting('ui.zoom')))
+  // The renderer sets a beforeunload guard while Agent settings hold unsaved edits (F-CFG-18); this asks instead of closing silently.
+  w.webContents.on('will-prevent-unload', (e) => {
+    const choice = dialog.showMessageBoxSync(w, {
+      type: 'question',
+      buttons: ['Keep editing', 'Discard changes and close'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Unsaved changes',
+      message: 'You have unsaved changes in Agent settings.',
+      detail: 'Edits are only kept in the window until you press Save.'
+    })
+    if (choice === 1) e.preventDefault()
+  })
   w.on('close', () => {
     if (!w.isMaximized() && !w.isMinimized()) {
       const r = w.getBounds()

@@ -150,6 +150,7 @@ test('folders get their own colour, shown in a legend that follows the Color by 
 })
 
 test('clicking a node opens the note with its backlinks and outgoing links', async () => {
+  await settled()
   const p = await pointOf('Index.md')
   await page.mouse.move(p.x, p.y)
   await page.mouse.click(p.x, p.y)

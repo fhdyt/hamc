@@ -1,16 +1,18 @@
-import { closeSync, existsSync, mkdirSync, openSync, statSync, unlinkSync, writeSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs'
 import { utils, type SFTPWrapper } from 'ssh2'
 
 export interface SftpOp {
-  op: 'mkdir' | 'open' | 'remove'
+  op: 'mkdir' | 'open' | 'remove' | 'rename' | 'chmod'
   path: string
   /** The permission bits the client asked for. */
   mode?: number
+  /** The target of a rename. */
+  to?: string
 }
 
 const S = utils.sftp.STATUS_CODE
 
-/** A small SFTP server over a local folder: just what uploads use (stat, mkdir, create and write, remove). */
+/** A small SFTP server over a local folder: what uploads and agent files use (stat, mkdir, create, read, write, rename, chmod, remove). */
 export function attachSftp(sftp: SFTPWrapper, toLocal: (remote: string) => string, log: SftpOp[]): void {
   const handles = new Map<number, { fd: number; path: string }>()
   let next = 1
@@ -78,6 +80,45 @@ export function attachSftp(sftp: SFTPWrapper, toLocal: (remote: string) => strin
       sftp.status(id, S.OK)
     } catch {
       sftp.status(id, S.NO_SUCH_FILE)
+    }
+  })
+  sftp.on('FSTAT', (id, h) => {
+    const hd = handleOf(h)
+    if (!hd) return sftp.status(id, S.FAILURE)
+    const st = fstatSync(hd.fd)
+    sftp.attrs(id, { mode: st.mode, size: st.size, uid: 0, gid: 0, atime: Math.floor(st.atimeMs / 1000), mtime: Math.floor(st.mtimeMs / 1000) })
+  })
+  sftp.on('READ', (id, h, offset, length) => {
+    const hd = handleOf(h)
+    if (!hd) return sftp.status(id, S.FAILURE)
+    const b = Buffer.alloc(length)
+    const n = readSync(hd.fd, b, 0, length, offset)
+    if (n === 0) return sftp.status(id, S.EOF)
+    sftp.data(id, b.subarray(0, n))
+  })
+  sftp.on('RENAME', (id, from, to) => {
+    try {
+      renameSync(toLocal(from), toLocal(to))
+      log.push({ op: 'rename', path: from, to })
+      sftp.status(id, S.OK)
+    } catch {
+      sftp.status(id, S.FAILURE)
+    }
+  })
+  sftp.on('SETSTAT', (id, path, attrs) => {
+    try {
+      if (attrs.mode !== undefined) {
+        // Windows has no permission bits; the log still records what the client asked for
+        try {
+          chmodSync(toLocal(path), attrs.mode & 0o777)
+        } catch {
+          /* ignore */
+        }
+        log.push({ op: 'chmod', path, mode: attrs.mode & 0o777 })
+      }
+      sftp.status(id, S.OK)
+    } catch {
+      sftp.status(id, S.FAILURE)
     }
   })
   sftp.on('OPENDIR', (id) => sftp.status(id, S.FAILURE))

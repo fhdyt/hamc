@@ -6,6 +6,9 @@ import { Modal } from '../components/Modal'
 import { UnsupportedState } from '../components/States'
 import { zoomPercent } from '../lib/zoom'
 import { EditConnectionDialogBody } from '../screens/EditConnectionDialog'
+import { AgentsSettings } from '../screens/agents/AgentsSettings'
+import { UnsavedDialog } from '../screens/agents/Dialogs'
+import { useAgentCfg } from '../stores/agentCfg'
 import { useUi, type SettingsTab } from '../stores/ui'
 import { UploadsTab } from './UploadsTab'
 
@@ -92,10 +95,26 @@ function About() {
 export function SettingsModal() {
   const tab = useUi((s) => s.settingsTab)
   const openSettings = useUi((s) => s.openSettings)
-  const close = useUi((s) => s.closeSettings)
-  if (!tab) return null
+  const closeNow = useUi((s) => s.closeSettings)
+  const requestLeave = useAgentCfg((s) => s.requestLeave)
+  const anyUnsaved = useAgentCfg((s) => Object.values(s.drafts).some((d) => d.loaded && d.text !== d.baseText) || Object.values(s.modelDirty).some(Boolean))
+
+  // F-CFG-18: a window that holds unsaved edits asks before it closes (the main process shows the dialog).
+  useEffect(() => {
+    if (!anyUnsaved) return
+    const guard = (e: BeforeUnloadEvent): void => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', guard)
+    return () => window.removeEventListener('beforeunload', guard)
+  }, [anyUnsaved])
+
+  if (!tab) return <UnsavedDialog />
+  const close = (): void => requestLeave('Closing Settings drops every unsaved change in Agents.', closeNow)
   return (
-    <Modal title="Settings" onClose={close} width={760}>
+    <>
+    <Modal title="Settings" onClose={close} width={tab === 'agents' ? 1000 : 760}>
       <div style={{ display: 'flex', gap: 16, minHeight: 320 }}>
         <div role="tablist" aria-orientation="vertical" aria-label="Settings sections" style={{ flex: 'none', width: 150, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {TABS.map((t) => (
@@ -120,9 +139,12 @@ export function SettingsModal() {
           {tab === 'about' && <About />}
           {tab === 'chat' && <ChatSettings />}
           {tab === 'uploads' && <UploadsTab />}
-          {tab !== 'general' && tab !== 'connection' && tab !== 'about' && tab !== 'uploads' && tab !== 'chat' && <UnsupportedState why="This section arrives in a later release." />}
+          {tab === 'agents' && <AgentsSettings />}
+          {tab !== 'general' && tab !== 'connection' && tab !== 'about' && tab !== 'uploads' && tab !== 'chat' && tab !== 'agents' && <UnsupportedState why="This section arrives in a later release." />}
         </div>
       </div>
     </Modal>
+    <UnsavedDialog />
+    </>
   )
 }

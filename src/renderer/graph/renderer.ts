@@ -1,13 +1,11 @@
 import 'pixi.js/unsafe-eval'
 import { Application, Container, Graphics, Mesh, MeshGeometry, Sprite, Text, Texture } from 'pixi.js'
 import { quadtree, type Quadtree } from 'd3-quadtree'
-import { densityScale, neighbours, reachOf, somaRadius, type GNode, type Graph } from '../lib/brain/graphModel'
+import { densityScale, neighbours, somaRadius, type GNode, type Graph } from '../lib/brain/graphModel'
 
 export interface GraphStyle {
   nodeSize: number
   linkWidth: number
-  /** Show the synapse dot at the end of every link even when zoomed out. */
-  arrows: boolean
   /** 0..1, higher means labels only show when zoomed in further. */
   labelFade: number
   groupColors: readonly string[]
@@ -32,7 +30,6 @@ export interface DragSink {
 
 const NEUTRAL = { note: 0xa9b2d3, ghost: 0x6b7089, tag: 0x50fa7b, attachment: 0xffb86c }
 const WHITE = 0xffffff
-const ACCENT = 0xbd93f9
 const MAX_LABELS = 60
 const TEX = 32
 const GLOW = 128
@@ -40,16 +37,14 @@ const MIN_K = 0.02
 const MAX_K = 10
 const PULSE_MS = 1400
 const SEGMENTS = 3 // segments per half of a link
-const MAX_ARBORS = 260
 const MAX_SIGNALS = 260
-const MAX_SYNAPSES = 700
 const RECENT_S = 3600
 const FRAME_MS = 33
+const WOBBLE_MAX = 1500 // above this many nodes the idle drift is skipped, it would redraw every link on each frame
 
 const hex = (s: string): number => parseInt(s.replace('#', ''), 16)
 const css = (c: number, a: number): string => `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${a})`
 const clamp = (v: number, a: number, b: number): number => Math.max(a, Math.min(b, v))
-const rng = (seed: number) => (): number => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296
 
 interface Ring {
   i: number
@@ -71,18 +66,13 @@ interface Bucket {
   mesh: Mesh
 }
 
-type Seg = [number, number, number, number]
-
 export class GraphRenderer {
   private app!: Application
   private world = new Container()
   private labelLayer = new Container()
   private edgeLayer = new Container()
-  private synGfx = new Graphics()
   private signalLayer = new Container()
-  private arborLayer = new Container()
   private glowLayer = new Container()
-  private discLayer = new Container()
   private coreLayer = new Container()
   private hiLines = new Graphics()
   private recentGfx = new Graphics()
@@ -90,12 +80,10 @@ export class GraphRenderer {
   private selRing = new Graphics()
   private buckets: Bucket[] = []
   private glows: Sprite[] = []
-  private discs: Sprite[] = []
   private cores: Sprite[] = []
   private sigSprites: Sprite[] = []
   private labels: Text[] = []
   private rings: Ring[] = []
-  private arbors = new Map<number, Graphics>()
   private glowTex = new Map<number, Texture>()
   private tex!: Texture
   private graph: Graph = { nodes: [], edges: [], index: new Map() }
@@ -103,13 +91,18 @@ export class GraphRenderer {
   private adjE: number[][] = []
   private order: number[] = []
   private recent: number[] = []
+  /** Positions as drawn: the layout's (`base`) plus a slight idle drift. */
   private pos: Float32Array = new Float32Array(0)
+  private base: Float32Array = new Float32Array(0)
+  private disp: Float32Array = new Float32Array(0)
+  /** The neuron the reader is dragging: it follows the pointer at once, without waiting for the layout worker. */
+  private dragging: { i: number; x: number; y: number } | null = null
   private ctrl: Float32Array = new Float32Array(0)
   private curv: Float32Array = new Float32Array(0)
   private fireV: Float32Array = new Float32Array(0)
   private signals: Signal[] = []
   private cam = { x: 0, y: 0, k: 1 }
-  private style: GraphStyle = { nodeSize: 1, linkWidth: 1, arrows: false, labelFade: 0.5, groupColors: [], motion: true }
+  private style: GraphStyle = { nodeSize: 1, linkWidth: 1, labelFade: 0.5, groupColors: [], motion: true }
   private density = 1
   private edgeAlpha = 0.5
   private hover = -1
@@ -160,7 +153,7 @@ export class GraphRenderer {
     const g = new Graphics().circle(TEX / 2, TEX / 2, TEX / 2).fill(0xffffff)
     this.tex = app.renderer.generateTexture({ target: g, resolution: 2 })
     g.destroy()
-    for (const l of [this.edgeLayer, this.synGfx, this.signalLayer, this.arborLayer, this.glowLayer, this.discLayer, this.coreLayer, this.hiLines, this.recentGfx, this.ringLayer, this.selRing]) this.world.addChild(l)
+    for (const l of [this.edgeLayer, this.signalLayer, this.glowLayer, this.coreLayer, this.hiLines, this.recentGfx, this.ringLayer, this.selRing]) this.world.addChild(l)
     app.stage.addChild(this.world)
     app.stage.addChild(this.labelLayer)
     this.bindEvents(app.canvas)
@@ -191,7 +184,7 @@ export class GraphRenderer {
     if (this.destroyed || !this.app) return
     const first = this.graph.nodes.length === 0
     this.graph = g
-    this.pos = pos
+    this.pos = this.base = pos
     this.nb = neighbours(g)
     this.adjE = g.nodes.map(() => [])
     g.edges.forEach((e, i) => {
@@ -199,7 +192,7 @@ export class GraphRenderer {
       this.adjE[e.t]!.push(i)
     })
     this.density = densityScale(g.nodes.length)
-    this.edgeAlpha = clamp(0.62 - 0.12 * Math.log10(Math.max(10, g.edges.length)), 0.2, 0.55)
+    this.edgeAlpha = clamp(0.24 * (1 - 0.35 * Math.log10(Math.max(300, g.edges.length) / 300)), 0.1, 0.24)
     this.order = g.nodes.map((_, i) => i).sort((a, b) => g.nodes[b]!.degree - g.nodes[a]!.degree)
     this.fireV = new Float32Array(g.nodes.length)
     this.signals = []
@@ -216,7 +209,6 @@ export class GraphRenderer {
     this.treeStale = true
     for (const r of this.rings) r.g.destroy()
     this.rings = []
-    this.clearArbors()
     this.rebuildBuckets()
     this.dirtyPos = this.dirtyStyle = this.dirtyCam = this.dirtyHi = true
     if (first) this.fit()
@@ -225,7 +217,8 @@ export class GraphRenderer {
 
   setPositions(pos: Float32Array): void {
     if (pos.length !== this.pos.length) return
-    this.pos = pos
+    this.pos = this.base = pos
+    this.pinDragged(pos)
     this.dirtyPos = true
     this.treeStale = true
     this.request()
@@ -237,7 +230,6 @@ export class GraphRenderer {
     this.dirtyStyle = true
     if (key !== this.colorKey) {
       this.colorKey = key
-      this.clearArbors()
       this.rebuildBuckets()
     }
     this.request()
@@ -305,7 +297,7 @@ export class GraphRenderer {
     ys.sort((a, b) => a - b)
     const q = (a: number[], p: number): number => a[Math.min(a.length - 1, Math.max(0, Math.floor(p * (a.length - 1))))]!
     const lo = n > 50 ? 0.02 : 0
-    const margin = reachOf(4, this.style.nodeSize * this.density) * 0.7
+    const margin = 14
     const x0 = q(xs, lo) - margin
     const x1 = q(xs, 1 - lo) + margin
     const y0 = q(ys, lo) - margin
@@ -381,10 +373,6 @@ export class GraphRenderer {
       glow.blendMode = 'add'
       this.glowLayer.addChild(glow)
       this.glows.push(glow)
-      const disc = new Sprite(this.tex)
-      disc.anchor.set(0.5)
-      this.discLayer.addChild(disc)
-      this.discs.push(disc)
       const core = new Sprite(this.tex)
       core.anchor.set(0.5)
       core.tint = WHITE
@@ -393,87 +381,7 @@ export class GraphRenderer {
     }
     for (let i = 0; i < this.glows.length; i++) {
       const on = i < n
-      this.glows[i]!.visible = this.discs[i]!.visible = this.cores[i]!.visible = on
-    }
-  }
-
-  // ---- dendrites ----------------------------------------------------------
-
-  private clearArbors(): void {
-    for (const g of this.arbors.values()) g.destroy()
-    this.arbors.clear()
-  }
-
-  /** A neuron's dendrite tree: a few thick branches from the soma that fork into thinner ones. Hubs fork once more. */
-  private buildArbor(i: number): Graphics {
-    const n = this.graph.nodes[i]!
-    const r = rng(Math.imul(i + 1, 2654435761) >>> 0)
-    const rs = somaRadius(n.degree, 1)
-    const levels: Seg[][] = [[], [], [], [], []]
-    const L0 = 13 + 6.5 * Math.sqrt(n.degree + 1)
-    const nprim = 4 + Math.floor(r() * 3)
-    const dmax = n.degree > 8 ? 4 : 3
-    const grow = (x: number, y: number, a: number, len: number, d: number): void => {
-      const bend = (r() - 0.5) * 0.35
-      const x2 = x + Math.cos(a + bend) * len
-      const y2 = y + Math.sin(a + bend) * len
-      levels[d]!.push([x, y, x2, y2])
-      if (d >= dmax) return
-      for (let k = 0; k < 2; k++) grow(x2, y2, a + (k ? 1 : -1) * (0.35 + r() * 0.55), len * (0.66 + r() * 0.13), d + 1)
-    }
-    for (let k = 0; k < nprim; k++) {
-      const a = (k / nprim) * Math.PI * 2 + r() * 0.6
-      grow(Math.cos(a) * rs, Math.sin(a) * rs, a, L0, 0)
-    }
-    const color = this.colorOf(n)
-    const widths = [2.2, 1.6, 1.15, 0.8, 0.6]
-    const g = new Graphics()
-    levels.forEach((segs, lv) => {
-      if (!segs.length) return
-      for (const s of segs) g.moveTo(s[0], s[1]).lineTo(s[2], s[3])
-      g.stroke({ width: widths[lv]!, color, alpha: 0.62 - lv * 0.08, cap: 'round' })
-    })
-    return g
-  }
-
-  private updateArbors(): void {
-    const { k, x, y } = this.cam
-    const { w, h } = this.size
-    const sc = this.scale()
-    const want: number[] = []
-    for (const i of this.order) {
-      const n = this.graph.nodes[i]!
-      if (n.kind !== 'note') continue
-      const reach = reachOf(n.degree, sc)
-      if (reach * k < 14) continue
-      const sx = this.pos[i * 2]! * k + x
-      const sy = this.pos[i * 2 + 1]! * k + y
-      const m = reach * k
-      if (sx < -m || sy < -m || sx > w + m || sy > h + m) continue
-      want.push(i)
-      if (want.length >= MAX_ARBORS) break
-    }
-    const keep = new Set(want)
-    for (const [i, g] of this.arbors) {
-      if (keep.has(i)) continue
-      g.visible = false
-      if (this.arbors.size > MAX_ARBORS * 2) {
-        g.destroy()
-        this.arbors.delete(i)
-      }
-    }
-    for (const i of want) {
-      let g = this.arbors.get(i)
-      if (!g) {
-        g = this.buildArbor(i)
-        this.arborLayer.addChild(g)
-        this.arbors.set(i, g)
-      }
-      const dim = this.hover >= 0 ? (this.hoverSet.has(i) ? 1 : 0.22) : 1
-      g.visible = true
-      g.position.set(this.pos[i * 2]!, this.pos[i * 2 + 1]!)
-      g.scale.set(sc)
-      g.alpha = clamp(dim * (1 + this.fireV[i]! * 0.7), 0, 1)
+      this.glows[i]!.visible = this.cores[i]!.visible = on
     }
   }
 
@@ -509,14 +417,14 @@ export class GraphRenderer {
       const geo = new MeshGeometry({ positions: new Float32Array(m * (SEGMENTS + 1) * 4), uvs: new Float32Array(m * (SEGMENTS + 1) * 4), indices: idx })
       const mesh = new Mesh({ geometry: geo, texture: Texture.WHITE })
       mesh.tint = color
+      mesh.blendMode = 'add'
       this.edgeLayer.addChild(mesh)
       this.buckets.push({ color, entries: Int32Array.from(list), mesh })
     }
   }
 
-  /** Control points of every link: it starts at the edge of the first soma, bends a little and ends at the next one. */
+  /** Control points of every link: it runs from one soma's centre to the next one's and bends a little. */
   private updateCtrl(): void {
-    const k = this.cam.k
     const p = this.pos
     const edges = this.graph.edges
     for (let i = 0; i < edges.length; i++) {
@@ -525,15 +433,10 @@ export class GraphRenderer {
       const y1 = p[e.s * 2 + 1]!
       const x2 = p[e.t * 2]!
       const y2 = p[e.t * 2 + 1]!
-      const dx = x2 - x1
-      const dy = y2 - y1
-      const L = Math.hypot(dx, dy) || 1
-      const ra = Math.max(this.somaOf(e.s), 1.1 / k)
-      const rb = Math.max(this.somaOf(e.t), 1.1 / k) + 2
-      const ax = x1 + (dx / L) * ra
-      const ay = y1 + (dy / L) * ra
-      const bx = x2 - (dx / L) * rb
-      const by = y2 - (dy / L) * rb
+      const ax = x1
+      const ay = y1
+      const bx = x2
+      const by = y2
       const c = this.curv[i]!
       const o = i * 6
       this.ctrl[o] = ax
@@ -548,7 +451,7 @@ export class GraphRenderer {
   private updateEdges(): void {
     this.updateCtrl()
     const k = this.cam.k
-    const hw = Math.max(0.3, this.style.linkWidth * 0.9) / k / 2
+    const hw = Math.max(0.3, this.style.linkWidth) / k / 2
     const c = this.ctrl
     for (const b of this.buckets) {
       const out = b.mesh.geometry.positions
@@ -581,7 +484,7 @@ export class GraphRenderer {
         }
       }
       b.mesh.geometry.getBuffer('aPosition').update()
-      b.mesh.alpha = this.hover >= 0 ? 0.06 : this.edgeAlpha
+      b.mesh.alpha = this.hover >= 0 ? this.edgeAlpha * 0.14 : this.edgeAlpha
     }
   }
 
@@ -592,45 +495,49 @@ export class GraphRenderer {
     return [u * u * c[q]! + 2 * u * t * c[q + 4]! + t * t * c[q + 2]!, u * u * c[q + 1]! + 2 * u * t * c[q + 5]! + t * t * c[q + 3]!]
   }
 
-  /** The synapse dots where a link ends, and the highlighted links of the neuron under the pointer. */
-  private drawLinkDetails(): void {
-    const k = this.cam.k
-    const { w, h } = this.size
-    const syn = this.synGfx
-    syn.clear()
-    const edges = this.graph.edges
-    const nodes = this.graph.nodes
-    if ((k > 1.1 || this.style.arrows) && edges.length > 0) {
-      let drawn = 0
-      const dim = this.hover >= 0
-      for (let i = 0; i < edges.length && drawn < MAX_SYNAPSES; i++) {
-        const q = i * 6
-        const sx = this.ctrl[q + 2]! * k + this.cam.x
-        const sy = this.ctrl[q + 3]! * k + this.cam.y
-        if (sx < -10 || sy < -10 || sx > w + 10 || sy > h + 10) continue
-        const e = edges[i]!
-        const col = this.colorOf(nodes[e.t]!)
-        const a = dim ? 0.08 : 0.8
-        syn.circle(this.ctrl[q + 2]!, this.ctrl[q + 3]!, 2.3).fill({ color: col, alpha: a })
-        for (const t of [0.9, 0.95]) {
-          const p = this.quad(i, t)
-          syn.circle(p[0], p[1], 1.1).fill({ color: col, alpha: a })
-        }
-        drawn++
-      }
+  /** The highlighted links of the neuron under the pointer. */
+  /** The slight idle drift of every neuron around its place (off with Reduce motion and in very big vaults). */
+  private drift(now: number): boolean {
+    const n = this.graph.nodes.length
+    if (!this.style.motion || n === 0 || n > WOBBLE_MAX) {
+      if (this.pos === this.base) return false
+      this.pos = this.base
+      return true
     }
+    if (this.disp.length !== this.base.length) this.disp = new Float32Array(this.base.length)
+    const t = now / 1000
+    for (let i = 0; i < n; i++) {
+      this.disp[i * 2] = this.base[i * 2]! + Math.sin(t * 0.7 + i * 1.7) * 1.3
+      this.disp[i * 2 + 1] = this.base[i * 2 + 1]! + Math.cos(t * 0.6 + i * 2.3) * 1.3
+    }
+    this.pinDragged(this.disp)
+    this.pos = this.disp
+    return true
+  }
+
+  private pinDragged(a: Float32Array): void {
+    const d = this.dragging
+    if (!d || d.i * 2 + 1 >= a.length) return
+    a[d.i * 2] = d.x
+    a[d.i * 2 + 1] = d.y
+  }
+
+  private drawHighlight(): void {
+    const k = this.cam.k
     const hl = this.hiLines
     hl.clear()
-    if (this.hover >= 0) {
-      const col = ACCENT
-      for (const i of this.adjE[this.hover]!) {
-        const q = i * 6
-        hl.moveTo(this.ctrl[q]!, this.ctrl[q + 1]!).quadraticCurveTo(this.ctrl[q + 4]!, this.ctrl[q + 5]!, this.ctrl[q + 2]!, this.ctrl[q + 3]!)
-      }
-      hl.stroke({ width: 1.6 / k, color: col, alpha: 0.95 })
-      for (const i of this.adjE[this.hover]!) {
-        const q = i * 6
-        hl.circle(this.ctrl[q + 2]!, this.ctrl[q + 3]!, 2.6).fill({ color: col, alpha: 0.95 })
+    if (this.hover < 0) return
+    // the links of the neuron under the pointer are brighter and a little thicker, each half in the colour of its end
+    const nodes = this.graph.nodes
+    for (const i of this.adjE[this.hover]!) {
+      const e = this.graph.edges[i]!
+      for (const half of [0, 1]) {
+        for (let s = 0; s <= 6; s++) {
+          const p = this.quad(i, half * 0.5 + (s / 6) * 0.5)
+          if (s === 0) hl.moveTo(p[0], p[1])
+          else hl.lineTo(p[0], p[1])
+        }
+        hl.stroke({ width: 1.7 / k, color: this.colorOf(nodes[half ? e.t : e.s]!), alpha: Math.min(1, this.edgeAlpha * 2.4) })
       }
     }
   }
@@ -711,22 +618,16 @@ export class GraphRenderer {
       const dim = dimOn ? (this.hoverSet.has(i) ? 1 : 0.22) : n.kind === 'ghost' ? 0.7 : 1
       const note = n.kind === 'note'
       const glow = this.glows[i]!
-      const disc = this.discs[i]!
       const core = this.cores[i]!
       const x = p[i * 2]!
       const y = p[i * 2 + 1]!
       glow.position.set(x, y)
-      disc.position.set(x, y)
       core.position.set(x, y)
-      const gs = Math.max(rs * ((note ? 6 : 4.5) + f * 5), 5 / k)
-      glow.scale.set(gs / GLOW)
+      const dr = rs * (1 + f * 0.9)
+      glow.scale.set(Math.max(dr * (note ? 8 : 6), 5 / k) / GLOW)
       glow.alpha = dim * (0.8 + f * 0.2)
-      const dr = rs * (1 + f * 0.25)
-      disc.scale.set((dr * 2) / TEX)
-      disc.tint = i === this.hover ? ACCENT : color
-      disc.alpha = dim
-      core.scale.set((dr * 0.84) / TEX)
-      core.alpha = dim * clamp(0.5 + f * 0.5, 0, 1)
+      core.scale.set(dr / TEX)
+      core.alpha = dim * clamp(0.55 + f * 0.45, 0, 1)
       if (this.dirtyStyle) glow.texture = this.glowTexture(color)
     }
   }
@@ -849,10 +750,10 @@ export class GraphRenderer {
     this.world.position.set(this.cam.x, this.cam.y)
     this.world.scale.set(this.cam.k)
     this.updateSignals(dt)
+    if (this.drift(now)) this.dirtyPos = true
     if (this.dirtyPos || this.dirtyCam || this.dirtyStyle) this.updateEdges()
-    this.drawLinkDetails()
+    this.drawHighlight()
     this.drawSignals()
-    this.updateArbors()
     this.updateNodes()
     const recentLive = this.updateRecent(now)
     const ringsLive = this.updateRings(now)
@@ -915,9 +816,13 @@ export class GraphRenderer {
         m.moved += Math.abs(sx - m.x) + Math.abs(sy - m.y)
         m.x = sx
         m.y = sy
-        if (m.moved > 4 && !this.opts.mini) {
+        if (!this.opts.mini) {
           const [wx, wy] = this.toWorld(sx, sy)
+          this.dragging = { i: m.i, x: wx, y: wy }
+          this.pinDragged(this.base)
+          this.dirtyPos = this.treeStale = true
           this.sink?.drag(m.i, wx, wy)
+          this.request()
         }
       } else {
         const i = this.hit(sx, sy)
@@ -928,6 +833,7 @@ export class GraphRenderer {
     const up = (e: PointerEvent): void => {
       const m = this.mode
       this.mode = { kind: 'none' }
+      this.dragging = null
       if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId)
       if (m.kind === 'node') {
         this.sink?.release(m.i)

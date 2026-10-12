@@ -7,6 +7,7 @@ interface N extends SimulationNodeDatum {
 }
 
 const FRAME_MS = 33
+const STEP_MS = 16
 const BUDGET_MS = 24
 
 let nodes: N[] = []
@@ -16,6 +17,8 @@ let anchors: Float32Array = new Float32Array(0)
 let sim: Simulation<N, SimulationLinkDatum<N>> | null = null
 let timer: ReturnType<typeof setInterval> | null = null
 let forces: Forces = { center: 0.3, repel: 0.5, link: 0.5, distance: 0.4 }
+/** The first layout runs as many ticks as fit in a frame; once the reader interacts, one tick per frame (60 per second) so the motion is smooth. */
+let bulk = true
 
 const post = (m: FromWorker, transfer?: Transferable[]): void => (self as unknown as Worker).postMessage(m, transfer ?? [])
 
@@ -57,7 +60,7 @@ function loop(): void {
   if (!sim) return
   const start = performance.now()
   do sim.tick()
-  while (sim.alpha() >= sim.alphaMin() && performance.now() - start < BUDGET_MS)
+  while (bulk && sim.alpha() >= sim.alphaMin() && performance.now() - start < BUDGET_MS)
   const pos = snapshot()
   post({ type: 'tick', pos, alpha: sim.alpha() }, [pos.buffer])
   if (sim.alpha() < sim.alphaMin() && sim.alphaTarget() === 0) {
@@ -67,11 +70,12 @@ function loop(): void {
 }
 
 function wake(): void {
-  if (timer === null && sim) timer = setInterval(loop, FRAME_MS)
+  if (timer === null && sim) timer = setInterval(loop, bulk ? FRAME_MS : STEP_MS)
 }
 
 function setGraph(m: Extract<ToWorker, { type: 'set' }>): void {
   stopLoop()
+  bulk = true
   const n = m.pos.length / 2
   nodes = Array.from({ length: n }, (_, i) => {
     const x = m.pos[i * 2]!
@@ -105,6 +109,10 @@ self.onmessage = (ev: MessageEvent<ToWorker>): void => {
   } else if (m.type === 'drag') {
     const node = nodes[m.i]
     if (!node) return
+    if (bulk) {
+      bulk = false
+      stopLoop()
+    }
     node.fx = m.x
     node.fy = m.y
     sim.alphaTarget(0.25)

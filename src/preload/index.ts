@@ -62,6 +62,16 @@ const api: MissionApi = {
     remove: (path) => ipcRenderer.invoke(IPC.uploadsDelete, path),
     cancel: (id) => ipcRenderer.invoke(IPC.uploadsCancel, id)
   },
+  agentCfg: {
+    readFile: (profile, kind) => ipcRenderer.invoke(IPC.agentFileRead, { profile, kind }),
+    writeFile: (req) => ipcRenderer.invoke(IPC.agentFileWrite, req),
+    readModel: (profile) => ipcRenderer.invoke(IPC.agentModelRead, profile),
+    fetchModels: (req) => ipcRenderer.invoke(IPC.agentModelFetch, req),
+    saveModel: (req) => ipcRenderer.invoke(IPC.agentModelSave, req),
+    testModel: (profile) => ipcRenderer.invoke(IPC.agentModelTest, profile),
+    keyAsArgument: () => ipcRenderer.invoke(IPC.agentKeyMode),
+    restartGateway: (profile) => ipcRenderer.invoke(IPC.agentGatewayRestart, profile)
+  },
   onEvent: (cb) => on(IPC.evEvent, cb),
   onChat: (cb) => on(IPC.evChat, cb),
   onUpload: (cb) => on(IPC.evUpload, cb),
