@@ -102,6 +102,16 @@ Sebelum menguji Model, jalankan skrip di `docs/spike-m6-hermes-cli.md` di VPS da
 65. **Test dan restart.** **Test saved model** menjawab ✓ dengan latensi. **Restart this agent's gateway** meminta konfirmasi lalu menjalankan `hermes -p <p> gateway restart` hanya untuk agent itu.
 66. **Zero-Change.** Yang berubah di VPS hanyalah berkas yang Anda simpan, hasil `hermes config set`, dan gateway yang Anda restart. `.env` dan `auth.json` tidak dibaca (tidak ada `cat` atau SFTP ke keduanya), tidak ada skrip atau berkas bantu baru.
 
+## Tambahan M4b: graph agent
+
+Semua format di bagian ini adalah tebakan dari PRD dan belum diverifikasi di Hermes asli; catat yang berbeda.
+
+67. **Skema kanban.** Di VPS jalankan `sqlite3 ~/.hermes/kanban.db .schema` (dan untuk `kanban/boards/*/kanban.db`). Collector mencari tabel `tasks` dengan kolom id, assignee, pembuat (`created_by`/`creator`/...) dan `task_events(task_id, ts)`. Buat satu tugas dari agent A untuk agent B: di tab **agents** muncul garis oranye A -> B berlabel `#<id>`. Bila tidak muncul, kirim keluaran `.schema` ke pengembang; status sumber kanban di keadaan kosong menunjukkan `unreadable` bila skemanya tidak dikenal.
+68. **message_agent.** Kirim pesan antar agent (Bot Mode). Di `state.db` agent tujuan harus ada sesi berjudul `Bot Chat` dengan pesan `Message from <nama> (@handle):`. Garis pink berlabel `msg` muncul dari pengirim ke tujuan, dan kartu detail menampilkan teks pesan terakhir. Pesan dari nama atau handle yang bukan profile dihitung "unresolved" dan tidak digambar.
+69. **Room.** Untuk group chat, sesi anggota harus berjudul `Group: <room> · <thread>`. Muncul node kotak room dengan garis ungu ke tiap anggota; kartu menunjukkan anggota dan baris terakhir.
+70. **delegate_task.** Jalankan tugas yang memakai subagent. Muncul lingkaran putus-putus cyan di dekat agent induk, terisi saat berjalan (kurang dari 5 menit tanpa `ended_at`). Catat nilai `source` dan `parent_session_id` yang sebenarnya.
+71. **Realtime dan Zero-Change.** Garis aktif (kejadian dalam 60 detik) bertitik bergerak, dan data baru tampil dalam sekitar 2 detik. **Open session** di kartu membuka sesi di Live feed. Selama ini tidak ada berkas baru di VPS dan collector tidak menjalankan `hermes`; `kanban.db` dan `state.db` dibuka `mode=ro`.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.
