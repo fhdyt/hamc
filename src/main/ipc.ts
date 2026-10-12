@@ -2,6 +2,7 @@ import { app, ipcMain, type BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/channels'
 import { ConnectRequestSchema, HostKeyChallengeSchema, type AppInfo } from '@shared/ipc'
+import { CUSTOM_NAME_RE, CUSTOM_SLUG, EFFORT_RE, FILE_KINDS, MAX_FILE_BYTES, PRESETS, type AgentFileKind } from '@shared/agentCfg'
 import { SETTINGS_SCHEMA, isSettingKey } from '@shared/settings'
 import { isTrustedSender, type AppTarget } from './security'
 import type { MissionSession } from './session'
@@ -32,6 +33,27 @@ const ChatSendArgs = z.object({
 const AttachmentId = z.string().regex(/^[A-Za-z0-9-]{8,64}$/)
 const SessionId = z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/)
 const TurnId = z.string().regex(/^[A-Za-z0-9-]{8,64}$/)
+
+const FileKind = z.enum(FILE_KINDS as [AgentFileKind, ...AgentFileKind[]])
+const FileReadArgs = z.object({ profile: ProfileName, kind: FileKind })
+const FileWriteArgs = z.object({
+  profile: ProfileName,
+  kind: FileKind,
+  text: z.string().max(MAX_FILE_BYTES),
+  baseHash: z.string().regex(/^[0-9a-f]{64}$/).nullable()
+})
+const ProviderSlug = z.enum([CUSTOM_SLUG, ...PRESETS.map((p) => p.slug)] as [string, ...string[]])
+const ModelSaveArgs = z.object({
+  profile: ProfileName,
+  provider: ProviderSlug,
+  customName: z.string().regex(CUSTOM_NAME_RE).optional(),
+  baseUrl: z.string().max(2048),
+  apiKey: z.string().max(4096).optional(),
+  model: z.string().min(1).max(200),
+  effort: z.string().regex(EFFORT_RE).nullable().optional(),
+  writeBaseUrl: z.boolean()
+})
+const ModelFetchArgs = z.object({ baseUrl: z.string().max(2048), apiKey: z.string().max(4096).optional() })
 
 export interface IpcDeps {
   session: MissionSession
@@ -107,5 +129,19 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.uploadsDelete, (a) => d.session.uploadsRemove(z.string().min(1).max(4096).parse(a)))
   handle(IPC.chatSessions, (a) => d.session.chatSessions(ProfileName.parse(a)))
   handle(IPC.chatBackend, (a) => d.session.chatBackend(ProfileName.parse(a)))
+  handle(IPC.agentFileRead, (a) => {
+    const { profile, kind } = FileReadArgs.parse(a)
+    return d.session.agentReadFile(profile, kind)
+  })
+  handle(IPC.agentFileWrite, (a) => {
+    const { profile, kind, text, baseHash } = FileWriteArgs.parse(a)
+    return d.session.agentWriteFile(profile, kind, text, baseHash)
+  })
+  handle(IPC.agentModelRead, (a) => d.session.agentReadModel(ProfileName.parse(a)))
+  handle(IPC.agentModelFetch, (a) => d.session.agentFetchModels(ModelFetchArgs.parse(a)))
+  handle(IPC.agentModelSave, (a) => d.session.agentSaveModel(ModelSaveArgs.parse(a)))
+  handle(IPC.agentModelTest, (a) => d.session.agentTestModel(ProfileName.parse(a)))
+  handle(IPC.agentKeyMode, () => d.session.agentKeyAsArgument())
+  handle(IPC.agentGatewayRestart, (a) => d.session.agentRestartGateway(ProfileName.parse(a)))
   handle(IPC.appInfo, (): AppInfo => ({ version: app.getVersion(), electron: process.versions.electron ?? '', platform: process.platform }))
 }
