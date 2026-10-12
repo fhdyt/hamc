@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { AppInfo } from '@shared/ipc'
-import { saveSetting, setZoomLevel, stepZoomLevel } from '../actions'
+import { resetSettings, saveSetting, setZoomLevel, stepZoomLevel } from '../actions'
 import { Icon } from '../components/Icon'
 import { Modal } from '../components/Modal'
 import { UnsupportedState } from '../components/States'
@@ -43,6 +43,7 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
 
 function General() {
   const s = useUi((st) => st.settings)
+  const [confirmReset, setConfirmReset] = useState(false)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <Row label="Text size" hint="Ctrl + / Ctrl −, 70% to 150%">
@@ -61,6 +62,16 @@ function General() {
       </Row>
       <Row label="Reduce motion" hint="Turns off animations">
         <Switch checked={s['ui.reduceMotion']} label="Reduce motion" onChange={(v) => void saveSetting('ui.reduceMotion', v)} />
+      </Row>
+      <Row label="Reset settings" hint="Text size, density, panel sizes, graph choices and filters go back to their defaults. Your connection, pinned agents, vault path and the window size stay.">
+        {confirmReset ? (
+          <span style={{ display: 'inline-flex', gap: 8 }}>
+            <button type="button" className="cb dng" onClick={() => void resetSettings().then(() => setConfirmReset(false))}>Reset all settings</button>
+            <button type="button" className="cb" onClick={() => setConfirmReset(false)}>Cancel</button>
+          </span>
+        ) : (
+          <button type="button" className="cb" onClick={() => setConfirmReset(true)}>Reset settings…</button>
+        )}
       </Row>
     </div>
   )

@@ -187,6 +187,8 @@ export interface MissionApi {
   settings: {
     all(): Promise<SettingsMap>
     set<K extends keyof SettingsMap>(key: K, value: SettingsMap[K]): Promise<void>
+    /** Puts every setting back to its default (not the window size, not the connection) and returns the new values. */
+    reset(): Promise<SettingsMap>
   }
   agents: {
     getPins(): Promise<{ pins: string[]; initialized: boolean }>

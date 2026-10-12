@@ -68,6 +68,13 @@ export async function saveSetting<K extends keyof SettingsMap>(key: K, value: Se
   await window.mc.settings.set(key, value)
 }
 
+/** Reset settings (F-APP-5): every app setting goes back to its default; the connection and the window size stay. */
+export async function resetSettings(): Promise<void> {
+  const settings = await window.mc.settings.reset()
+  useUi.getState().hydrate(settings)
+  await window.mc.app.setZoom(settings['ui.zoom'])
+}
+
 export async function setZoomLevel(z: number): Promise<void> {
   await window.mc.app.setZoom(z)
   await saveSetting('ui.zoom', z)

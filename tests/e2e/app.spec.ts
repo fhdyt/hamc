@@ -85,6 +85,26 @@ test('sidebar collapse and text size persist across launches', async () => {
   await expect(page.getByRole('button', { name: 'Reset text size' })).toHaveText('110%')
 })
 
+test('Reset settings asks first, then brings back the defaults and keeps the connection', async () => {
+  const zoomBtn = () => page.getByRole('contentinfo').getByRole('button', { name: 'Reset text size' })
+  ;({ app, page } = await launchApp(userData))
+  await expect(mainNav()).toBeVisible({ timeout: 25_000 })
+  await expect(zoomBtn()).toHaveText('110%')
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Settings' })
+  await dialog.getByRole('button', { name: 'Reset settings…' }).click()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(zoomBtn()).toHaveText('110%')
+  await dialog.getByRole('button', { name: 'Reset settings…' }).click()
+  await dialog.getByRole('button', { name: 'Reset all settings' }).click()
+  await expect(zoomBtn()).toHaveText('100%')
+  await expect(page.locator('aside.mc-side.is-rail')).toHaveCount(0)
+  await app.close()
+  ;({ app, page } = await launchApp(userData))
+  await expect(mainNav()).toBeVisible({ timeout: 25_000 }) // still connected without asking for the password
+  await expect(zoomBtn()).toHaveText('100%')
+})
+
 test('reconnects after the server drops the connection', async () => {
   ;({ app, page } = await launchApp(userData))
   await expect(mainNav()).toBeVisible({ timeout: 25_000 })

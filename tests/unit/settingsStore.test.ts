@@ -25,6 +25,24 @@ describe('settings', () => {
   it('rejects a value that fails the schema', () => {
     expect(() => store.setSetting('ui.zoom', 9)).toThrow()
   })
+
+  it('resets every setting to its default and keeps the window bounds, the connection and what belongs to it', () => {
+    const id = store.upsertConnection({ ...conn, passwordEnc: Buffer.from('enc') })
+    store.setPins(id, ['scout'])
+    store.setVault(id, '/home/hermes/vault')
+    store.setSetting('ui.zoom', 1.3)
+    store.setSetting('dashboard.chatW', 500)
+    store.setSetting('dashboard.graphTab', 'agents')
+    store.setSetting('window.bounds', { width: 900, height: 600 })
+    const after = store.resetSettings()
+    expect(after['ui.zoom']).toBe(SETTINGS_DEFAULTS['ui.zoom'])
+    expect(after['dashboard.chatW']).toBe(SETTINGS_DEFAULTS['dashboard.chatW'])
+    expect(store.getSetting('dashboard.graphTab')).toBe('brain')
+    expect(store.getSetting('window.bounds')).toEqual({ width: 900, height: 600 })
+    expect(store.getConnection()).toMatchObject({ id, host: '10.0.0.1' })
+    expect(store.getPins(id)).toEqual(['scout'])
+    expect(store.getVault(id)).toBe('/home/hermes/vault')
+  })
 })
 
 describe('connections', () => {

@@ -7,6 +7,7 @@ export const IPC = {
   secretStatus: 'mc:connection:secret-status',
   settingsAll: 'mc:settings:all',
   settingsSet: 'mc:settings:set',
+  settingsReset: 'mc:settings:reset',
   pinsGet: 'mc:agents:pins-get',
   pinsSet: 'mc:agents:pins-set',
   setZoom: 'mc:app:set-zoom',

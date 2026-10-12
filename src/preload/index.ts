@@ -19,7 +19,8 @@ const api: MissionApi = {
   },
   settings: {
     all: () => ipcRenderer.invoke(IPC.settingsAll),
-    set: (key, value) => ipcRenderer.invoke(IPC.settingsSet, { key, value })
+    set: (key, value) => ipcRenderer.invoke(IPC.settingsSet, { key, value }),
+    reset: () => ipcRenderer.invoke(IPC.settingsReset)
   },
   agents: {
     getPins: () => ipcRenderer.invoke(IPC.pinsGet),

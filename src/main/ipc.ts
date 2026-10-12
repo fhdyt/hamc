@@ -90,6 +90,7 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.secretStatus, () => d.session.secretStatus())
 
   handle(IPC.settingsAll, () => d.store.allSettings())
+  handle(IPC.settingsReset, () => d.store.resetSettings())
   handle(IPC.settingsSet, (a) => {
     const { key, value } = SetSetting.parse(a)
     if (!isSettingKey(key)) throw new Error(`unknown setting ${key}`)

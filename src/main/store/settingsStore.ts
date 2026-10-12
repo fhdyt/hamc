@@ -91,6 +91,15 @@ export class SettingsStore {
       .run(key, JSON.stringify(checked))
   }
 
+  /** Back to the defaults for every app setting. The window bounds stay, and so do the connection, its pins, vault and chat sessions. */
+  resetSettings(): SettingsMap {
+    const del = this.db.prepare('DELETE FROM settings WHERE key = ?')
+    this.db.transaction(() => {
+      for (const key of Object.keys(SETTINGS_DEFAULTS)) if (key !== 'window.bounds') del.run(key)
+    })()
+    return this.allSettings()
+  }
+
   allSettings(): SettingsMap {
     const out: Record<string, unknown> = { ...SETTINGS_DEFAULTS }
     for (const key of Object.keys(SETTINGS_DEFAULTS) as (keyof SettingsMap)[]) out[key] = this.getSetting(key)
