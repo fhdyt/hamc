@@ -221,6 +221,54 @@ def add_message(db: Path, sid: str | None, role: str, content=None, ts: float = 
     return mid
 
 
+def add_kanban_db(path: Path, tasks, events=(), variant: str = "a") -> None:
+    """tasks: (id, title, assignee, creator, status, created_at); events: (id, task_id, ts, kind, body)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(path)
+    if variant == "a":
+        con.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT, assignee TEXT, created_by TEXT, status TEXT, created_at REAL)")
+    else:  # other column names a different Hermes version might use
+        con.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT, assignee_profile TEXT, creator TEXT, state TEXT, created REAL)")
+    con.execute("CREATE TABLE task_events (id INTEGER PRIMARY KEY, task_id INTEGER, ts REAL, kind TEXT, body TEXT)")
+    for t in tasks:
+        con.execute("INSERT INTO tasks VALUES (?,?,?,?,?,?)", t)
+    for e in events:
+        con.execute("INSERT INTO task_events VALUES (?,?,?,?,?)", e)
+    con.commit()
+    con.close()
+
+
+def add_interactions(fx: Fixture) -> None:
+    """Interactions between default, scout and atlas, on top of make_fixture (never part of its defaults)."""
+    now, home = fx.now, fx.home
+    atlas, scout = home / "profiles" / "atlas", home / "profiles" / "scout"
+    ad, sd, dd = atlas / "state.db", scout / "state.db", home / "state.db"
+    make_db(ad).close()
+    w(atlas / "profile.yaml", 'display_name: "Atlas"\n')
+    # message_agent: atlas -> scout twice, plus one from a handle that is no profile
+    add_session(sd, "s-bot", "bot", now - 3000, title="Bot Chat")
+    add_message(sd, "s-bot", "user", "Message from Atlas (@atlas): ping me when the digest is ready", now - 2000)
+    add_message(sd, "s-bot", "user", "Message from Atlas (@atlas): still waiting", now - 100)
+    add_message(sd, "s-bot", "user", "Message from nobody (@ghost): who am i", now - 90)
+    # a group room with all three agents
+    for db, sid in ((ad, "s-room-a"), (sd, "s-room-s"), (dd, "s-room-d")):
+        add_session(db, sid, "group", now - 5000, title="Group: ops-room · main")
+    add_message(sd, "s-room-s", "assistant", "disk alert cleared", now - 40)
+    add_message(dd, "s-room-d", "user", "thanks", now - 4000)
+    # delegate_task: scout already has s-scout-child (parent s-scout-1); atlas gets a running subagent
+    add_session(ad, "s-atlas-1", "cli", now - 600)
+    add_session(ad, "s-atlas-sub", "subagent", now - 30, parent="s-atlas-1", title="research")
+    add_message(ad, "s-atlas-sub", "assistant", "reading", now - 20)
+    # kanban: atlas -> scout #41 (done), scout -> default #42 (running), #43 created by an unknown name
+    add_kanban_db(
+        home / "kanban.db",
+        tasks=[(41, "Find sources for the changelog", "scout", "atlas", "done", now - 7000),
+               (42, "Draft the weekly digest", "default", "scout", "running", now - 500),
+               (43, "Orphan task", "scout", "ghost", "todo", now - 400)],
+        events=[(1, 41, now - 6000, "completed", "sources attached"), (2, 42, now - 60, "comment", "notes ready")],
+    )
+
+
 def add_profile(home: Path, name: str, display_name: str | None = None, markers=("SOUL.md",)) -> Path:
     pdir = home / "profiles" / name
     pdir.mkdir(parents=True, exist_ok=True)
@@ -378,6 +426,8 @@ if __name__ == "__main__":
         (Path(sys.argv[2]) / sys.argv[3]).unlink()
     elif cmd == "synthetic-vault":
         print(make_synthetic_vault(Path(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]) if len(sys.argv) > 4 else 4))
+    elif cmd == "add-interactions":
+        add_interactions(load(Path(sys.argv[2])))
     elif cmd == "advance":
         advance(load(Path(sys.argv[2])), int(sys.argv[3]))
     else:

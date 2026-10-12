@@ -905,6 +905,255 @@ def collect_stats(db_path, now):
     return st
 
 
+# ---- interactions (agent graph) --------------------------------------------
+
+INTER_WINDOW_S = 7 * 86400
+INTER_MAX_EDGES = 300
+INTER_MAX_SUBS = 40
+INTER_MAX_ROOMS = 40
+INTER_RUNNING_S = 300
+INTER_SCAN_ROWS = 2000
+BOT_RE = re.compile(r"^\s*Message from (.{1,80}?) \(@([A-Za-z0-9._-]{1,64})\):")
+GROUP_RE = re.compile(r"^Group:\s*(.{1,80}?)(?:\s+[\u00b7|-]\s+(.{0,80}))?\s*$")
+ROOM_ID_RE = re.compile(r"^room:[^\x00]{1,80}$")
+INTER_KINDS = ("kanban", "message", "room", "delegate")
+TASK_COLS = {
+    "id": ("id",),
+    "title": ("title", "name", "summary"),
+    "assignee": ("assignee", "assignee_profile", "assigned_to", "owner"),
+    "creator": ("created_by", "creator", "author", "created_by_profile"),
+    "status": ("status", "state"),
+    "created": ("created_at", "created", "ts", "created_ts"),
+}
+
+
+def match_bot_message(text):
+    m = BOT_RE.match(text or "")
+    return (m.group(1).strip(), m.group(2)) if m else None
+
+
+def match_group_title(title):
+    m = GROUP_RE.match(title or "")
+    if not m:
+        return None
+    return (m.group(1).strip(), (m.group(2) or "").strip())
+
+
+def _pick_col(cols, names):
+    for n in names:
+        if n in cols:
+            return n
+    return None
+
+
+def _kanban_paths(home):
+    return [os.path.join(home, "kanban.db")] + sorted(glob.glob(os.path.join(home, "kanban", "boards", "*", "kanban.db")))
+
+
+class InteractionState:
+    """Aggregates who talks to whom from state.db and kanban.db files, read-only.
+
+    Message edges accumulate across polls (a cursor per Bot Chat session means only new rows are read);
+    every other kind is rebuilt on each poll from small, pre-filtered queries.
+    """
+
+    def __init__(self):
+        self.msg_cursor = {}
+        self.msg_unresolved = 0
+        self.edges = {}
+        self.rooms = {}
+        self.subs = {}
+        self.sources = {}
+
+    def _edge_add(self, kind, frm, to, ts, label):
+        eid = "%s:%s>%s:" % (kind, frm, to)
+        e = self.edges.get(eid)
+        if e is None:
+            e = self.edges[eid] = {"id": eid, "kind": kind, "from": frm, "to": to, "count": 0, "firstTs": ts, "lastTs": ts, "label": label, "status": None}
+        e["count"] += 1
+        e["firstTs"] = min(e["firstTs"], ts)
+        e["lastTs"] = max(e["lastTs"], ts)
+
+    def _edge_set(self, kind, frm, to, first, last, label=None, status=None, suffix=""):
+        eid = "%s:%s>%s:%s" % (kind, frm, to, suffix)
+        self.edges[eid] = {"id": eid, "kind": kind, "from": frm, "to": to, "count": 1, "firstTs": first, "lastTs": last, "label": label, "status": status}
+
+    def _src(self, kind, state):
+        rank = {"absent": 0, "ok": 1, "unreadable": 2}
+        cur = self.sources[kind]
+        if rank[state] >= rank[cur["state"]]:
+            cur["state"] = state
+
+    def poll(self, home, now):
+        since = now - INTER_WINDOW_S
+        profiles = list_profiles(home)
+        names = {}
+        for name, pdir in profiles:
+            for key in (name.lower(), display_name(pdir, name).lower()):
+                names.setdefault(key, name)
+        self.edges = {k: v for k, v in self.edges.items() if v["kind"] == "message"}
+        self.sources = {k: {"state": "absent", "unresolved": 0} for k in INTER_KINDS}
+        room_members, room_last, subs = {}, {}, {}
+        for name, pdir in profiles:
+            db = os.path.join(pdir, "state.db")
+            if os.path.isfile(db):
+                self._scan_profile(db, name, names, since, now, room_members, room_last, subs)
+        self.rooms = {}
+        for rid, info in room_members.items():
+            last = room_last.get(rid, 0.0)
+            self.rooms[rid] = {"id": rid, "name": info["name"], "members": sorted(info["members"]), "lastTs": last}
+            for m in info["members"]:
+                self._edge_set("room", m, rid, last, last)
+        self.rooms = dict(sorted(self.rooms.items(), key=lambda kv: -kv[1]["lastTs"])[:INTER_MAX_ROOMS])
+        self.subs = {}
+        for s in sorted(subs.values(), key=lambda s: -s["lastTs"])[:INTER_MAX_SUBS]:
+            self.subs[s["id"]] = s
+            self._edge_set("delegate", s["parent"], s["id"], s["lastTs"], s["lastTs"])
+        self._kanban(home, names, since)
+        self.sources["message"]["unresolved"] = self.msg_unresolved
+        return self._payload(since)
+
+    def _scan_profile(self, db, name, names, since, now, room_members, room_last, subs):
+        con = None
+        try:
+            con = open_ro(db)
+            scols = table_columns(con, "sessions")
+            if "id" not in scols:
+                return
+            for k in ("message", "room", "delegate"):
+                self._src(k, "ok")
+            kinds = []
+            if "title" in scols:
+                kinds += ["title = 'Bot Chat'", "title LIKE 'Group:%'"]
+            if "source" in scols:
+                kinds.append("source = 'subagent'")
+            if "parent_session_id" in scols:
+                kinds.append("parent_session_id IS NOT NULL")
+            if not kinds:
+                return
+            where, params = "(" + " OR ".join(kinds) + ")", []
+            recent = []
+            if "started_at" in scols:
+                recent.append("started_at >= ?")
+                params.append(since)
+            if "ended_at" in scols:
+                recent += ["ended_at IS NULL", "ended_at >= ?"]
+                params.append(since)
+            if recent:
+                where += " AND (" + " OR ".join(recent) + ")"
+            sel = ["id"] + [col for col in ("source", "parent_session_id", "title", "started_at", "ended_at") if col in scols]
+            order = "started_at DESC" if "started_at" in scols else "id DESC"
+            rows = con.execute("SELECT %s FROM sessions WHERE %s ORDER BY %s LIMIT %d" % (", ".join(sel), where, order, INTER_SCAN_ROWS), params).fetchall()
+            mcols = table_columns(con, "messages")
+            can_msg = {"id", "session_id", "role", "content", "timestamp"} <= mcols
+            for r in rows:
+                s = dict(zip(sel, r))
+                sid, title, source = s["id"], _text(s.get("title")) or "", _text(s.get("source")) or ""
+                started = to_epoch(s.get("started_at")) or 0.0
+
+                def activity():
+                    if can_msg:
+                        last = con.execute("SELECT MAX(timestamp) FROM messages WHERE session_id = ?", (sid,)).fetchone()
+                        t = to_epoch(last[0]) if last and last[0] is not None else None
+                        if t is not None:
+                            return t
+                    return started
+
+                if source == "subagent" or (s.get("parent_session_id") and source != CHAT_SOURCE and not title.startswith("Group:")):
+                    last = activity()
+                    if last < since:
+                        continue
+                    running = s.get("ended_at") is None and now - last <= INTER_RUNNING_S
+                    sub_id = "sub:%s:%s" % (name, sid)
+                    subs[sub_id] = {"id": sub_id, "parent": name, "status": "running" if running else "done", "lastTs": last, "title": title[:80] or None}
+                    continue
+                grp = match_group_title(title)
+                if grp is not None:
+                    last = activity()
+                    if last < since:
+                        continue
+                    rid = "room:" + grp[0]
+                    room_members.setdefault(rid, {"name": grp[0], "members": set()})["members"].add(name)
+                    room_last[rid] = max(room_last.get(rid, 0.0), last)
+                    continue
+                if title == "Bot Chat" and can_msg:
+                    key = (name, sid)
+                    msgs = con.execute(
+                        "SELECT id, content, timestamp FROM messages WHERE session_id = ? AND role = 'user' AND id > ? AND timestamp >= ? ORDER BY id ASC LIMIT ?",
+                        (sid, self.msg_cursor.get(key, 0), since, INTER_SCAN_ROWS)).fetchall()
+                    for mid, content, ts in msgs:
+                        self.msg_cursor[key] = max(self.msg_cursor.get(key, 0), mid)
+                        hit = match_bot_message(as_text(content))
+                        if hit is None:
+                            continue
+                        sender = names.get(hit[1].lower()) or names.get(hit[0].lower())
+                        if sender is None or sender == name:
+                            self.msg_unresolved += 1
+                            continue
+                        self._edge_add("message", sender, name, to_epoch(ts) or 0.0, "msg")
+        except sqlite3.Error:
+            for k in ("message", "room", "delegate"):
+                self._src(k, "unreadable")
+        finally:
+            if con is not None:
+                con.close()
+
+    def _kanban(self, home, names, since):
+        for path in _kanban_paths(home):
+            if not os.path.isfile(path):
+                continue
+            con = None
+            try:
+                con = open_ro(path)
+                tcols = table_columns(con, "tasks")
+                col = {k: _pick_col(tcols, v) for k, v in TASK_COLS.items()}
+                if not (col["id"] and col["assignee"] and col["creator"]):
+                    self._src("kanban", "unreadable")
+                    continue
+                self._src("kanban", "ok")
+                ecols = table_columns(con, "task_events")
+                last_ev = {}
+                if {"task_id", "ts"} <= ecols:
+                    for tid, ts in con.execute("SELECT task_id, MAX(ts) FROM task_events GROUP BY task_id"):
+                        last_ev[tid] = to_epoch(ts) or 0.0
+                sel = ", ".join(("%s AS %s" % (col[k], k)) if col[k] else ("NULL AS %s" % k) for k in TASK_COLS)
+                for r in con.execute("SELECT %s FROM tasks ORDER BY %s DESC LIMIT 500" % (sel, col["id"])):
+                    t = dict(zip(TASK_COLS, r))
+                    created = to_epoch(t["created"]) or 0.0
+                    ts = max(created, last_ev.get(t["id"], 0.0))
+                    if ts < since:
+                        continue
+                    frm, to = names.get(str(t["creator"]).lower()), names.get(str(t["assignee"]).lower())
+                    if frm is None or to is None or frm == to:
+                        self.sources["kanban"]["unresolved"] += 1
+                        continue
+                    self._edge_set("kanban", frm, to, created, ts, label="#%s" % t["id"], status=_text(t["status"], 40), suffix="#%s" % t["id"])
+            except sqlite3.Error:
+                self._src("kanban", "unreadable")
+            finally:
+                if con is not None:
+                    con.close()
+
+    def _payload(self, since):
+        edges = sorted(self.edges.values(), key=lambda e: (-e["lastTs"], e["id"]))[:INTER_MAX_EDGES]
+        self.edges = {e["id"]: e for e in edges}
+        return {
+            "since": since,
+            "edges": edges,
+            "rooms": sorted(self.rooms.values(), key=lambda r: (-r["lastTs"], r["id"])),
+            "subagents": sorted(self.subs.values(), key=lambda s: (-s["lastTs"], s["id"])),
+            "sources": {k: dict(v) for k, v in self.sources.items()},
+        }
+
+    @staticmethod
+    def digest(data):
+        core = [(e["id"], e["count"], e["lastTs"], e["status"]) for e in data["edges"]]
+        core += [(r["id"], tuple(r["members"]), r["lastTs"]) for r in data["rooms"]]
+        core += [(s["id"], s["status"], s["lastTs"]) for s in data["subagents"]]
+        core += sorted((k, v["state"], v["unresolved"]) for k, v in data["sources"].items())
+        return hashlib.sha1(json.dumps(core, default=str).encode("ascii", "replace")).hexdigest()
+
+
 class QueryError(Exception):
     pass
 
