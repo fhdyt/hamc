@@ -4,11 +4,11 @@ import { join, resolve } from 'node:path'
 import { _electron as electron, expect, type ElectronApplication, type Page } from '@playwright/test'
 import type { FakeSsh } from '../helpers/fakeSshServer'
 
+/** With MC_PACKAGED_EXE set (npm run test:e2e:packaged) the suite drives the packaged app instead of out/main. */
 export async function launchApp(userData: string): Promise<{ app: ElectronApplication; page: Page }> {
-  const app = await electron.launch({
-    args: [resolve('out/main/index.js')],
-    env: { ...process.env, MC_USER_DATA: userData, NODE_ENV: 'production' }
-  })
+  const exe = process.env['MC_PACKAGED_EXE']
+  const env = { ...process.env, MC_USER_DATA: userData, NODE_ENV: 'production' } as Record<string, string>
+  const app = await electron.launch(exe ? { executablePath: exe, args: [], env } : { args: [resolve('out/main/index.js')], env })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   return { app, page }

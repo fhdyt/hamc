@@ -1,0 +1,53 @@
+# Installers for Windows (NSIS), macOS (universal DMG), Linux (AppImage and deb): PRD F-APP-3.
+# Build one OS at a time on that OS (see docs/release.md); CI builds all three.
+appId: com.fhdyt.hermes-mission-control
+productName: Hermes Agent Mission Control
+copyright: Copyright (c) 2026 fhdyt
+artifactName: hermes-mission-control-${version}-${os}-${arch}.${ext}
+directories:
+  output: dist
+  buildResources: assets/brand
+files:
+  - out/**
+  - assets/brand/icon-1024.png
+  - package.json
+# The collector is read from disk and sent over SSH stdin (src/main/index.ts collectorPath()), so it ships next to the asar.
+extraResources:
+  - from: collector/mc_collector.py
+    to: mc_collector.py
+# better-sqlite3 is a native module; node-gyp builds for the Electron ABI come from `electron-builder install-app-deps`.
+npmRebuild: true
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+
+# Signing: nothing is signed by default (PRD Q10). It switches on when the usual electron-builder variables are present:
+# Windows CSC_LINK + CSC_KEY_PASSWORD; macOS CSC_LINK + CSC_KEY_PASSWORD and, for notarization, APPLE_ID,
+# APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID (then set mac.notarize to true).
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: assets/brand/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+mac:
+  target:
+    - target: dmg
+      arch: [universal]
+  icon: assets/brand/icon-1024.png
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  icon: assets/brand/icon-1024.png
+  category: Utility
+  maintainer: fhdyt <fhdyt@users.noreply.github.com>
+  synopsis: Mission Control for Hermes Agent

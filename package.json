@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "Mission Control for Hermes Agent",
+  "author": "fhdyt <fhdyt@users.noreply.github.com>",
+  "homepage": "https://github.com/fhdyt/hamc",
+  "license": "UNLICENSED",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -13,7 +16,13 @@
     "test": "node scripts/run-vitest.mjs run",
     "test:py": "python -m pytest tests/collector -q",
     "test:e2e": "npm run build && playwright test",
+    "test:e2e:packaged": "node scripts/e2e-packaged.mjs",
     "icons": "python scripts/gen-icons.py",
+    "dist": "npm run build && electron-builder --publish never",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
     "check": "npm run typecheck && npm run test && npm run test:py",
     "postinstall": "electron-builder install-app-deps",
     "dev:fake": "tsx scripts/dev-fake-server.ts"

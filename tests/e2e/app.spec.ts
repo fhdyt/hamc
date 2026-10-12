@@ -1,4 +1,5 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
 import { advanceFixture, buildFixture, type FixtureDirs } from '../helpers/fixture'
@@ -112,6 +113,14 @@ test('reconnects after the server drops the connection', async () => {
   srv.dropConnections()
   await expect(page.getByText(/Reconnecting/).first()).toBeVisible({ timeout: 10_000 })
   await expect(page.getByText(/\d+ ms/).first()).toBeVisible({ timeout: 30_000 })
+})
+
+test('the packaged app carries the collector next to the asar', async () => {
+  test.skip(!process.env['MC_PACKAGED_EXE'], 'only meaningful against the packaged app (npm run test:e2e:packaged)')
+  ;({ app, page } = await launchApp(userData))
+  const info = await app.evaluate(({ app: a }) => ({ packaged: a.isPackaged, resources: process.resourcesPath }))
+  expect(info.packaged).toBe(true)
+  expect(existsSync(join(info.resources, 'mc_collector.py'))).toBe(true)
 })
 
 test('the renderer is sandboxed', async () => {
