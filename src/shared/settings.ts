@@ -21,8 +21,6 @@ export interface BrainGraphSettings {
   /** Colour notes by their top-level folder (user groups still win). */
   colorByFolder: boolean
   groups: BrainGroup[]
-  /** Draw the synapse dots at the end of every link even when zoomed out. */
-  arrows: boolean
   /** Zoom level above which labels start to show (0 shows them early, 1 only when zoomed in). */
   labelFade: number
   nodeSize: number
@@ -42,14 +40,13 @@ export const BRAIN_GRAPH_DEFAULTS: BrainGraphSettings = {
   showOrphans: true,
   colorByFolder: true,
   groups: [],
-  arrows: false,
   labelFade: 0.5,
   nodeSize: 1,
   linkWidth: 1,
-  centerForce: 0.3,
-  repelForce: 0.5,
+  centerForce: 0.47,
+  repelForce: 0.32,
   linkForce: 0.5,
-  linkDistance: 0.4,
+  linkDistance: 0.25,
   controlsOpen: true,
   previewOpen: true
 }
@@ -118,7 +115,6 @@ export const SETTINGS_SCHEMA = {
     showOrphans: z.boolean(),
     colorByFolder: z.boolean(),
     groups: z.array(z.object({ id: z.string().max(40), query: z.string().max(200), color: z.string().regex(/^#[0-9a-fA-F]{6}$/) })).max(12),
-    arrows: z.boolean(),
     labelFade: z.number().min(0).max(1),
     nodeSize: z.number().min(0.3).max(3),
     linkWidth: z.number().min(0.3).max(4),

@@ -71,6 +71,7 @@ export class GraphEngine {
   setGraph(g: Graph): void {
     this.started = performance.now()
     this.settleMs = null
+    this.settled = false // the worker is about to move nodes again
     if (this.nodes === 0 && g.nodes.length > 0) this.autoFit = true // the first graph is framed as it unfolds
     this.nodes = g.nodes.length
     this.edges = g.edges.length

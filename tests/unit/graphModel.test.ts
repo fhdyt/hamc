@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_OPTIONS, FOLDER_PALETTE, anchorsOf, backlinksOf, collideRadius, densityScale, folderLegend, reachOf, somaRadius, topFolder, buildGraph, fileId, ghostId, isEmptyQuery, matchesQuery, neighbours, parseQuery, tagId, type GraphOptions } from '../../src/renderer/lib/brain/graphModel'
+import { DEFAULT_OPTIONS, FOLDER_PALETTE, anchorsOf, backlinksOf, collideRadius, densityScale, folderLegend, somaRadius, topFolder, buildGraph, fileId, ghostId, isEmptyQuery, matchesQuery, neighbours, parseQuery, tagId, type GraphOptions } from '../../src/renderer/lib/brain/graphModel'
 import { sampleBrain, sampleNote } from '../helpers/samples'
 
 const notes = sampleBrain().notes
@@ -142,13 +142,13 @@ describe('helpers', () => {
     expect(densityScale(1)).toBeLessThanOrEqual(1.4)
   })
 
-  it('sizes a neuron by its connections: soma, dendrite reach and the room it keeps', () => {
+  it('sizes a neuron by its connections: soma and the room it keeps', () => {
     expect(somaRadius(0, 1)).toBeLessThan(somaRadius(4, 1))
     expect(somaRadius(4, 1)).toBeLessThan(somaRadius(100, 1))
-    expect(somaRadius(100000, 1)).toBe(26)
+    expect(somaRadius(100000, 1)).toBe(20)
     expect(somaRadius(4, 2)).toBeGreaterThan(somaRadius(4, 1))
-    expect(reachOf(9, 1)).toBeGreaterThan(reachOf(8, 1) * 1.1) // a hub grows one more level of branches
-    expect(collideRadius({ kind: 'note', degree: 3 }, 1)).toBeGreaterThan(collideRadius({ kind: 'ghost', degree: 3 }, 1))
+    expect(collideRadius({ degree: 3 }, 1)).toBeGreaterThan(somaRadius(3, 1))
+    expect(collideRadius({ degree: 30 }, 1)).toBeGreaterThan(collideRadius({ degree: 3 }, 1))
   })
 
   it('colours notes by their top-level folder, user groups first', () => {

@@ -78,7 +78,6 @@ export function Controls() {
       </Section>
       <Section title="Display">
         <Toggle label="Color by folder" on={g.colorByFolder} onChange={(v) => set({ colorByFolder: v })} />
-        <Toggle label="Synapses" on={g.arrows} onChange={(v) => set({ arrows: v })} />
         <Slider label="Text fade threshold" value={g.labelFade} onChange={(v) => set({ labelFade: v })} />
         <Slider label="Node size" value={g.nodeSize} min={0.3} max={3} step={0.05} onChange={(v) => set({ nodeSize: v })} />
         <Slider label="Link thickness" value={g.linkWidth} min={0.3} max={4} step={0.05} onChange={(v) => set({ linkWidth: v })} />

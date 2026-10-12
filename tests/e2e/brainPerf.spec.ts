@@ -58,7 +58,7 @@ test(`the graph of ${N} notes stays smooth`, async () => {
     await page.mouse.move(0, 0)
     await page.waitForTimeout(500)
     await page.screenshot({ path: 'tests/e2e/shots/brain-perf.png' })
-    // zoom in on the middle to see the dendrites and synapses
+    // zoom in on the middle to see the glowing cell bodies and signals
     const box = (await page.locator('.brain-canvas canvas').boundingBox())!
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     for (let i = 0; i < 8; i++) await page.mouse.wheel(0, -240)

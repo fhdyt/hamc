@@ -38,8 +38,8 @@ export function useBrainGraph(opts: { plain?: boolean } = {}): { graph: Graph; s
   )
   const colors = useMemo(() => [...g.groups.map((x) => x.color), ...folders.map((f) => f.color)], [g.groups, folders])
   const style = useMemo<GraphStyle>(
-    () => ({ nodeSize: g.nodeSize, linkWidth: g.linkWidth, arrows: g.arrows, labelFade: g.labelFade, groupColors: colors, motion: !reduceMotion }),
-    [g.nodeSize, g.linkWidth, g.arrows, g.labelFade, colors, reduceMotion]
+    () => ({ nodeSize: g.nodeSize, linkWidth: g.linkWidth, labelFade: g.labelFade, groupColors: colors, motion: !reduceMotion }),
+    [g.nodeSize, g.linkWidth, g.labelFade, colors, reduceMotion]
   )
   const forces = useMemo<Forces>(() => ({ center: g.centerForce, repel: g.repelForce, link: g.linkForce, distance: g.linkDistance }), [g.centerForce, g.repelForce, g.linkForce, g.linkDistance])
   const legend = useMemo<LegendItem[]>(() => {
