@@ -112,6 +112,17 @@ Semua format di bagian ini adalah tebakan dari PRD dan belum diverifikasi di Her
 70. **delegate_task.** Jalankan tugas yang memakai subagent. Muncul lingkaran putus-putus cyan di dekat agent induk, terisi saat berjalan (kurang dari 5 menit tanpa `ended_at`). Catat nilai `source` dan `parent_session_id` yang sebenarnya.
 71. **Realtime dan Zero-Change.** Garis aktif (kejadian dalam 60 detik) bertitik bergerak, dan data baru tampil dalam sekitar 2 detik. **Open session** di kartu membuka sesi di Live feed. Selama ini tidak ada berkas baru di VPS dan collector tidak menjalankan `hermes`; `kanban.db` dan `state.db` dibuka `mode=ro`.
 
+## Tambahan M7: installer dan rilis
+
+Pakai installer dari artefak CI atau `npm run dist:<os>` (lihat `docs/release.md`). Lakukan di Windows 11, macOS (Apple Silicon) dan Ubuntu 24.04; installer tidak bertanda tangan, jadi ikuti panduan membuka aplikasi di `docs/release.md`.
+
+72. **Pasang.** Windows: jalankan `.exe` (SmartScreen: More info, Run anyway), pilih folder, aplikasi muncul di Start menu. macOS: seret ke Applications lalu buka dengan klik kanan, Open. Linux: `chmod +x` lalu jalankan `.AppImage`, atau `sudo apt install ./....deb`. Aplikasi terbuka di layar **Connect** dengan ikon dan judul yang benar.
+73. **Jalan pertama.** Hubungkan ke VPS bersih (Hermes standar, tanpa prasyarat). Dashboard, Server, Live feed dan Chat bekerja seperti pada langkah 1-66. Di Linux tanpa keyring (GNOME Keyring atau KWallet), "Remember password" mati dan alasannya tampil.
+74. **Reset settings.** Settings, General, **Reset settings…**: ukuran teks, kepadatan, ukuran panel dan pilihan graph kembali ke bawaan; koneksi, agent yang disematkan, path vault dan ukuran jendela tetap.
+75. **Zero-Change di VPS bersih (NF-4).** Dari komputer Anda, sebelum koneksi pertama: `ssh user@host "find ~ -xdev -printf '%p %s %T@\n' | sort" > before.txt`. Pakai semua layar (tanpa menekan Save, Send, Upload atau Restart), putuskan koneksi, lalu ulangi ke `after.txt`. `diff before.txt after.txt` hanya boleh memuat perubahan yang dibuat Hermes sendiri (misalnya `state.db`, log, sesi); tidak ada berkas atau proses baru dari aplikasi, dan `ps aux | grep mc_collector` kosong setelah putus.
+76. **Copot.** Windows: Settings, Apps, uninstall (folder pemasangan hilang; `%APPDATA%\Hermes Agent Mission Control` berisi `app.db` dan log tetap sampai Anda menghapusnya). macOS: hapus app. Linux: hapus AppImage atau `sudo apt remove hermes-mission-control`.
+77. **Pasang ulang.** Pasang lagi lalu buka: pengaturan dan koneksi yang tersimpan masih ada (aplikasi tersambung sendiri), kecuali Anda memilih Forget this connection.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.
