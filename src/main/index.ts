@@ -65,6 +65,8 @@ function createWindow(store: SettingsStore): BrowserWindow {
     minHeight: 520,
     show: false,
     backgroundColor: '#282A36',
+    // The title bar takes the colours of the UI; the renderer draws the drag strip (TitleBar). macOS keeps its own.
+    ...(process.platform === 'darwin' ? {} : { titleBarStyle: 'hidden' as const, titleBarOverlay: { color: '#21222C', symbolColor: '#F8F8F2', height: 32 } }),
     title: 'Hermes Agent Mission Control',
     icon: join(projectRoot, 'assets', 'brand', 'icon-1024.png'),
     webPreferences: { ...WEB_PREFERENCES, preload: join(__dirname, '../preload/index.js') }

@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
+import { TitleBar } from './shell/TitleBar'
 import { Chat } from './screens/Chat'
 import { ComingSoon } from './screens/ComingSoon'
 import { CronModal } from './screens/cron/CronModal'
@@ -29,17 +30,27 @@ export function App() {
   }, [density, reduce])
 
   if (!ready) return null
-  if (route === 'connect') return <Connect />
-  if (route === 'launch') return <Launch />
+  if (route === 'connect') return <Framed><Connect /></Framed>
+  if (route === 'launch') return <Framed><Launch /></Framed>
 
   return (
-    <>
+    <Framed>
       <Shell>{route === 'dashboard' ? <Dashboard /> : route === 'server' ? <Server /> : route === 'chat' ? <Chat /> : route === 'feed' ? <Feed /> : route === 'brain' ? <Brain /> : <ComingSoon route={route} />}</Shell>
       <CronModal />
       <FeedModal />
       <SessionModal />
       <NoteModal />
       <SettingsModal />
-    </>
+    </Framed>
+  )
+}
+
+/** The window content under the title bar strip (the strip has no height where the OS draws its own bar). */
+function Framed({ children }: { children: ReactNode }) {
+  return (
+    <div className="mc-app">
+      <TitleBar />
+      <div className="mc-app-main">{children}</div>
+    </div>
   )
 }
