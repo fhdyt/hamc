@@ -169,7 +169,7 @@ const FULL_ERRORS: Record<string, string> = {
 }
 
 /** Fetches the complete text of a truncated item once; later calls reuse the result. */
-export async function loadFullText(it: FeedItem): Promise<void> {
+export async function loadFullText(it: Pick<FeedItem, 'id' | 'kind' | 'profile' | 'messageId'>): Promise<void> {
   const cur = useFeed.getState().full[it.id]
   if (cur && cur.status !== 'error') return
   useFeed.getState().setFull(it.id, { status: 'loading' })

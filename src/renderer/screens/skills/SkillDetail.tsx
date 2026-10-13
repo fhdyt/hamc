@@ -118,7 +118,7 @@ export function SkillDetail({ skill, agentName }: { skill: Skill; agentName: str
               </button>
             </div>
           )}
-          {doc?.status === 'ok' && <Markdown text={stripFrontmatter(doc.text)} className="sk-mdtext" />}
+          {doc?.status === 'ok' && <Markdown text={stripFrontmatter(doc.text)} className="sk-mdtext" kind="doc" />}
           {doc?.status === 'ok' && doc.truncated && <span className="sk-why">Only the first 256 KiB are shown.</span>}
         </div>
         <span className="sk-why">

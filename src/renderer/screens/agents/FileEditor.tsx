@@ -135,7 +135,7 @@ export function FileEditor({ profile, kind }: { profile: string; kind: AgentFile
         <div className="ag-split">
           <textarea className="ag-text" rows={16} value={d.text} onChange={(e) => edit(e.target.value)} aria-label="SOUL.md text" spellCheck={false} />
           <div className="ag-preview" aria-label="Preview">
-            <Markdown text={d.text || '*Nothing to preview.*'} className="md-chat" />
+            <Markdown text={d.text || '*Nothing to preview.*'} className="md-chat" kind="doc" />
           </div>
         </div>
       ) : raw ? (

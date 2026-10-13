@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, type MouseEvent } from 'react'
 import { renderMarkdown } from '../lib/brain/markdown'
 
 /** A reply as markdown: tables, lists, emphasis and code blocks with a Copy button. The text is untrusted and sanitized. */
-export function Markdown({ text, className = '' }: { text: string; className?: string }) {
-  const html = useMemo(() => renderMarkdown(text), [text])
+export function Markdown({ text, className = '', kind = 'reply' }: { text: string; className?: string; kind?: 'reply' | 'doc' }) {
+  const html = useMemo(() => renderMarkdown(text, kind), [text, kind])
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {

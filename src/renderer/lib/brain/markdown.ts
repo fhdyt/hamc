@@ -1,22 +1,29 @@
 import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
+import { tidyMarkdown } from '../chatMarkdown'
 
 export const NOTE_SCHEME = 'mc-note:'
 
-const md = new MarkdownIt({ html: false, linkify: false, breaks: false })
-md.renderer.rules['image'] = (tokens, idx) => {
-  const alt = md.utils.escapeHtml(tokens[idx]?.content ?? '')
-  return `<span class="md-img">[image${alt ? ': ' + alt : ''}]</span>`
+function makeMd(breaks: boolean): MarkdownIt {
+  const m = new MarkdownIt({ html: false, linkify: false, breaks })
+  m.renderer.rules['image'] = (tokens, idx) => {
+    const alt = m.utils.escapeHtml(tokens[idx]?.content ?? '')
+    return `<span class="md-img">[image${alt ? ': ' + alt : ''}]</span>`
+  }
+  // Code blocks get a class and their language, so the chat can put a Copy button on them.
+  m.renderer.rules['fence'] = (tokens, idx) => {
+    const t = tokens[idx]
+    const lang = (t?.info ?? '').trim().split(/\s+/)[0] ?? ''
+    const safe = lang.replace(/[^A-Za-z0-9_+.-]/g, '').slice(0, 20)
+    return `<pre class="md-pre"${safe ? ` data-lang="${safe}"` : ''}><code>${m.utils.escapeHtml(t?.content ?? '')}</code></pre>
+`
+  }
+  return m
 }
 
-// Code blocks get a class and their language, so the chat can put a Copy button on them.
-md.renderer.rules['fence'] = (tokens, idx) => {
-  const t = tokens[idx]
-  const lang = (t?.info ?? '').trim().split(/\s+/)[0] ?? ''
-  const safe = lang.replace(/[^A-Za-z0-9_+.-]/g, '').slice(0, 20)
-  return `<pre class="md-pre"${safe ? ` data-lang="${safe}"` : ''}><code>${md.utils.escapeHtml(t?.content ?? '')}</code></pre>
-`
-}
+const md = makeMd(false)
+/** Replies keep their single line breaks, as in any chat. */
+const mdReply = makeMd(true)
 
 /** Drops a leading `---` YAML block. */
 export function stripFrontmatter(text: string): string {
@@ -71,10 +78,14 @@ function hook(): void {
   })
 }
 
-/** Markdown of an untrusted text (a chat reply) to safe HTML: no wikilinks, links are inert, code blocks are marked. */
-export function renderMarkdown(text: string): string {
+/**
+ * Markdown of an untrusted text to safe HTML: no wikilinks, links are inert, code blocks are marked. A `reply` (what a
+ * model wrote) gets its missing blank lines back and keeps single line breaks; a `doc` is rendered as written.
+ */
+export function renderMarkdown(text: string, kind: 'reply' | 'doc' = 'reply'): string {
   hook()
-  return DOMPurify.sanitize(md.render(text), {
+  const html = kind === 'reply' ? mdReply.render(tidyMarkdown(text)) : md.render(text)
+  return DOMPurify.sanitize(html, {
     ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
     FORBID_TAGS: ['style', 'form', 'input', 'img', 'iframe', 'object', 'embed', 'svg', 'math', 'button', 'textarea', 'select'],
     FORBID_ATTR: ['style', 'srcset', 'src']

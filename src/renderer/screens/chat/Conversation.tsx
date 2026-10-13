@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { loadFullText } from '../../actions'
 import { answerApproval, loadHistory } from '../../chatActions'
 import { Icon } from '../../components/Icon'
 import { Markdown } from '../../components/Markdown'
@@ -113,6 +114,29 @@ function StreamBubble({ turn, showChips }: { turn: Turn; showChips: boolean }) {
   )
 }
 
+/** A saved reply. The live list keeps the first 4,000 characters; the rest is read from the server on request. */
+function Reply({ c, name }: { c: Extract<Conv, { kind: 'reply' }>; name: string }) {
+  const full = useFeed((s) => s.full[c.id])
+  const text = full?.status === 'ok' ? full.text : c.text
+  return (
+    <div className="cv-agent-wrap">
+      <div className="cv-agent" title={`${name} · ${clock(c.ts)}`}>
+        <Markdown text={text} />
+      </div>
+      {c.truncated && full?.status !== 'ok' && (
+        <button type="button" className="cb sm cv-more" disabled={full?.status === 'loading'} onClick={() => void loadFullText({ id: c.id, kind: 'reply', profile: c.profile, messageId: c.messageId })}>
+          {full?.status === 'loading' ? 'Loading…' : full?.status === 'error' ? 'Try again: show the full reply' : 'Show the full reply'}
+        </button>
+      )}
+      {full?.status === 'error' && (
+        <span className="cv-meta" role="alert">
+          {full.message}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function Item({ c, name }: { c: Conv; name: string }) {
   switch (c.kind) {
     case 'user':
@@ -153,13 +177,7 @@ function Item({ c, name }: { c: Conv; name: string }) {
         </Foldout>
       )
     case 'reply':
-      return (
-        <div className="cv-agent-wrap">
-          <div className="cv-agent" title={`${name} · ${clock(c.ts)}`}>
-            <Markdown text={c.text} />
-          </div>
-        </div>
-      )
+      return <Reply c={c} name={name} />
     case 'stream':
       return <StreamBubble turn={c.turn} showChips={c.showChips} />
   }
