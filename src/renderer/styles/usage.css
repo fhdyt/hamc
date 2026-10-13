@@ -29,3 +29,22 @@
 .us-none { color: #8b95bd; text-align: center; }
 .us-note { margin: 0; color: #8b95bd; font-size: 11px; }
 @media (max-width: 900px) { .us { padding: 12px; } }
+
+.us-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+.us-tools-main { flex: 3 1 520px; }
+.us-tools-detail { flex: 1 1 300px; min-width: 0; }
+.us-sort { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-decoration: underline dotted; }
+.us-sort:hover { color: #f8f8f2; }
+.us-table tbody tr { cursor: pointer; }
+.us-table tbody tr:hover, .us-table tbody tr.us-sel { background: #2c2e3b; }
+.us-tool-name { padding: 0; border: 0; background: transparent; color: #8be9fd; font: inherit; font-weight: 600; cursor: pointer; }
+.us-calls { display: inline-flex; align-items: center; gap: 8px; }
+.us-bar { display: inline-block; width: 70px; height: 6px; background: #343746; }
+.us-bar > span { display: block; height: 6px; background: #ffb86c; }
+.us-sub { margin: 8px 0 4px; color: #8b95bd; font-size: 11px; }
+.us-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.us-list .num { margin-left: 8px; color: #a9b2d3; }
+.us-fail { display: flex; flex-direction: column; gap: 2px; padding-bottom: 6px; border-bottom: 1px dashed #44475a; }
+.us-fail-top { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #8b95bd; }
+.us-fail-top .cb { margin-left: auto; }
+.us-fail-text { color: #ff9a9a; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -77,7 +77,41 @@ test('the agent filter narrows the tables and the range select changes the windo
   await filters().getByLabel('Time range').selectOption('30d')
 })
 
-// The Tools tab, the alert and the closing checks are added in later tasks.
+const toolsTable = () => page.getByRole('table', { name: 'Tools' })
+const toolDetail = () => page.getByRole('region', { name: 'Tool detail' })
+
+test('the Tools tab lists tool calls with failures and time, and sorts them', async () => {
+  await page.getByRole('tab', { name: 'Tools' }).click()
+  await expect(toolsTable()).toBeVisible({ timeout: 15_000 })
+  await expect(toolsTable().getByRole('row', { name: /web_search/ })).toBeVisible()
+  await expect(toolsTable().getByRole('row', { name: /terminal/ })).toBeVisible()
+  await expect(toolsTable().getByRole('row', { name: /web_search/ })).toContainText('33.3%')
+  await expect(toolsTable().getByRole('row', { name: /web_search/ })).toContainText('2.7 s')
+  await expect(page.getByText(/guesses from the result text and timestamps/)).toBeVisible()
+  await toolsTable().getByRole('button', { name: /errors/i }).click()
+  await expect(toolsTable().getByRole('columnheader', { name: /errors/i })).toHaveAttribute('aria-sort', 'descending')
+  await page.screenshot({ path: 'tests/e2e/shots/usage-tools.png' })
+})
+
+test('a tool opens its detail with calls per agent and the latest failures', async () => {
+  await toolsTable().getByRole('row', { name: /web_search/ }).click()
+  await expect(toolDetail()).toContainText('web_search')
+  await expect(toolDetail()).toContainText('Error: rate limited (429)')
+  await expect(toolDetail()).toContainText('default')
+  await toolsTable().getByRole('row', { name: /terminal/ }).click()
+  await expect(toolDetail()).toContainText('Traceback')
+  await expect(toolDetail()).toContainText('Scout')
+})
+
+test('Open session on a failure lands on that session in Sessions', async () => {
+  await toolDetail().getByRole('button', { name: 'Open session' }).first().click()
+  await expect(page.getByRole('heading', { name: 'Sessions' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Session detail' })).toContainText(/t[12]/, { timeout: 15_000 })
+  await mainNav().getByRole('button', { name: /^Usage/ }).click()
+  await page.getByRole('tab', { name: 'Cost' }).click()
+})
+
+// The alert and the closing checks are added in later tasks.
 void resizeWindow
 void treeBefore
 void expect
