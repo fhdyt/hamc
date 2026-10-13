@@ -1,4 +1,4 @@
-import { chmodSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readSync, renameSync, statSync, unlinkSync, writeSync, type Stats } from 'node:fs'
 import { utils, type SFTPWrapper } from 'ssh2'
 
 export interface SftpOp {
@@ -34,8 +34,16 @@ export function attachSftp(sftp: SFTPWrapper, toLocal: (remote: string) => strin
       sftp.status(id, S.NO_SUCH_FILE)
     }
   }
+  const attrsOf = (st: Stats) => ({ mode: st.mode, size: st.size, uid: 0, gid: 0, atime: Math.floor(st.atimeMs / 1000), mtime: Math.floor(st.mtimeMs / 1000) })
   sftp.on('STAT', stat)
-  sftp.on('LSTAT', stat)
+  sftp.on('LSTAT', (id, path) => {
+    if (path === '/' || path === '/home') return stat(id, path)
+    try {
+      sftp.attrs(id, attrsOf(lstatSync(toLocal(path))))
+    } catch {
+      sftp.status(id, S.NO_SUCH_FILE)
+    }
+  })
   sftp.on('MKDIR', (id, path, attrs) => {
     try {
       mkdirSync(toLocal(path))
@@ -66,6 +74,7 @@ export function attachSftp(sftp: SFTPWrapper, toLocal: (remote: string) => strin
     sftp.status(id, S.OK)
   })
   sftp.on('CLOSE', (id, h) => {
+    if (dirs.delete(h.readUInt32BE(0))) return sftp.status(id, S.OK)
     const hd = handleOf(h)
     if (hd) {
       closeSync(hd.fd)
@@ -121,6 +130,28 @@ export function attachSftp(sftp: SFTPWrapper, toLocal: (remote: string) => strin
       sftp.status(id, S.FAILURE)
     }
   })
-  sftp.on('OPENDIR', (id) => sftp.status(id, S.FAILURE))
-  sftp.on('READDIR', (id) => sftp.status(id, S.EOF))
+  // folder listings (the backup walks memories/ and skills/); every entry goes in one batch, then EOF
+  const dirs = new Map<number, { path: string; done: boolean }>()
+  sftp.on('OPENDIR', (id, path) => {
+    try {
+      if (!statSync(toLocal(path)).isDirectory()) return sftp.status(id, S.FAILURE)
+    } catch {
+      return sftp.status(id, S.NO_SUCH_FILE)
+    }
+    const h = next++
+    dirs.set(h, { path, done: false })
+    sftp.handle(id, buf(h))
+  })
+  sftp.on('READDIR', (id, h) => {
+    const d = dirs.get(h.readUInt32BE(0))
+    if (!d || d.done) return sftp.status(id, S.EOF)
+    d.done = true
+    const local = toLocal(d.path)
+    const names = readdirSync(local).map((filename) => {
+      const st = lstatSync(`${local}/${filename}`)
+      return { filename, longname: filename, attrs: attrsOf(st) as never }
+    })
+    if (names.length === 0) return sftp.status(id, S.EOF)
+    sftp.name(id, names)
+  })
 }

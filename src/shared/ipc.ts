@@ -5,6 +5,7 @@ import type { KanbanTaskArgs, KanbanTasksArgs } from './kanban'
 import type { CronActionRequest, CronActionResult } from './cron'
 import type { SkillActionRequest, SkillActionResult, SkillTextResult } from './skills'
 import type { MemoryVersion, MemoryVersionText } from './memory'
+import type { BackupRequest, BackupResult, NewProfileRequest, OpsApply, OpsText, ToolChange } from './agentOps'
 import type { CostAlertState, CronOutputFiles, CronRuns, SkillBlobs, SkillsLedger, SkillsList, SkillText, KanbanBoards, KanbanTaskDetail, KanbanTasks, LogsList, LogsRead, UsageSummary, UsageTools } from './events'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from './logs'
 import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
@@ -208,6 +209,18 @@ export interface MissionApi {
     runs(args: { profile: string; jobId: string; limit: number }): Promise<QueryResult<CronRuns>>
     /** One or two output files of a job, by the names `runs` listed. */
     output(args: { profile: string; jobId: string; names: string[] }): Promise<QueryResult<CronOutputFiles>>
+  }
+  ops: {
+    mcpList(profile: string): Promise<OpsText>
+    /** `hermes mcp test <name>`: starts the server once, after the user confirmed. */
+    mcpTest(profile: string, name: string): Promise<OpsText>
+    fallbackList(profile: string): Promise<OpsText>
+    /** `hermes tools list --platform <p>` for each platform. */
+    toolsList(profile: string, platforms: string[]): Promise<Record<string, OpsText>>
+    toolsApply(profile: string, changes: ToolChange[]): Promise<OpsApply>
+    profileCreate(req: NewProfileRequest): Promise<OpsText>
+    /** SFTP download of one profile into a zip the user saves locally (F-CFG-23). */
+    backup(req: BackupRequest): Promise<BackupResult>
   }
   memory: {
     /** Local versions of one memory file, newest first (F-MEMT-1). */

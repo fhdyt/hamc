@@ -14,7 +14,9 @@ import { BrainService } from './brain/service'
 import { AgentFileService } from './agentcfg/files'
 import { ModelService } from './agentcfg/model'
 import { SessionActionService } from './sessions/actions'
-import { saveExport } from './sessions/export'
+import { nativeSaveDialog, saveExport, type SaveDialog } from './sessions/export'
+import { AgentOpsService } from './agentops/service'
+import type { BackupRequest, BackupResult, NewProfileRequest, OpsApply, OpsText, ToolChange } from '@shared/agentOps'
 import { CostAlertService } from './usage/costAlert'
 import { ApprovalsService } from './approvals/service'
 import { GatewayService } from './gateway/service'
@@ -67,6 +69,8 @@ export interface SessionDeps {
   chatStopGraceMs?: number
   /** Extra collector arguments (tests shorten the memory interval). */
   collectorArgs?: string[]
+  /** The save dialog of exports and backups (tests answer it themselves). */
+  saveDialog?: SaveDialog
   latencyIntervalMs?: number
 }
 
@@ -124,6 +128,7 @@ export class MissionSession {
   private readonly cronActions: CronActionService
   private readonly skillActions: SkillActionService
   private readonly memory: MemorySnapshots
+  private readonly agentOps: AgentOpsService
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -165,6 +170,13 @@ export class MissionSession {
       hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
       isConnected: () => d.manager.isConnected(),
       store: this.cronStore,
+      log: (m) => d.log?.(m)
+    })
+    this.agentOps = new AgentOpsService({
+      conn: d.manager,
+      hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
+      home: () => this.hermes?.home ?? null,
+      isConnected: () => d.manager.isConnected(),
       log: (m) => d.log?.(m)
     })
     this.memory = new MemorySnapshots({
@@ -687,6 +699,35 @@ export class MissionSession {
 
   memoryClear(): number {
     return this.memory.clear()
+  }
+
+  mcpList(profile: string): Promise<OpsText> {
+    return this.agentOps.mcpList(profile)
+  }
+
+  mcpTest(profile: string, name: string): Promise<OpsText> {
+    return this.agentOps.mcpTest(profile, name)
+  }
+
+  fallbackList(profile: string): Promise<OpsText> {
+    return this.agentOps.fallbackList(profile)
+  }
+
+  toolsList(profile: string, platforms: string[]): Promise<Record<string, OpsText>> {
+    return this.agentOps.toolsList(profile, platforms)
+  }
+
+  toolsApply(profile: string, changes: ToolChange[]): Promise<OpsApply> {
+    return this.agentOps.toolsApply(profile, changes)
+  }
+
+  profileCreate(req: NewProfileRequest): Promise<OpsText> {
+    return this.agentOps.profileCreate(req)
+  }
+
+  agentBackup(req: BackupRequest, win: BrowserWindow | null): Promise<BackupResult> {
+    const pick = this.d.saveDialog ?? nativeSaveDialog
+    return this.agentOps.backup(req, (defaultPath) => pick(win, { defaultPath, filters: [{ name: 'Zip archive', extensions: ['zip'] }] }))
   }
 
   agentReadModel(profile: string): ReturnType<ModelService['read']> {

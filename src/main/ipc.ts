@@ -7,6 +7,7 @@ import { SETTINGS_SCHEMA, isSettingKey } from '@shared/settings'
 import { LOG_FILES } from '@shared/logs'
 import { BOARD_RE, TASK_ID_RE } from '@shared/kanban'
 import { CRON_ACTIONS, INCIDENT_ID_RE, JOB_ID_RE, SCHEDULE_MAX } from '@shared/cron'
+import { DESCRIPTION_MAX, MCP_NAME_RE, NEW_PROFILE_RE, PLATFORM_RE, TOOLSET_RE } from '@shared/agentOps'
 import { CATEGORY_RE, SHA_RE, SKILL_ACTIONS, SKILL_NAME_RE, validHubId, validSkillPath } from '@shared/skills'
 import { EXPORT_MAX_BYTES } from './sessions/export'
 import { isTrustedSender, type AppTarget } from './security'
@@ -188,6 +189,36 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.cronAction, (a) => d.session.cronAction(CronActionSchema.parse(a)))
   handle(IPC.cronRuns, (a) => d.session.cronRuns(CronRunsSchema.parse(a)))
   handle(IPC.cronRunOutput, (a) => d.session.cronRunOutput(CronOutputSchema.parse(a)))
+  handle(IPC.opsMcpList, (a) => d.session.mcpList(ProfileName.parse(a)))
+  handle(IPC.opsMcpTest, (a) => {
+    const { profile, name } = z.object({ profile: ProfileName, name: z.string().regex(MCP_NAME_RE) }).parse(a)
+    return d.session.mcpTest(profile, name)
+  })
+  handle(IPC.opsFallbackList, (a) => d.session.fallbackList(ProfileName.parse(a)))
+  handle(IPC.opsToolsList, (a) => {
+    const { profile, platforms } = z.object({ profile: ProfileName, platforms: z.array(z.string().regex(PLATFORM_RE)).min(1).max(24) }).parse(a)
+    return d.session.toolsList(profile, platforms)
+  })
+  handle(IPC.opsToolsApply, (a) => {
+    const { profile, changes } = z
+      .object({ profile: ProfileName, changes: z.array(z.object({ toolset: z.string().regex(TOOLSET_RE), platform: z.string().regex(PLATFORM_RE), enable: z.boolean() })).min(1).max(200) })
+      .parse(a)
+    return d.session.toolsApply(profile, changes)
+  })
+  handle(IPC.opsProfileCreate, (a) =>
+    d.session.profileCreate(
+      z
+        .object({
+          name: z.string().regex(NEW_PROFILE_RE),
+          description: z.string().max(DESCRIPTION_MAX).optional(),
+          cloneFrom: ProfileName.optional(),
+          noSkills: z.boolean(),
+          alias: z.boolean()
+        })
+        .parse(a)
+    )
+  )
+  handle(IPC.opsBackup, (a) => d.session.agentBackup(z.object({ profile: ProfileName, includeStateDb: z.boolean() }).parse(a), d.getWindow()))
   handle(IPC.memoryVersions, (a) => {
     const { profile, file } = z.object({ profile: ProfileName, file: FileKind }).parse(a)
     return d.session.memoryVersions(profile, file)

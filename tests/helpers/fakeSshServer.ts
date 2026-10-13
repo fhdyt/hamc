@@ -246,6 +246,23 @@ function runSkills(argv: string[], stream: ServerChannel, o: Resolved): void {
   stream.on('close', () => child.kill())
 }
 
+/** `hermes [-p P] mcp|tools|fallback|profile ...`: recorded, then answered by fake_hermes_ops.py. */
+function runOps(argv: string[], stream: ServerChannel, o: Resolved): void {
+  o.st.opsCalls.push(argv.slice(1))
+  const child = spawn(pythonExe, [resolve('tests/fixtures/fake_hermes_ops.py'), ...argv.slice(1)], {
+    env: { ...process.env, MC_FAKE_HOME: o.fixture.home, PYTHONIOENCODING: 'utf-8' },
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  child.stdout.pipe(stream, { end: false })
+  child.stderr.on('data', (d: Buffer) => stream.stderr.write(d))
+  child.on('close', (code) => {
+    if (!stream.writable) return
+    stream.exit(code ?? 0)
+    stream.end()
+  })
+  stream.on('close', () => child.kill())
+}
+
 /** A signal request (Stop) ends the fake chat the way Hermes does: a result with exit code 130. */
 function interruptChat(stream: ServerChannel): void {
   const child = chats.get(stream)
@@ -287,6 +304,7 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
     if ((rest[0] === 'cron' || rest[2] === 'cron') && rest[rest.length - 1] !== '--help') return runCron(argv, stream, o)
     const sub = rest[0] === '-p' ? rest[2] : rest[0]
     if ((sub === 'curator' || sub === 'skills') && rest[rest.length - 1] !== '--help') return runSkills(argv, stream, o)
+    if ((sub === 'mcp' || sub === 'fallback' || sub === 'profile' || (sub === 'tools' && !rest.includes('--summary'))) && rest[rest.length - 1] !== '--help') return runOps(argv, stream, o)
     if (runConfigCommands(rest, stream, o)) return
   }
   if (cmd === o.pythonPath || cmd === 'python3') {

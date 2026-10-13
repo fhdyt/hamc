@@ -22,9 +22,11 @@ export interface FakeHermesState {
   cronCalls: string[][]
   /** Every `hermes curator ...` and `hermes skills ...` call, as the arguments after `hermes`. */
   skillCalls: string[][]
+  /** Every `hermes mcp|tools|fallback|profile ...` call, as the arguments after `hermes`. */
+  opsCalls: string[][]
 }
 
-export const newHermesState = (): FakeHermesState => ({ config: new Map(), env: new Map(), keyVia: [], restarts: [], stops: [], failOn: {}, sessionCalls: [], cronCalls: [], skillCalls: [] })
+export const newHermesState = (): FakeHermesState => ({ config: new Map(), env: new Map(), keyVia: [], restarts: [], stops: [], failOn: {}, sessionCalls: [], cronCalls: [], skillCalls: [], opsCalls: [] })
 
 export interface FakeHermesOptions {
   st: FakeHermesState

@@ -35,6 +35,15 @@ const api: MissionApi = {
     runs: (args) => ipcRenderer.invoke(IPC.cronRuns, args),
     output: (args) => ipcRenderer.invoke(IPC.cronRunOutput, args)
   },
+  ops: {
+    mcpList: (profile) => ipcRenderer.invoke(IPC.opsMcpList, profile),
+    mcpTest: (profile, name) => ipcRenderer.invoke(IPC.opsMcpTest, { profile, name }),
+    fallbackList: (profile) => ipcRenderer.invoke(IPC.opsFallbackList, profile),
+    toolsList: (profile, platforms) => ipcRenderer.invoke(IPC.opsToolsList, { profile, platforms }),
+    toolsApply: (profile, changes) => ipcRenderer.invoke(IPC.opsToolsApply, { profile, changes }),
+    profileCreate: (req) => ipcRenderer.invoke(IPC.opsProfileCreate, req),
+    backup: (req) => ipcRenderer.invoke(IPC.opsBackup, req)
+  },
   memory: {
     versions: (profile, file) => ipcRenderer.invoke(IPC.memoryVersions, { profile, file }),
     version: (id) => ipcRenderer.invoke(IPC.memoryVersion, id),
