@@ -160,7 +160,16 @@ test('a high threshold clears the row, and an invalid amount is refused', async 
   await mainNav().getByRole('button', { name: /^Usage/ }).click()
 })
 
-// The closing checks are added in the last task.
-void resizeWindow
-void treeBefore
-void expect
+test('on a narrow window the Usage screen does not scroll sideways', async () => {
+  await resizeWindow(app, 800, 700)
+  await expect(chart()).toBeVisible()
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
+  await resizeWindow(app, 1280, 800)
+})
+
+test('browsing usage, tools and the alert leave the server files untouched', async () => {
+  const verbs = new Set(srv.execLog.map((a) => a[0]))
+  for (const bad of ['rm', 'mv', 'cp', 'touch', 'mkdir', 'tee', 'sudo', 'chmod', 'curl', 'wget', 'tar', 'sed', 'cat']) expect(verbs.has(bad)).toBe(false)
+  expect(snapshotTree(fx.root)).toEqual(treeBefore)
+})
