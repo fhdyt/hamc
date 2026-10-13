@@ -97,6 +97,25 @@ describe('CostAlertService', () => {
     expect(notified).toHaveBeenCalledTimes(2)
   })
 
+  it('runs once more when a check is asked for while one is still running', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    let n = 0
+    const sent = vi.fn()
+    const query = vi.fn(async (_a: UsageSummaryArgs): Promise<QueryResult<UsageSummary>> => {
+      n++
+      if (n === 1) await gate
+      return ok(12)
+    })
+    const svc = new CostAlertService({ query, settings: () => ({ enabled: true, usd: 10 }), isConnected: () => true, send: sent, notify: () => {}, intervalMs: 1_000_000 })
+    const first = svc.recheck()
+    const second = svc.recheck()
+    release()
+    await Promise.all([first, second])
+    expect(query).toHaveBeenCalledTimes(2)
+    expect(sent).toHaveBeenCalledTimes(2)
+  })
+
   it('runs again on the timer after start and stops cleanly', async () => {
     vi.useFakeTimers()
     try {

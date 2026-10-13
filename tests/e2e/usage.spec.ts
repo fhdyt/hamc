@@ -111,7 +111,56 @@ test('Open session on a failure lands on that session in Sessions', async () => 
   await page.getByRole('tab', { name: 'Cost' }).click()
 })
 
-// The alert and the closing checks are added in later tasks.
+const settingsDialog = () => page.getByRole('dialog', { name: 'Settings' })
+const activity = () => page.locator('section.card[aria-label="Activity"]')
+
+async function openAlertSettings(): Promise<void> {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await settingsDialog().getByRole('tab', { name: 'Alerts' }).click()
+}
+
+test('Settings → Alerts turns on the daily cost alert and the Dashboard shows a COST row', async () => {
+  await openAlertSettings()
+  await expect(settingsDialog().getByText('The rule is off.')).toBeVisible()
+  await settingsDialog().getByRole('switch', { name: /Alert when the daily cost/ }).click()
+  await settingsDialog().getByLabel('Threshold (USD per day)').fill('0.01')
+  await settingsDialog().getByLabel('Threshold (USD per day)').press('Enter')
+  await expect(settingsDialog().getByText(/Today so far: \$/)).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.press('Escape')
+  await mainNav().getByRole('button', { name: /^Dashboard/ }).click()
+  await activity().getByRole('tab', { name: /^alerts/ }).click()
+  const row = activity().getByRole('listitem', { name: /COST/ })
+  await expect(row).toBeVisible({ timeout: 20_000 })
+  await expect(row).toContainText('is over $0.01')
+  await page.screenshot({ path: 'tests/e2e/shots/usage-alert.png' })
+  await row.click()
+  await expect(page.getByRole('heading', { name: 'Usage' })).toBeVisible()
+  await expect(page.getByText(/days? over the \$0\.01 alert threshold/)).toBeVisible({ timeout: 15_000 })
+})
+
+test('Review in Sessions opens Sessions on a range that holds the first day over the threshold', async () => {
+  await page.getByRole('button', { name: 'Review in Sessions' }).click()
+  await expect(page.getByRole('heading', { name: 'Sessions' })).toBeVisible()
+  await expect(page.getByRole('search', { name: 'Session filters' }).getByLabel('Time range')).toHaveValue('30d')
+  await mainNav().getByRole('button', { name: /^Usage/ }).click()
+})
+
+test('a high threshold clears the row, and an invalid amount is refused', async () => {
+  await openAlertSettings()
+  await settingsDialog().getByLabel('Threshold (USD per day)').fill('100000')
+  await settingsDialog().getByLabel('Threshold (USD per day)').press('Enter')
+  await settingsDialog().getByLabel('Threshold (USD per day)').fill('abc')
+  await settingsDialog().getByLabel('Threshold (USD per day)').press('Enter')
+  await expect(settingsDialog().getByRole('alert')).toContainText('Enter an amount from $0.01 to $100,000.')
+  await page.keyboard.press('Escape')
+  await mainNav().getByRole('button', { name: /^Dashboard/ }).click()
+  await activity().getByRole('tab', { name: /^alerts/ }).click()
+  await expect(activity().getByRole('listitem', { name: /COST/ })).toHaveCount(0, { timeout: 20_000 })
+  await expect(activity().getByRole('tab', { name: 'alerts 1' })).toBeVisible()
+  await mainNav().getByRole('button', { name: /^Usage/ }).click()
+})
+
+// The closing checks are added in the last task.
 void resizeWindow
 void treeBefore
 void expect

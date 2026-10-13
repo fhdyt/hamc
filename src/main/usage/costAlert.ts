@@ -28,6 +28,7 @@ export class CostAlertService {
   private timer: ReturnType<typeof setInterval> | null = null
   private notifiedDay: string | null = null
   private running = false
+  private again = false
 
   constructor(private readonly d: CostAlertDeps) {}
 
@@ -47,31 +48,43 @@ export class CostAlertService {
     this.notifiedDay = null
   }
 
+  /** A check asked for while another is running (the setting just changed) is not lost: it runs right after. */
   async recheck(): Promise<void> {
-    if (this.running) return
+    if (this.running) {
+      this.again = true
+      return
+    }
     this.running = true
     try {
-      const nowMs = (this.d.now ?? Date.now)()
-      const day = localDayKey(nowMs / 1000)
-      const { enabled, usd } = this.d.settings()
-      if (!enabled) {
-        this.d.send({ enabled: false, day, total: null, threshold: usd, over: false, checkedAt: nowMs })
-        return
-      }
-      if (!this.d.isConnected()) return
-      const { dayStarts, endTs } = dayStartsFor(1, nowMs / 1000)
-      const res = await this.d.query({ profiles: [], dayStarts, endTs })
-      if (!res.ok) return
-      const total = res.data.rows.reduce((sum, r) => sum + r.cost, 0)
-      const { over, notify } = evaluateCost(total, enabled, usd, this.notifiedDay, day)
-      const state: CostAlertState = { enabled, day, total, threshold: usd, over, checkedAt: nowMs }
-      this.d.send(state)
-      if (notify) {
-        this.notifiedDay = day
-        this.d.notify(state)
-      }
+      await this.check()
     } finally {
       this.running = false
+    }
+    if (this.again) {
+      this.again = false
+      await this.recheck()
+    }
+  }
+
+  private async check(): Promise<void> {
+    const nowMs = (this.d.now ?? Date.now)()
+    const day = localDayKey(nowMs / 1000)
+    const { enabled, usd } = this.d.settings()
+    if (!enabled) {
+      this.d.send({ enabled: false, day, total: null, threshold: usd, over: false, checkedAt: nowMs })
+      return
+    }
+    if (!this.d.isConnected()) return
+    const { dayStarts, endTs } = dayStartsFor(1, nowMs / 1000)
+    const res = await this.d.query({ profiles: [], dayStarts, endTs })
+    if (!res.ok) return
+    const total = res.data.rows.reduce((sum, r) => sum + r.cost, 0)
+    const { over, notify } = evaluateCost(total, enabled, usd, this.notifiedDay, day)
+    const state: CostAlertState = { enabled, day, total, threshold: usd, over, checkedAt: nowMs }
+    this.d.send(state)
+    if (notify) {
+      this.notifiedDay = day
+      this.d.notify(state)
     }
   }
 }

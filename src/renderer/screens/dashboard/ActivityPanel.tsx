@@ -7,7 +7,9 @@ import { useNow } from '../../hooks/useNow'
 import { agentColor } from '../../lib/agentColor'
 import { agentLabel, formatCountdown, isFailure, jobKey } from '../../lib/cron'
 import { KIND_COLOR, KIND_LABEL, clock } from '../../lib/feed'
+import { moneyLabel } from '../../lib/usage'
 import { useAgents } from '../../stores/agents'
+import { useCostAlert } from '../../stores/costAlert'
 import { useCron } from '../../stores/cron'
 import { useFeed } from '../../stores/feed'
 import { useUi } from '../../stores/ui'
@@ -25,6 +27,10 @@ export function ActivityPanel({ style, profile }: { style?: CSSProperties; profi
   const openModal = useFeed((s) => s.openModal)
   const jobs = useCron((s) => s.jobs)
   const openCron = useCron((s) => s.openModal)
+  const cost = useCostAlert((s) => s.state)
+  const navigate = useUi((s) => s.navigate)
+  const costOver = !profile && cost !== null && cost.enabled && cost.over
+  const costRule = useUi((s) => s.settings['alerts.cost.enabled'])
   const sharedTab = useUi((s) => s.settings['dashboard.activityTab'])
   const sharedOpen = useUi((s) => s.settings['dashboard.activityOpen'])
   const [ownTab, setOwnTab] = useState<'activity' | 'alerts'>('activity')
@@ -46,7 +52,7 @@ export function ActivityPanel({ style, profile }: { style?: CSSProperties; profi
   const head = (
     <div role="tablist" aria-label="Activity" className="d-tabs">
       {tabBtn('activity', 'activity')}
-      {tabBtn('alerts', 'alerts', alerts.length > 0 && <span style={{ color: '#FF5555' }}>{alerts.length}</span>)}
+      {tabBtn('alerts', 'alerts', alerts.length + (costOver ? 1 : 0) > 0 && <span style={{ color: '#FF5555' }}>{alerts.length + (costOver ? 1 : 0)}</span>)}
     </div>
   )
   const actions = (
@@ -63,10 +69,29 @@ export function ActivityPanel({ style, profile }: { style?: CSSProperties; profi
   let body
   if (tab === 'alerts') {
     body =
-      alerts.length === 0 ? (
-        <EmptyState title="No alerts" why={profile ? `Failed cron runs of ${names[profile] ?? profile} show up here.` : 'Failed cron runs show up here.'} />
+      alerts.length === 0 && !costOver ? (
+        <EmptyState title="No alerts" why={profile ? `Failed cron runs of ${names[profile] ?? profile} show up here.` : costRule ? 'Failed cron runs and cost alerts show up here.' : 'Failed cron runs show up here.'} />
       ) : (
         <div role="list" aria-label="Alerts" className="d-scroll">
+          {costOver && cost && (
+            <button
+              type="button"
+              role="listitem"
+              className="dash-row"
+              aria-label={`COST: daily cost ${moneyLabel(cost.total ?? 0)} is over ${moneyLabel(cost.threshold)}`}
+              onClick={() => navigate('usage')}
+            >
+              <span className="dr-top">
+                <span className="dr-time num">{clock(cost.checkedAt / 1000)}</span>
+                <span className="dr-kind" style={{ color: '#FFB86C' }}>
+                  COST
+                </span>
+              </span>
+              <span className="dr-text">
+                Daily cost {moneyLabel(cost.total ?? 0)} is over {moneyLabel(cost.threshold)}
+              </span>
+            </button>
+          )}
           {alerts.map((j) => (
             <button key={jobKey(j)} type="button" role="listitem" className="dash-row" onClick={() => openCron(jobKey(j))}>
               <span className="dr-top">
