@@ -1704,6 +1704,81 @@ def q_usage_summary(home, a):
     return {"rows": rows, "truncated": truncated, "errors": errors}
 
 
+TOOL_ROWS_MAX = 20000
+TOOLS_MAX = 200
+TOOL_FAILURES_KEPT = 5
+_EXIT_RE = re.compile(r"exit code [1-9]")
+
+
+def _looks_failed(text):
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    for start in ("error", "traceback", "exception", "failed"):
+        if t.startswith(start):
+            return True
+    return '"error":' in t or _EXIT_RE.search(t) is not None
+
+
+def q_usage_tools(home, a):
+    profiles = _filters({"profiles": a.get("profiles", [])})[0]
+    since, end = a.get("sinceTs"), a.get("endTs")
+    for v in (since, end):
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise QueryError("bad_args")
+    if end <= since:
+        raise QueryError("bad_args")
+    stats, errors, readable, scanned, truncated = {}, [], 0, 0, False
+    for name, db in _each_profile(home, profiles):
+        con = None
+        try:
+            con = open_ro(db)
+            mcols = table_columns(con, "messages")
+            if not {"id", "session_id", "role", "timestamp", "tool_name", "content"} <= mcols:
+                errors.append({"profile": name, "code": "unsupported_schema"})
+                continue
+            active = " AND active = 1" if "active" in mcols else ""
+            sql = ("SELECT id, session_id, timestamp, tool_name, substr(content, 1, 400) FROM messages "
+                   "WHERE role = 'tool' AND timestamp >= ? AND timestamp < ?%s ORDER BY id DESC LIMIT ?" % active)
+            rows = con.execute(sql, (since, end, TOOL_ROWS_MAX + 1)).fetchall()
+            if len(rows) > TOOL_ROWS_MAX:
+                truncated = True
+                rows = rows[:TOOL_ROWS_MAX]
+            for mid, sid, ts, tool, text in rows:
+                scanned += 1
+                prev = con.execute("SELECT timestamp FROM messages WHERE session_id = ? AND id < ?%s ORDER BY id DESC LIMIT 1" % active, (sid, mid)).fetchone()
+                t_ts, p_ts = to_epoch(ts), (to_epoch(prev[0]) if prev else None)
+                label = _text(tool, 80) or "unknown"
+                s = stats.setdefault(label, {"name": label, "calls": 0, "errors": 0, "ms": [], "lastTs": None, "byProfile": {}, "failures": []})
+                s["calls"] += 1
+                s["byProfile"][name] = s["byProfile"].get(name, 0) + 1
+                if t_ts is not None and (s["lastTs"] is None or t_ts > s["lastTs"]):
+                    s["lastTs"] = t_ts
+                if t_ts is not None and p_ts is not None and t_ts >= p_ts:
+                    s["ms"].append(int(round((t_ts - p_ts) * 1000)))
+                if _looks_failed(text):
+                    s["errors"] += 1
+                    s["failures"].append({"profile": name, "sessionId": _text(sid, 128) or "", "ts": t_ts, "text": (_text(text) or "")[:160]})
+            readable += 1
+        except sqlite3.Error:
+            errors.append({"profile": name, "code": "db_unreadable"})
+        finally:
+            if con is not None:
+                con.close()
+    if errors and readable == 0:
+        raise QueryError(errors[0]["code"])
+    tools = []
+    for s in stats.values():
+        ms = s.pop("ms")
+        s["avgMs"] = int(round(sum(ms) / len(ms))) if ms else None
+        s["maxMs"] = max(ms) if ms else None
+        s["failures"].sort(key=lambda f: -(f["ts"] or 0))
+        s["failures"] = s["failures"][:TOOL_FAILURES_KEPT]
+        tools.append(s)
+    tools.sort(key=lambda s: (-s["calls"], s["name"]))
+    return {"tools": tools[:TOOLS_MAX], "scanned": scanned, "truncated": truncated, "errors": errors}
+
+
 # ---- chat ----------------------------------------------------------------
 
 CHAT_SOURCE = "mission-control"
@@ -2282,7 +2357,7 @@ def run_query(home, cmd, raw):
         "chat_sessions": q_chat_sessions, "uploads_list": q_uploads_list, "interaction": q_interaction,
         "sessions_list": q_sessions_list, "sessions_search": q_sessions_search,
         "session_transcript": q_session_transcript,
-        "usage_summary": q_usage_summary,
+        "usage_summary": q_usage_summary, "usage_tools": q_usage_tools,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}

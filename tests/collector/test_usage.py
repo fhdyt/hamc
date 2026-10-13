@@ -98,3 +98,63 @@ def test_summary_bad_args(fx):
     assert summary(fx, dayStarts=["x"])["error"] == "bad_args"
     assert summary(fx, endTs=STARTS[-1])["error"] == "bad_args"
     assert summary(fx, profiles=["../x"])["error"] == "bad_args"
+
+
+# ---- tools ------------------------------------------------------------------
+
+def tools(fx, **over):
+    args = {"profiles": [], "sinceTs": BASE - 10, "endTs": BASE + 1000}
+    args.update(over)
+    return q(fx, "usage_tools", args)
+
+
+def by_name(r):
+    return {t["name"]: t for t in r["data"]["tools"]}
+
+
+def test_tools_count_failures_and_time(fx):
+    mf.add_tool_data(fx, BASE)
+    r = tools(fx)
+    assert r["ok"] is True
+    t = by_name(r)
+    assert set(t) == {"web_search", "terminal"}
+    ws = t["web_search"]
+    assert ws["calls"] == 2 and ws["errors"] == 1
+    assert ws["avgMs"] == 3500 and ws["maxMs"] == 5000 and ws["lastTs"] == BASE + 25
+    assert ws["byProfile"] == {"default": 2}
+    assert ws["failures"] == [{"profile": "default", "sessionId": "t1", "ts": BASE + 25, "text": "Error: rate limited (429)"}]
+    term = t["terminal"]
+    assert term["calls"] == 2 and term["errors"] == 1 and term["byProfile"] == {"default": 1, "scout": 1}
+    assert r["data"]["scanned"] == 4 and r["data"]["truncated"] is False
+
+
+def test_tools_respect_range_profiles_and_active(fx):
+    mf.add_tool_data(fx, BASE)
+    assert "hidden" not in by_name(tools(fx))
+    assert by_name(tools(fx, profiles=["scout"]))["terminal"]["calls"] == 1
+    assert tools(fx, sinceTs=BASE + 26, endTs=BASE + 1000)["data"]["scanned"] == 2
+
+
+def test_failure_guess():
+    f = c._looks_failed
+    for text in ["Traceback (most recent call last)", "Error: ENOENT", "  error: nope", '{"error": "boom"}', "Command failed with exit code 1", "Exception in thread"]:
+        assert f(text), text
+    for text in ["3 results", "no errors found", "exit code 0", "file saved", "", None]:
+        assert not f(text), text
+
+
+def test_tools_cut_failure_text_and_cap_failures(fx):
+    d = fx.home / "state.db"
+    mf.add_session(d, "t9", "cli", BASE)
+    for i in range(8):
+        mf.add_message(d, "t9", "tool", "Error: " + "x" * 400, BASE + 100 + i, tool_name="flaky")
+    flaky = by_name(tools(fx))["flaky"]
+    assert flaky["errors"] == 8 and len(flaky["failures"]) == 5
+    assert all(len(f["text"]) <= 160 for f in flaky["failures"])
+    assert flaky["failures"][0]["ts"] == BASE + 107
+
+
+def test_tools_bad_args(fx):
+    assert tools(fx, sinceTs="x")["error"] == "bad_args"
+    assert tools(fx, endTs=BASE - 100)["error"] == "bad_args"
+    assert tools(fx, profiles=["../x"])["error"] == "bad_args"
