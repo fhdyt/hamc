@@ -1992,6 +1992,187 @@ def q_logs_read(home, a):
             "more": start > 0 and (after is None or reset), "reset": reset, "skipped": skipped}
 
 
+# ---- kanban (read-only screen) ----------------------------------------------
+
+KANBAN_TASKS_MAX = 1000
+KANBAN_BODY_MAX = 65536
+KANBAN_COMMENT_MAX = 16384
+KANBAN_PAYLOAD_MAX = 2000
+KANBAN_SUMMARY_MAX = 4096
+BOARD_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def _kanban_dbs(home):
+    """(slug, path) of every kanban.db: the home one is the board `default`, each folder under kanban/boards is its own board."""
+    out = []
+    home_db = os.path.join(home, "kanban.db")
+    if os.path.isfile(home_db):
+        out.append(("default", home_db))
+    base = os.path.join(home, "kanban", "boards")
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        names = []
+    for name in names:
+        path = os.path.join(base, name, "kanban.db")
+        if BOARD_RE.match(name) and name != "default" and os.path.isfile(path):
+            out.append((name, path))
+    return out
+
+
+def _kanban_path(home, slug):
+    if not isinstance(slug, str) or not BOARD_RE.match(slug):
+        raise QueryError("bad_args")
+    for s, path in _kanban_dbs(home):
+        if s == slug:
+            return path
+    raise QueryError("not_found")
+
+
+def _kb_sel(cols, pairs, alias="t"):
+    return ", ".join(("%s.%s AS %s" % (alias, c, a)) if c in cols else ("NULL AS %s" % a) for a, c in pairs)
+
+
+def _kb_int(v, default=0):
+    if isinstance(v, bool):
+        return default
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float):
+        return int(v)
+    return default
+
+
+def _kb_card(r):
+    status = _text(r.get("status"), 40)
+    return {
+        "id": str(r["id"]), "title": _text(r.get("title"), 300), "assignee": _text(r.get("assignee"), 64), "createdBy": _text(r.get("created_by"), 64),
+        "status": (status or "").strip().lower() or "other", "priority": _kb_int(r.get("priority")),
+        "createdAt": to_epoch(r.get("created_at")), "startedAt": to_epoch(r.get("started_at")), "completedAt": to_epoch(r.get("completed_at")),
+        "comments": _kb_int(r.get("comments")), "parents": _kb_int(r.get("parents")), "children": _kb_int(r.get("children")),
+        "blockKind": _text(r.get("block_kind"), 40), "failures": _kb_int(r.get("consecutive_failures")), "failed": bool(r.get("last_failure_error")),
+    }
+
+
+CARD_PAIRS = [("id", "id"), ("title", "title"), ("assignee", "assignee"), ("created_by", "created_by"), ("status", "status"), ("priority", "priority"),
+              ("created_at", "created_at"), ("started_at", "started_at"), ("completed_at", "completed_at"), ("block_kind", "block_kind"),
+              ("consecutive_failures", "consecutive_failures"), ("last_failure_error", "last_failure_error")]
+
+
+def _kb_counts(con):
+    """SQL for the three counts of a card; a missing table or column counts as 0."""
+    comments = "(SELECT COUNT(*) FROM task_comments c WHERE c.task_id = t.id)" if {"task_id"} <= table_columns(con, "task_comments") else "0"
+    lcols = table_columns(con, "task_links")
+    parents = "(SELECT COUNT(*) FROM task_links l WHERE l.child_id = t.id)" if {"parent_id", "child_id"} <= lcols else "0"
+    children = "(SELECT COUNT(*) FROM task_links l WHERE l.parent_id = t.id)" if {"parent_id", "child_id"} <= lcols else "0"
+    return "%s AS comments, %s AS parents, %s AS children" % (comments, parents, children)
+
+
+def q_kanban_boards(home, a):
+    boards, errors = [], []
+    for slug, path in _kanban_dbs(home):
+        con = None
+        try:
+            con = open_ro(path)
+            tcols = table_columns(con, "tasks")
+            by = {}
+            if "status" in tcols and "id" in tcols:
+                by = {(str(s or "").strip().lower() or "other"): n for s, n in con.execute("SELECT status, COUNT(*) FROM tasks GROUP BY status")}
+            archived = by.get("archived", 0)
+            boards.append({"slug": slug, "path": os.path.relpath(path, home).replace(os.sep, "/"), "tasks": sum(by.values()) - archived,
+                           "archived": archived, "byStatus": by, "readable": "id" in tcols})
+        except sqlite3.Error:
+            errors.append({"slug": slug, "code": "db_unreadable"})
+        finally:
+            if con is not None:
+                con.close()
+    return {"boards": boards, "errors": errors}
+
+
+def q_kanban_tasks(home, a):
+    path = _kanban_path(home, a.get("board"))
+    con = open_ro(path)
+    try:
+        tcols = table_columns(con, "tasks")
+        if "id" not in tcols:
+            raise QueryError("unsupported_schema")
+        has_status = "status" in tcols
+        where = " WHERE (t.status IS NULL OR lower(t.status) != 'archived')" if has_status else ""
+        order = "ORDER BY (t.created_at IS NULL), t.created_at DESC, t.id DESC" if "created_at" in tcols else "ORDER BY t.id DESC"
+        sql = "SELECT %s, %s FROM tasks t%s %s LIMIT ?" % (_kb_sel(tcols, CARD_PAIRS), _kb_counts(con), where, order)
+        rows = _dict_rows(con.execute(sql, (KANBAN_TASKS_MAX + 1,)))
+        archived = con.execute("SELECT COUNT(*) FROM tasks WHERE lower(status) = 'archived'").fetchone()[0] if has_status else 0
+    except sqlite3.Error:
+        raise QueryError("db_unreadable")
+    finally:
+        con.close()
+    return {"board": a["board"], "tasks": [_kb_card(r) for r in rows[:KANBAN_TASKS_MAX]], "archived": archived, "truncated": len(rows) > KANBAN_TASKS_MAX}
+
+
+def _kb_ref(r):
+    return {"id": str(r[0]), "title": _text(r[1], 300), "status": (_text(r[2], 40) or "").strip().lower() or "other"}
+
+
+def q_kanban_task(home, a):
+    path = _kanban_path(home, a.get("board"))
+    tid = a.get("id")
+    if not isinstance(tid, str) or not ID_RE.match(tid):
+        raise QueryError("bad_args")
+    con = open_ro(path)
+    try:
+        tcols = table_columns(con, "tasks")
+        if "id" not in tcols:
+            raise QueryError("unsupported_schema")
+        extra = [("body", "body"), ("result", "result"), ("last_failure_error", "last_failure_error"), ("skills", "skills"),
+                 ("model_override", "model_override"), ("provider_override", "provider_override"), ("session_id", "session_id")]
+        sql = "SELECT %s, %s, %s FROM tasks t WHERE t.id = ?" % (_kb_sel(tcols, CARD_PAIRS), _kb_sel(tcols, extra), _kb_counts(con))
+        rows = _dict_rows(con.execute(sql, (tid,)))
+        if not rows:
+            raise QueryError("not_found")
+        r = rows[0]
+        task = _kb_card(r)
+        task.update({
+            "body": _text(r.get("body"), KANBAN_BODY_MAX), "result": _text(r.get("result"), KANBAN_SUMMARY_MAX),
+            "lastFailureError": _text(r.get("last_failure_error"), KANBAN_SUMMARY_MAX), "skills": _text(r.get("skills"), 300),
+            "modelOverride": _text(r.get("model_override"), 128), "providerOverride": _text(r.get("provider_override"), 128),
+            "sessionId": _text(r.get("session_id"), 128),
+        })
+        comments, runs, events, attachments, parents, children = [], [], [], [], [], []
+        ccols = table_columns(con, "task_comments")
+        if {"id", "task_id", "body"} <= ccols:
+            sel = _kb_sel(ccols, [("id", "id"), ("author", "author"), ("body", "body"), ("created_at", "created_at")], "c")
+            comments = [{"id": _kb_int(x["id"]), "author": _text(x["author"], 64), "body": _text(x["body"], KANBAN_COMMENT_MAX) or "", "createdAt": to_epoch(x["created_at"])}
+                        for x in _dict_rows(con.execute("SELECT %s FROM task_comments c WHERE c.task_id = ? ORDER BY c.id LIMIT 200" % sel, (tid,)))]
+        rcols = table_columns(con, "task_runs")
+        if {"id", "task_id"} <= rcols:
+            sel = _kb_sel(rcols, [("id", "id"), ("profile", "profile"), ("step_key", "step_key"), ("status", "status"), ("started_at", "started_at"),
+                                  ("ended_at", "ended_at"), ("outcome", "outcome"), ("summary", "summary"), ("error", "error")], "r")
+            got = _dict_rows(con.execute("SELECT %s FROM task_runs r WHERE r.task_id = ? ORDER BY r.id DESC LIMIT 50" % sel, (tid,)))
+            runs = [{"id": _kb_int(x["id"]), "profile": _text(x["profile"], 64), "stepKey": _text(x["step_key"], 80), "status": _text(x["status"], 40),
+                     "startedAt": to_epoch(x["started_at"]), "endedAt": to_epoch(x["ended_at"]), "outcome": _text(x["outcome"], 80),
+                     "summary": _text(x["summary"], KANBAN_SUMMARY_MAX), "error": _text(x["error"], KANBAN_SUMMARY_MAX)} for x in reversed(got)]
+        if {"parent_id", "child_id"} <= table_columns(con, "task_links"):
+            parents = [_kb_ref(x) for x in con.execute("SELECT p.id, p.title, p.status FROM task_links l JOIN tasks p ON p.id = l.parent_id WHERE l.child_id = ? LIMIT 50", (tid,))]
+            children = [_kb_ref(x) for x in con.execute("SELECT p.id, p.title, p.status FROM task_links l JOIN tasks p ON p.id = l.child_id WHERE l.parent_id = ? LIMIT 50", (tid,))]
+        ecols = table_columns(con, "task_events")
+        if {"id", "task_id"} <= ecols:
+            sel = _kb_sel(ecols, [("id", "id"), ("run_id", "run_id"), ("kind", "kind"), ("payload", "payload"), ("created_at", "created_at")], "e")
+            got = _dict_rows(con.execute("SELECT %s FROM task_events e WHERE e.task_id = ? ORDER BY e.id DESC LIMIT 100" % sel, (tid,)))
+            events = [{"id": _kb_int(x["id"]), "runId": _kb_int(x["run_id"], None) if x["run_id"] is not None else None, "kind": _text(x["kind"], 80),
+                       "payload": _text(x["payload"], KANBAN_PAYLOAD_MAX), "createdAt": to_epoch(x["created_at"])} for x in reversed(got)]
+        acols = table_columns(con, "task_attachments")
+        if {"id", "task_id"} <= acols:
+            sel = _kb_sel(acols, [("id", "id"), ("filename", "filename"), ("size", "size"), ("uploaded_by", "uploaded_by"), ("created_at", "created_at")], "a")
+            attachments = [{"id": _kb_int(x["id"]), "filename": _text(x["filename"], 255), "size": _kb_int(x["size"], None) if x["size"] is not None else None,
+                            "uploadedBy": _text(x["uploaded_by"], 64), "createdAt": to_epoch(x["created_at"])}
+                           for x in _dict_rows(con.execute("SELECT %s FROM task_attachments a WHERE a.task_id = ? ORDER BY a.id LIMIT 50" % sel, (tid,)))]
+    except sqlite3.Error:
+        raise QueryError("db_unreadable")
+    finally:
+        con.close()
+    return {"task": task, "comments": comments, "runs": runs, "parents": parents, "children": children, "events": events, "attachments": attachments}
+
+
 # ---- chat ----------------------------------------------------------------
 
 CHAT_SOURCE = "mission-control"
@@ -2572,6 +2753,7 @@ def run_query(home, cmd, raw):
         "session_transcript": q_session_transcript,
         "usage_summary": q_usage_summary, "usage_tools": q_usage_tools,
         "logs_list": q_logs_list, "logs_read": q_logs_read,
+        "kanban_boards": q_kanban_boards, "kanban_tasks": q_kanban_tasks, "kanban_task": q_kanban_task,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}

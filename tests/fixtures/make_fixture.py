@@ -321,6 +321,70 @@ def add_kanban_db(path: Path, tasks, events=(), variant: str = "a") -> None:
     con.close()
 
 
+REAL_TASK_COLS = (
+    "id TEXT PRIMARY KEY, title TEXT, body TEXT, assignee TEXT, status TEXT, priority INTEGER, created_by TEXT, created_at INTEGER, "
+    "started_at INTEGER, completed_at INTEGER, workspace_kind TEXT, workspace_path TEXT, branch_name TEXT, project_id TEXT, claim_lock TEXT, "
+    "claim_expires INTEGER, tenant TEXT, result TEXT, idempotency_key TEXT, consecutive_failures INTEGER, worker_pid INTEGER, "
+    "last_failure_error TEXT, max_runtime_seconds INTEGER, last_heartbeat_at INTEGER, current_run_id INTEGER, workflow_template_id TEXT, "
+    "current_step_key TEXT, skills TEXT, model_override TEXT, provider_override TEXT, reasoning_effort TEXT, max_retries INTEGER, "
+    "goal_mode INTEGER, goal_max_turns INTEGER, session_id TEXT, block_kind TEXT, block_recurrences INTEGER"
+)
+
+
+def make_real_kanban_db(path: Path) -> sqlite3.Connection:
+    """An empty kanban.db with the tables and columns seen on a real Hermes v0.21 install."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE tasks (%s)" % REAL_TASK_COLS)
+    con.execute("CREATE TABLE task_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, author TEXT, body TEXT, created_at INTEGER)")
+    con.execute("CREATE TABLE task_events (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, run_id INTEGER, kind TEXT, payload TEXT, created_at INTEGER)")
+    con.execute("CREATE TABLE task_links (parent_id TEXT, child_id TEXT)")
+    con.execute(
+        "CREATE TABLE task_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, profile TEXT, step_key TEXT, status TEXT, claim_lock TEXT, "
+        "claim_expires INTEGER, worker_pid INTEGER, max_runtime_seconds INTEGER, last_heartbeat_at INTEGER, started_at INTEGER, ended_at INTEGER, "
+        "outcome TEXT, summary TEXT, metadata TEXT, error TEXT)"
+    )
+    con.execute("CREATE TABLE task_attachments (id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, filename TEXT, stored_path TEXT, content_type TEXT, size INTEGER, uploaded_by TEXT, created_at INTEGER)")
+    con.execute("CREATE TABLE kanban_notify_subs (task_id TEXT, platform TEXT, chat_id TEXT)")
+    con.commit()
+    return con
+
+
+def add_real_kanban(fx) -> None:
+    """The home board (empty, like the user's) and the board `sim-kanban` with tasks in every column, comments, runs, links and events."""
+    make_real_kanban_db(fx.home / "kanban.db").close()
+    path = fx.home / "kanban" / "boards" / "sim-kanban" / "kanban.db"
+    con = make_real_kanban_db(path)
+    now = int(fx.now)
+
+    def task(tid, title, status, assignee, created_by, age, prio=0, **cols):
+        vals = {"id": tid, "title": title, "status": status, "assignee": assignee, "created_by": created_by, "created_at": now - age, "priority": prio}
+        vals.update(cols)
+        con.execute("INSERT INTO tasks (%s) VALUES (%s)" % (", ".join(vals), ", ".join("?" * len(vals))), list(vals.values()))
+
+    task("t_done1", "Find sources for the changelog", "done", "scout", "atlas", 7200, body="# Done body\n\nSources attached.", completed_at=now - 3600, result="6 sources")
+    task("t_run1", "Draft the weekly digest", "running", "scout", "atlas", 3600, 1, body="Draft the digest from **3 notes**.", started_at=now - 300, current_run_id=1,
+         session_id="s-scout-1", skills="web,notes", model_override="m-x")
+    task("t_blk1", "Fix inbox-triage delivery", "blocked", "default", "atlas", 5400, 2, block_kind="human", last_failure_error="telegram 403 Forbidden", consecutive_failures=2)
+    task("t_rev1", "Summarise the cost section", "review", "atlas", "atlas", 4000)
+    task("t_todo1", "Publish the digest", "todo", None, "scout", 1800)
+    task("t_tri1", "Check unpaid invoices", "triage", None, "atlas", 900)
+    task("t_sch1", "Weekly uptime summary", "scheduled", "default", "atlas", 600)
+    task("t_odd1", "Task with a status nobody planned", "weird", "scout", "atlas", 300)
+    task("t_arc1", "An old archived task", "archived", "scout", "atlas", 90000)
+    con.execute("INSERT INTO task_comments (task_id, author, body, created_at) VALUES ('t_run1', 'atlas', 'Please keep it under 120 words.', ?)", (now - 3000,))
+    con.execute("INSERT INTO task_comments (task_id, author, body, created_at) VALUES ('t_run1', 'scout', 'On it.', ?)", (now - 2900,))
+    con.execute("INSERT INTO task_links VALUES ('t_done1', 't_run1')")
+    con.execute("INSERT INTO task_links VALUES ('t_run1', 't_blk1')")
+    con.execute("INSERT INTO task_runs (task_id, profile, status, started_at, ended_at, outcome, summary) VALUES ('t_done1', 'scout', 'done', ?, ?, 'completed', '6 sources found')", (now - 5000, now - 3600))
+    con.execute("INSERT INTO task_runs (task_id, profile, status, started_at) VALUES ('t_run1', 'scout', 'running', ?)", (now - 300,))
+    for i, (kind, payload) in enumerate([("created", '{"by": "atlas"}'), ("claimed", '{"profile": "scout"}'), ("heartbeat", None)]):
+        con.execute("INSERT INTO task_events (task_id, run_id, kind, payload, created_at) VALUES ('t_run1', 2, ?, ?, ?)", (kind, payload, now - 3500 + i * 100))
+    con.execute("INSERT INTO task_attachments (task_id, filename, stored_path, size, uploaded_by, created_at) VALUES ('t_run1', 'notes.txt', '/srv/x/notes.txt', 2048, 'atlas', ?)", (now - 3200,))
+    con.commit()
+    con.close()
+
+
 def add_interactions(fx: Fixture) -> None:
     """Interactions between default, scout and atlas, on top of make_fixture (never part of its defaults)."""
     now, home = fx.now, fx.home
