@@ -65,12 +65,17 @@ export function CronPanel({ style }: { style?: CSSProperties }) {
                   type="button"
                   role="listitem"
                   className="dash-row"
-                  aria-label={`${j.name}, ${agentLabel(j.profile, names)}, ${statusLabel(j.lastStatus)}, next run ${eta}`}
+                  aria-label={`${j.name}, ${agentLabel(j.profile, names)}, ${statusLabel(j.lastStatus)}${j.incident ? ', incident open' : ''}, next run ${eta}`}
                   onClick={() => openModal(jobKey(j))}
                 >
                   <span className="dr-top">
                     <span className="dot" style={{ background: statusColor(j) }} aria-hidden="true" />
                     <span className="dr-name">{j.name}</span>
+                    {j.incident && (
+                      <span className="badge" style={{ color: '#FF5555', borderColor: '#FF5555' }} title="Incident open" aria-hidden="true">
+                        !
+                      </span>
+                    )}
                     <span className="num dr-eta" style={{ color: etaColor }}>
                       {eta}
                     </span>

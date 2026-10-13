@@ -43,7 +43,14 @@ export function CronTable({ jobs, selected, nowMs, names, onSelect }: Props) {
                     {j.state === 'paused' ? '—' : j.state === 'running' ? 'running' : formatCountdown(j.nextRunTs, nowMs)}
                   </td>
                   <td style={{ color: '#A9B2D3' }} title={formatLocal(j.lastRunTs)}>{j.lastRunTs === null ? 'never' : formatAge(Math.max(0, nowMs / 1000 - j.lastRunTs))}</td>
-                  <td><span className="badge" style={{ color: statusColor(j), borderColor: statusColor(j) }}>{statusLabel(j.lastStatus)}</span></td>
+                  <td>
+                    <span className="badge" style={{ color: statusColor(j), borderColor: statusColor(j) }}>{statusLabel(j.lastStatus)}</span>
+                    {j.incident && (
+                      <span className="badge" style={{ marginLeft: 4, color: '#FF5555', borderColor: '#FF5555' }} title={`Incident ${j.incident.state}: ${j.incident.error}`}>
+                        INCIDENT
+                      </span>
+                    )}
+                  </td>
                   <td style={{ color: stateColor(j.state) }}>{stateLabel(j.state)}</td>
                   <td style={{ color: '#A9B2D3' }}>{j.deliver || '—'}</td>
                 </tr>

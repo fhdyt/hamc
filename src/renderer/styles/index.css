@@ -12,6 +12,7 @@
 @import './palette.css';
 @import './logs.css';
 @import './kanban.css';
+@import './cron.css';
 
 @theme {
   --font-sans: 'JetBrains Mono', ui-monospace, monospace;

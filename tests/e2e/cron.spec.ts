@@ -36,14 +36,14 @@ test('the Cron panel lists the jobs of every profile with a visible error count'
   await page.screenshot({ path: 'tests/e2e/shots/cron-panel.png' })
 })
 
-test('clicking a job opens the modal on that job with its failure streak and output', async () => {
+test('clicking a job opens the modal on that job with its incident and output', async () => {
   await panel().getByRole('listitem', { name: /second-brain-daily-sync/ }).click()
   await expect(dialog()).toBeVisible()
   const detail = dialog().getByLabel('Job detail')
   await expect(detail).toContainText('second-brain-daily-sync')
-  await expect(detail).toContainText('Failed 10 runs in a row')
+  await expect(detail).toContainText('Incident open: failed 10 runs in a row')
   await expect(detail).toContainText('ERROR')
-  await expect(detail.getByLabel('Last output')).toContainText('latest run', { timeout: 15_000 })
+  await expect(detail.getByLabel('Output lines')).toContainText('latest run', { timeout: 15_000 })
   await expect(dialog().getByRole('img', { name: /scheduled runs in the next 24 hours/ })).toBeVisible()
   await page.waitForTimeout(500)
   await page.screenshot({ path: 'tests/e2e/shots/cron-modal.png' })
@@ -73,15 +73,12 @@ test('details cover a job without output, a legacy output file and every status 
   await dialog().getByRole('button', { name: 'never-ran' }).click()
   const detail = dialog().getByLabel('Job detail')
   await expect(detail).toContainText('NEVER RUN')
-  await expect(detail).toContainText('has not produced any output yet')
+  await expect(detail).toContainText('This job has not run yet.', { timeout: 15_000 })
   await dialog().getByRole('button', { name: 'Pantau pembaruan' }).click()
-  await expect(detail.getByLabel('Last output')).toContainText('legacy loose file', { timeout: 15_000 })
+  await expect(detail.getByLabel('Output lines')).toContainText('legacy loose file', { timeout: 15_000 })
+  await expect(detail).toContainText('runs are listed from their output files only')
   await expect(detail).toContainText('telegram:744164478')
   await expect(detail).toContainText('UTC+07:00')
-})
-
-test('the modal is read-only', async () => {
-  await expect(dialog().getByRole('button', { name: /pause|resume|run now|edit schedule|acknowledge/i })).toHaveCount(0)
 })
 
 test('Escape closes the modal', async () => {

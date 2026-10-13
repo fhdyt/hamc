@@ -1,9 +1,12 @@
 import type { CronJob } from '@shared/events'
 import { Icon } from '../../components/Icon'
 import { agentColor } from '../../lib/agentColor'
+import { CronControls } from './CronControls'
+import { CronIncident } from './CronIncident'
+import { CronRuns } from './CronRuns'
 import { agentLabel, formatLocal, formatOffset, stateColor, stateLabel, statusColor, statusLabel } from '../../lib/cron'
 
-export function CronDetail({ job, names }: { job: CronJob | null; names: Record<string, string> }) {
+export function CronDetail({ job, names, nowMs }: { job: CronJob | null; names: Record<string, string>; nowMs: number }) {
   if (!job) {
     return (
       <aside className="cron-card" aria-label="Job detail" style={{ flex: '1 1 300px', minWidth: 0 }}>
@@ -12,7 +15,7 @@ export function CronDetail({ job, names }: { job: CronJob | null; names: Record<
     )
   }
   const tone = statusColor(job)
-  const streak = job.failureStreak >= 2
+  const streak = job.failureStreak >= 2 && !job.incident
   const rows: [string, string][] = [
     ['id', job.id],
     ['schedule', job.schedule.expr ?? job.schedule.display],
@@ -29,6 +32,7 @@ export function CronDetail({ job, names }: { job: CronJob | null; names: Record<
       </span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         <span className="badge" style={{ color: tone, borderColor: tone }}>{statusLabel(job.lastStatus)}</span>
+        {job.incident && <span className="badge" style={{ color: '#FF5555', borderColor: '#FF5555' }}>INCIDENT</span>}
         <span className="badge" style={{ color: stateColor(job.state), borderColor: '#44475A' }}>{stateLabel(job.state)}</span>
       </div>
       <dl className="kv" style={{ margin: 0 }}>
@@ -53,6 +57,8 @@ export function CronDetail({ job, names }: { job: CronJob | null; names: Record<
         </div>
       )}
 
+      <CronIncident job={job} />
+
       <span style={{ color: '#A9B2D3' }}>Prompt</span>
       <pre className="cron-pre" style={{ color: '#F1FA8C' }}>{job.prompt || '(empty)'}</pre>
 
@@ -69,6 +75,8 @@ export function CronDetail({ job, names }: { job: CronJob | null; names: Record<
         </>
       )}
 
+      <CronControls job={job} />
+      <CronRuns job={job} nowMs={nowMs} />
     </aside>
   )
 }

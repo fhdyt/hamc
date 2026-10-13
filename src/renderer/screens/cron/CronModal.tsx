@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { loadRuns } from '../../cronActions'
 import { Modal } from '../../components/Modal'
 import { EmptyState, Skeleton, StaleBanner } from '../../components/States'
 import { useNow } from '../../hooks/useNow'
@@ -30,6 +31,15 @@ function CronBody() {
   useEffect(() => {
     if (selected === null && shown.length > 0) select(jobKey(shown[0]!))
   }, [selected, shown, select])
+
+  // the run history of the selected job is read again every 10 s while the dialog is open and the window visible
+  useEffect(() => {
+    if (selected === null) return
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadRuns(true)
+    }, 10_000)
+    return () => clearInterval(t)
+  }, [selected])
 
   if (receivedAt === null) {
     return connState === 'connected' || connState === 'connecting' ? (
@@ -63,7 +73,7 @@ function CronBody() {
             <div style={{ flex: '999 1 560px', minWidth: 0 }}>
               <CronTable jobs={shown} selected={selected} nowMs={now} names={names} onSelect={select} />
             </div>
-            <CronDetail job={detail} names={names} />
+            <CronDetail job={detail} names={names} nowMs={now} />
           </div>
         </>
       )}
