@@ -47,17 +47,23 @@ jobs:
             script: dist:win
             artifacts: |
               dist/*-win-x64.exe
+              dist/*-win-x64.exe.blockmap
+              dist/latest.yml
           - name: macOS
             os: macos-latest
             script: dist:mac
             artifacts: |
               dist/*.dmg
+              dist/*-mac-universal.zip
+              dist/*-mac-universal.zip.blockmap
+              dist/latest-mac.yml
           - name: Linux
             os: ubuntu-latest
             script: dist:linux
             artifacts: |
               dist/*.AppImage
               dist/*.deb
+              dist/latest-linux.yml
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -123,6 +129,8 @@ jobs:
         with:
           path: installers
           merge-multiple: true
+      # The app updates itself from the latest *published* release (electron-updater reads latest*.yml next to the
+      # installers), so the draft must be published by hand after a check; drafts and pre-releases are ignored.
       - name: Create a draft release with the installers
         env:
           GH_TOKEN: ${{ github.token }}

@@ -109,7 +109,7 @@ docs/manual-vps-checklist.md
 - [ ] **Step 1: Buat `package.json` dan pasang dependensi**
 
 ```bash
-cd "C:/Users/Lenovo/Documents/Project/mission-control-hermes"
+cd path/to/mission-control-hermes
 cat > package.json <<'EOF'
 {
   "name": "hermes-mission-control",

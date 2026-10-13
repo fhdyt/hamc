@@ -7,7 +7,7 @@ import type { FakeSsh } from '../helpers/fakeSshServer'
 /** With MC_PACKAGED_EXE set (npm run test:e2e:packaged) the suite drives the packaged app instead of out/main. */
 export async function launchApp(userData: string): Promise<{ app: ElectronApplication; page: Page }> {
   const exe = process.env['MC_PACKAGED_EXE']
-  const env = { ...process.env, MC_USER_DATA: userData, NODE_ENV: 'production' } as Record<string, string>
+  const env = { ...process.env, MC_USER_DATA: userData, NODE_ENV: 'production', MC_NO_UPDATE: '1' } as Record<string, string>
   const app = await electron.launch(exe ? { executablePath: exe, args: [], env } : { args: [resolve('out/main/index.js')], env })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')

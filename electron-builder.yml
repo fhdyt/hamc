@@ -20,6 +20,14 @@ npmRebuild: true
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
 
+# Auto-update (F-APP-6): electron-updater reads latest.yml / latest-mac.yml / latest-linux.yml from the newest
+# published GitHub release of this repository (it must be public). The build writes those files; CI attaches them.
+publish:
+  provider: github
+  owner: fhdyt
+  repo: hamc
+  releaseType: release
+
 # Signing: nothing is signed by default (PRD Q10). It switches on when the usual electron-builder variables are present:
 # Windows CSC_LINK + CSC_KEY_PASSWORD; macOS CSC_LINK + CSC_KEY_PASSWORD and, for notarization, APPLE_ID,
 # APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID (then set mac.notarize to true).
@@ -36,6 +44,9 @@ nsis:
 mac:
   target:
     - target: dmg
+      arch: [universal]
+    # auto-update on macOS downloads the zip, not the dmg
+    - target: zip
       arch: [universal]
   icon: assets/brand/icon-1024.png
   category: public.app-category.developer-tools

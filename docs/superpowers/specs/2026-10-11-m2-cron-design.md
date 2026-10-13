@@ -29,7 +29,7 @@ Pause, resume, run now, edit schedule, acknowledge insiden, riwayat run, dan dif
 
 ## 3. Bentuk data nyata (Hermes v0.21.0, diamati 2026-10-11)
 
-Satu VPS milik pemilik proyek dengan 6 profile (`default`, `gamos`, `hestia`, `themis`, `wardah`, `zelos`). Struktur diambil dengan skrip hanya-baca yang menyingkat teks.
+Satu VPS milik pemilik proyek dengan 6 profile (`default` dan lima profile lain). Struktur diambil dengan skrip hanya-baca yang menyingkat teks.
 
 `<profile>/cron/jobs.json`:
 ```
@@ -40,7 +40,7 @@ Field job yang teramati: `id`, `name`, `prompt`, `skills[]`, `skill`, `model`, `
 Catatan penting:
 - Semua waktu adalah **ISO 8601 dengan offset zona waktu**, bukan epoch.
 - `cron/output/` berisi folder `<job_id>/` dengan berkas `YYYY-MM-DD_HH-MM-SS.md`, **dan** berkas lepas seperti `<job_id>_20260920_190257.txt`. Pembaca harus menangani keduanya.
-- Profile tanpa job (`wardah`) tidak punya `cron/jobs.json`.
+- Profile tanpa job tidak punya `cron/jobs.json`.
 - Satu job nyata gagal berulang (`last_status: "error"`, `failure_streak: 10`).
 - Setiap profile punya `gateway_state.json` sendiri: `pid`, `kind`, `argv`, `start_time`, `gateway_state`, `exit_reason`, `restart_requested`, `active_agents`, `platforms{<nama>{state,error_code,error_message,updated_at,...}}`, `updated_at`, `code_sha`, `code_version`, `session_store`. **Tidak ada** `served_profiles` atau `heartbeat`.
 - `state.db` (`user_version` 0, tabel `schema_version`) memakai `messages.timestamp`, `messages.active`, `sessions.ended_at`, sesuai asumsi M1.

@@ -12,6 +12,7 @@ import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
 import type { SettingsMap } from './settings'
 import type { Notice, NoticeTarget } from './notify'
+import type { UpdateState } from './update'
 import type { TermData, TermExit, TermOpenResult, TermSize } from './terminal'
 
 export { IPC } from './channels'
@@ -219,6 +220,14 @@ export interface MissionApi {
     /** SFTP download of one profile into a zip the user saves locally (F-CFG-23). */
     backup(req: BackupRequest): Promise<BackupResult>
   }
+  update: {
+    /** Null only before the main process set the service up. */
+    get(): Promise<UpdateState | null>
+    /** Check for updates now (the button). */
+    check(): Promise<UpdateState | null>
+    /** Restart into the downloaded version; false when none is ready. */
+    install(): Promise<boolean>
+  }
   notify: {
     /** Shows one OS notification now (Settings → Notifications). */
     test(): Promise<{ shown: boolean; reason?: string }>
@@ -342,6 +351,7 @@ export interface MissionApi {
   onCostAlert(cb: (s: CostAlertState) => void): () => void
   /** A memory file got a new local version. */
   onMemory(cb: (e: { profile: string; file: AgentFileKind }) => void): Unsub
+  onUpdate(cb: (s: UpdateState) => void): Unsub
   /** A notification for the bell (and a toast when the window is in front). */
   onNotice(cb: (n: Notice) => void): Unsub
   /** An OS notification was clicked: open what it is about. */

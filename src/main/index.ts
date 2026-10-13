@@ -8,6 +8,8 @@ import type { CronAlert } from './cron/watcher'
 import type { GatewayAlert } from './gateway/watcher'
 import { registerIpc } from './ipc'
 import { NotificationCenter } from './notify/center'
+import { autoUpdater } from 'electron-updater'
+import { UpdateService } from './update/service'
 import { createLogger } from './log'
 import { WEB_PREFERENCES, hardenWebContents, type AppTarget } from './security'
 import { MissionSession } from './session'
@@ -71,6 +73,14 @@ function applyTray(on: boolean): void {
     tray.destroy()
     tray = null
   }
+}
+
+/** Why automatic updates cannot work in this copy of the app, or null when they can. */
+function updatesUnsupported(): string | null {
+  if (process.env['MC_NO_UPDATE']) return 'Updates are turned off for this run.'
+  if (!app.isPackaged) return 'Updates work in the installed app only.'
+  if (process.platform === 'linux' && !process.env['APPIMAGE']) return 'This copy came from a package (.deb); update it with your package manager, or use the AppImage for automatic updates.'
+  return null
 }
 
 function applyLoginItem(on: boolean): void {
@@ -200,7 +210,19 @@ if (!app.requestSingleInstanceLock()) {
         }
       }
     })
+    const why = updatesUnsupported()
+    if (!why) autoUpdater.logger = null
+    const updates = new UpdateService({
+      updater: why ? null : autoUpdater,
+      ...(why ? { unsupportedWhy: why } : {}),
+      current: app.getVersion(),
+      enabled: () => store.getSetting('app.autoUpdate'),
+      send,
+      log
+    })
+    updates.start()
     registerIpc({
+      updates,
       session,
       store,
       getWindow: () => win,

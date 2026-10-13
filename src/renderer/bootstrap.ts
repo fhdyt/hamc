@@ -16,6 +16,7 @@ import { memoryChanged } from './memoryActions'
 import { notifyChatReply, openNoticeTarget } from './noticeActions'
 import { playReplySound } from './soundActions'
 import { useNotices } from './stores/notices'
+import { useUpdate } from './stores/update'
 import { sortAgents } from './lib/roster'
 
 export async function bootstrap(): Promise<void> {
@@ -70,6 +71,8 @@ export async function bootstrap(): Promise<void> {
     useNotices.getState().add(n, front)
   })
   mc.onNoticeOpen((t) => openNoticeTarget(t))
+  mc.onUpdate((u) => useUpdate.getState().set(u))
+  void mc.update.get().then((u) => useUpdate.getState().set(u))
 
   const [settings, saved, secret] = await Promise.all([mc.settings.all(), mc.connection.saved(), mc.connection.secretStatus()])
   useConn.setState({ saved, savedLoaded: true, secret })

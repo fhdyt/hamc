@@ -8,6 +8,7 @@ import { EditConnectionDialogBody } from '../screens/EditConnectionDialog'
 import { AgentsSettings } from '../screens/agents/AgentsSettings'
 import { UnsavedDialog } from '../screens/agents/Dialogs'
 import { useAgentCfg } from '../stores/agentCfg'
+import { updateLine, useUpdate } from '../stores/update'
 import { useUi, type SettingsTab } from '../stores/ui'
 import { AlertsTab } from './AlertsTab'
 import { DataTab } from './DataTab'
@@ -63,6 +64,9 @@ function General() {
       <Row label="Start minimized" hint="Opens in the taskbar (or the tray) instead of in front">
         <Switch checked={s['app.startMinimized']} label="Start minimized" onChange={(v) => void saveSetting('app.startMinimized', v)} />
       </Row>
+      <Row label="Check for updates automatically" hint="Looks for a new version on GitHub when the app starts and every 6 hours, downloads it in the background and installs it when you quit">
+        <Switch checked={s['app.autoUpdate']} label="Check for updates automatically" onChange={(v) => void saveSetting('app.autoUpdate', v)} />
+      </Row>
       <Row label="Keep running in the tray" hint="Closing the window hides it; Mission Control stays connected and keeps notifying. Quit from the tray icon.">
         <Switch checked={s['app.tray']} label="Keep running in the tray" onChange={(v) => void saveSetting('app.tray', v)} />
       </Row>
@@ -98,15 +102,50 @@ function ChatSettings() {
 
 function About() {
   const [info, setInfo] = useState<AppInfo | null>(null)
+  const update = useUpdate((st) => st.state)
+  const [busy, setBusy] = useState(false)
   useEffect(() => {
     void window.mc.app.info().then(setInfo)
   }, [])
+  const phase = update?.phase
   return (
-    <dl className="kv" style={{ margin: 0 }}>
-      <dt>app</dt><dd>Hermes Agent Mission Control {info ? `v${info.version}` : ''}</dd>
-      <dt>electron</dt><dd>{info?.electron ?? '–'}</dd>
-      <dt>platform</dt><dd>{info?.platform ?? '–'}</dd>
-    </dl>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <dl className="kv" style={{ margin: 0 }}>
+        <dt>app</dt><dd>Hermes Agent Mission Control {info ? `v${info.version}` : ''}</dd>
+        <dt>electron</dt><dd>{info?.electron ?? '–'}</dd>
+        <dt>platform</dt><dd>{info?.platform ?? '–'}</dd>
+      </dl>
+      <section aria-label="Updates" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ color: '#BD93F9', fontWeight: 600 }}>Updates</div>
+        <div role="status" className={phase === 'error' ? 'banner bad' : undefined} style={phase === 'error' ? undefined : { color: '#A9B2D3' }}>
+          {updateLine(update)}
+        </div>
+        {phase === 'downloading' && update?.percent !== null && (
+          <div className="up-bar" role="progressbar" aria-label="Download" aria-valuemin={0} aria-valuemax={100} aria-valuenow={update?.percent ?? 0}>
+            <span style={{ width: `${update?.percent ?? 0}%` }} />
+          </div>
+        )}
+        <span style={{ display: 'inline-flex', gap: 8 }}>
+          {phase === 'ready' ? (
+            <button type="button" className="cb pri" onClick={() => void window.mc.update.install()}>
+              Restart to update
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="cb"
+              disabled={!update || phase === 'unsupported' || phase === 'checking' || phase === 'downloading' || busy}
+              onClick={() => {
+                setBusy(true)
+                void window.mc.update.check().finally(() => setBusy(false))
+              }}
+            >
+              {phase === 'checking' || busy ? 'Checking…' : 'Check for updates'}
+            </button>
+          )}
+        </span>
+      </section>
+    </div>
   )
 }
 

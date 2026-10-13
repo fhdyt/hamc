@@ -44,6 +44,11 @@ const api: MissionApi = {
     profileCreate: (req) => ipcRenderer.invoke(IPC.opsProfileCreate, req),
     backup: (req) => ipcRenderer.invoke(IPC.opsBackup, req)
   },
+  update: {
+    get: () => ipcRenderer.invoke(IPC.updateGet),
+    check: () => ipcRenderer.invoke(IPC.updateCheck),
+    install: () => ipcRenderer.invoke(IPC.updateInstall)
+  },
   notify: {
     test: () => ipcRenderer.invoke(IPC.notifyTest),
     chat: (profile, title, body) => ipcRenderer.invoke(IPC.notifyChat, { profile, title, body })
@@ -150,6 +155,7 @@ const api: MissionApi = {
   onModels: (cb) => on(IPC.evModels, cb),
   onCostAlert: (cb) => on(IPC.evCostAlert, cb),
   onMemory: (cb) => on(IPC.evMemory, cb),
+  onUpdate: (cb) => on(IPC.evUpdate, cb),
   onNotice: (cb) => on(IPC.evNotice, cb),
   onNoticeOpen: (cb) => on(IPC.evNoticeOpen, cb),
   onTermData: (cb) => on(IPC.evTermData, cb),

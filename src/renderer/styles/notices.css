@@ -21,3 +21,7 @@
 .mc-nomotion .nt-toast { animation: none; }
 @media (prefers-reduced-motion: reduce) { .nt-toast { animation: none; } }
 .ws-path { display: block; padding: 6px 8px; border: 1px solid #44475a; border-radius: 6px; background: #191a21; color: #f1fa8c; font-size: 11px; overflow-wrap: anywhere; }
+/* Auto-update (F-APP-6) */
+.up-bar { height: 6px; border-radius: 3px; background: #343746; overflow: hidden; max-width: 320px; }
+.up-bar > span { display: block; height: 100%; background: #50fa7b; transition: width 0.3s; }
+.statusbar .up-ready { background: #2e6b40; color: #f8f8f2; }

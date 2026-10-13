@@ -114,6 +114,8 @@ export interface SettingsMap {
   'app.launchAtLogin': boolean
   'app.startMinimized': boolean
   'app.tray': boolean
+  /** F-APP-6: look for a new version on start and every 6 hours, download it and install it on quit. */
+  'app.autoUpdate': boolean
   /** The Terminal panel (F-R12-2): open or hidden, its height (0 until the user drags it) and saved snippets (F-TERM-7). */
   'terminal.open': boolean
   'terminal.height': number
@@ -161,6 +163,7 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'app.launchAtLogin': false,
   'app.startMinimized': false,
   'app.tray': false,
+  'app.autoUpdate': true,
   'terminal.open': false,
   'terminal.height': 0,
   'terminal.snippets': DEFAULT_SNIPPETS,
@@ -223,6 +226,7 @@ export const SETTINGS_SCHEMA = {
   'app.launchAtLogin': z.boolean(),
   'app.startMinimized': z.boolean(),
   'app.tray': z.boolean(),
+  'app.autoUpdate': z.boolean(),
   'terminal.open': z.boolean(),
   'terminal.height': z.number().refine((v) => v === 0 || (v >= TERM_MIN_H && v <= TERM_MAX_H)),
   'terminal.snippets': z

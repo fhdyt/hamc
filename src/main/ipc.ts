@@ -15,6 +15,7 @@ import { isTrustedSender, type AppTarget } from './security'
 import type { MissionSession } from './session'
 import type { SettingsStore } from './store/settingsStore'
 import type { NotificationCenter } from './notify/center'
+import type { UpdateService } from './update/service'
 import { NOTICE_BODY_MAX, NOTICE_TITLE_MAX } from '@shared/notify'
 
 const ProfileName = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
@@ -127,6 +128,8 @@ export interface IpcDeps {
   target: AppTarget
   /** Notifications (F-SHELL-4); the test button and finished chat replies. */
   center?: NotificationCenter
+  /** Auto-update (F-APP-6). */
+  updates?: UpdateService
   /** A setting that the main process must act on (tray, login item) changed. */
   onSetting?: (key: string, value: unknown) => void
 }
@@ -184,6 +187,9 @@ export function registerIpc(d: IpcDeps): void {
     d.store.setSetting(key, parsed as never)
     d.onSetting?.(key, parsed)
   })
+  handle(IPC.updateGet, () => d.updates?.get() ?? null)
+  handle(IPC.updateCheck, () => d.updates?.check() ?? null)
+  handle(IPC.updateInstall, () => d.updates?.install() ?? false)
   handle(IPC.notifyTest, () => d.center?.test() ?? { shown: false, reason: 'Notifications are not available.' })
   handle(IPC.notifyChat, (a) => {
     // the renderer tells when a reply finished while that agent was not on screen; it never names a target of its own

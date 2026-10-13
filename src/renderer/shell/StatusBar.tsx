@@ -7,6 +7,7 @@ import { useAgents } from '../stores/agents'
 import { useConn } from '../stores/conn'
 import { useMetrics } from '../stores/metrics'
 import { useUi } from '../stores/ui'
+import { useUpdate } from '../stores/update'
 
 const TONE: Record<string, { bg: string; text: string }> = {
   connected: { bg: '#2E6B40', text: '' },
@@ -24,6 +25,7 @@ export function StatusBar() {
   const metrics = useMetrics((s) => s.latest)
   const zoom = useUi((s) => s.settings['ui.zoom'])
   const openSettings = useUi((s) => s.openSettings)
+  const update = useUpdate((s) => s.state)
 
   const tone = TONE[status.state] ?? TONE['idle']!
   const who = saved ? `${saved.username}@${saved.host}` : 'No connection'
@@ -67,6 +69,12 @@ export function StatusBar() {
           <Icon name="plus" size={12} />
         </button>
       </span>
+      {update?.phase === 'ready' && (
+        <button type="button" className="sb-item up-ready" onClick={() => void window.mc.update.install()} title={`Install v${update.version ?? ''} and restart`}>
+          <Icon name="download" size={12} />
+          Restart to update
+        </button>
+      )}
       <NoticeBell />
       <button type="button" className="sb-item" onClick={() => openSettings('general')} aria-label="Settings" title="Settings">
         <Icon name="settings" size={13} />

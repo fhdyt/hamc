@@ -60,7 +60,15 @@ Nothing changes in the config; set these variables before building (in CI as rep
 - Windows: `CSC_LINK` (a `.pfx` file or its base64) and `CSC_KEY_PASSWORD`.
 - macOS: `CSC_LINK` and `CSC_KEY_PASSWORD` (a Developer ID Application certificate), and for notarization `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` plus `mac.notarize: true` in `electron-builder.yml`.
 
-Auto-update (F-APP-6, `electron-updater`) is P2 and not built; the build still writes `latest.yml` and `app-update.yml`, which are harmless.
+## Auto-update (F-APP-6)
+
+The installed app updates itself from the newest **published** GitHub release of `fhdyt/hamc` (`publish` in `electron-builder.yml`; the repository must be public, or the app could not read the releases without a token).
+
+- The build writes `latest.yml` (Windows), `latest-mac.yml` and `latest-linux.yml` next to the installers; CI attaches them, the Windows `.blockmap` and the macOS `.zip` (macOS updates from the zip, not the dmg) to the draft release.
+- **Publish the draft** after checking it: drafts and pre-releases are invisible to the updater. Every release needs a higher `version` in `package.json`.
+- In the app: Settings → General → *Check for updates automatically* (on by default: 20 s after start, then every 6 hours; downloads in the background, installs when the app quits); Settings → About shows the state with *Check for updates* and *Restart to update*; the status bar shows *Restart to update* when a download is ready.
+- Where it works: the Windows NSIS install (unsigned is accepted; signed is better), macOS only when the app is signed and notarized, Linux only for the AppImage (a `.deb` is updated with the package manager). A development run and `MC_NO_UPDATE=1` (the E2E tests) turn it off.
+- Code: `src/main/update/service.ts` (`UpdateService` around `electron-updater`'s `autoUpdater`), `src/shared/update.ts`, `src/renderer/stores/update.ts`, channels `mc:update:get|check|install`, `mc:ev:update`.
 
 ## Zero-Change on a clean VPS (NF-4)
 
