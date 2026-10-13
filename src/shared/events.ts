@@ -169,6 +169,58 @@ export const SessionDetail = z.object({
 })
 export type SessionDetail = z.infer<typeof SessionDetail>
 
+export const SessionStatus = z.enum(['running', 'ended', 'failed', 'compressed'])
+export type SessionStatus = z.infer<typeof SessionStatus>
+
+const OptInt = z.number().int().nullable()
+
+export const SessionRow = z.object({
+  profile: z.string(),
+  id: z.string(),
+  title: z.string().nullable(),
+  source: z.string().nullable(),
+  model: z.string().nullable(),
+  startedAt: z.number().nullable(),
+  endedAt: z.number().nullable(),
+  endReason: z.string().nullable(),
+  messageCount: OptInt,
+  toolCallCount: OptInt,
+  inputTokens: OptInt,
+  outputTokens: OptInt,
+  cacheReadTokens: OptInt,
+  cost: z.number().nullable(),
+  costKind: z.enum(['actual', 'estimated']).nullable(),
+  parentSessionId: z.string().nullable(),
+  hasChildren: z.boolean(),
+  pinned: z.boolean(),
+  status: SessionStatus,
+  /** Search only: the matching text with 0x02 and 0x03 around the matched words. */
+  snippet: z.string().nullable()
+})
+export type SessionRow = z.infer<typeof SessionRow>
+
+export const SessionsList = z.object({
+  rows: z.array(SessionRow),
+  sources: z.array(z.string()),
+  errors: z.array(z.object({ profile: z.string(), code: z.string() })),
+  more: z.boolean(),
+  /** `title` when the search could not use the message index and only looked at titles. */
+  fallback: z.enum(['title']).nullable()
+})
+export type SessionsList = z.infer<typeof SessionsList>
+
+export const SessionTranscript = z.object({
+  session: SessionRow,
+  items: z.array(FeedItem),
+  nextAfter: z.number().int().nullable(),
+  chain: z.object({
+    parent: z.object({ id: z.string(), title: z.string().nullable() }).nullable(),
+    children: z.array(z.object({ id: z.string(), title: z.string().nullable(), source: z.string().nullable() }))
+  }),
+  total: OptInt
+})
+export type SessionTranscript = z.infer<typeof SessionTranscript>
+
 export const BrainNote = z.object({
   id: z.string(),
   title: z.string(),

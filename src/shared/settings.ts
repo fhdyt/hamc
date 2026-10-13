@@ -81,6 +81,9 @@ export interface SettingsMap {
   /** Kinds and time range of the agent interaction graph. */
   'dashboard.agentGraph': AgentGraphSettings
   'brain.graph': BrainGraphSettings
+  /** Agent and time range shared by Sessions, Usage, Logs and Skills (F-NAV-8). `all` or a profile name. */
+  'filters.agent': string
+  'filters.range': 'today' | '7d' | '30d' | 'all'
   'window.bounds': WindowBounds | null
 }
 
@@ -103,6 +106,8 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'dashboard.graphTab': 'brain',
   'dashboard.agentGraph': AGENT_GRAPH_DEFAULTS,
   'brain.graph': BRAIN_GRAPH_DEFAULTS,
+  'filters.agent': 'all',
+  'filters.range': '7d',
   'window.bounds': null
 }
 
@@ -141,6 +146,8 @@ export const SETTINGS_SCHEMA = {
     controlsOpen: z.boolean(),
     previewOpen: z.boolean()
   }),
+  'filters.agent': z.string().min(1).max(64),
+  'filters.range': z.enum(['today', '7d', '30d', 'all']),
   'window.bounds': z
     .object({ x: z.number().optional(), y: z.number().optional(), width: z.number(), height: z.number() })
     .nullable()
