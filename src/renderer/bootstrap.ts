@@ -12,6 +12,9 @@ import { useInteractions } from './stores/interactions'
 import { useLogs } from './stores/logs'
 import { useMetrics } from './stores/metrics'
 import { useUi } from './stores/ui'
+import { useMemoryTimeline } from './stores/memoryTimeline'
+import { memoryChanged } from './memoryActions'
+import { sortAgents } from './lib/roster'
 
 export async function bootstrap(): Promise<void> {
   const mc = window.mc
@@ -51,6 +54,10 @@ export async function bootstrap(): Promise<void> {
   mc.onCapabilities((capabilities) => useConn.setState({ capabilities }))
   mc.onModels((models) => useAgents.getState().setModels(models))
   mc.onCostAlert((state) => useCostAlert.getState().apply(state))
+  mc.onMemory(({ profile, file }) => {
+    const st = useMemoryTimeline.getState()
+    memoryChanged(profile, file, st.profile ?? sortAgents(useAgents.getState().agents)[0]?.profile ?? null)
+  })
   mc.onOpenLogs((tab) => {
     const route = useUi.getState().route
     if (route === 'connect' || route === 'launch') return

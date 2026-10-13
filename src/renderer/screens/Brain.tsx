@@ -12,6 +12,8 @@ import { useUi } from '../stores/ui'
 import { Controls } from './brain/Controls'
 import { NotePreview } from './brain/NotePreview'
 import { VaultSetup } from './brain/VaultSetup'
+import { MemoryTimeline } from './brain/MemoryTimeline'
+import { useMemoryTimeline, type BrainTab } from '../stores/memoryTimeline'
 
 export function Brain() {
   const loaded = useBrain((s) => s.loaded)
@@ -34,11 +36,24 @@ export function Brain() {
   const { graph, style, forces, legend } = useBrainGraph()
   const engine = useRef<GraphEngine | null>(null)
   const [changing, setChanging] = useState(false)
+  const tab = useMemoryTimeline((s) => s.tab)
+  const setTab = useMemoryTimeline((s) => s.setTab)
+  const tabs: { id: BrainTab; label: string }[] = [
+    { id: 'graph', label: 'Graph' },
+    { id: 'timeline', label: 'Memory timeline' }
+  ]
 
   const head = (
     <div className="bh">
       <h1 className="page-title">Second brain</h1>
-      {vault && (
+      <div role="tablist" aria-label="Second brain views" className="bh-tabs">
+        {tabs.map((t) => (
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className="bh-tab" onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {vault && tab === 'graph' && (
         <>
           <button type="button" className={`ib ${g.controlsOpen ? 'on' : ''}`} aria-pressed={g.controlsOpen} aria-label="Toggle graph controls" title="Graph controls" onClick={() => saveGraphSettings({ controlsOpen: !g.controlsOpen })}>
             <Icon name="panel-left" size={15} />
@@ -86,7 +101,9 @@ export function Brain() {
   return (
     <div className="page brain-page">
       {head}
-      {body ? (
+      {tab === 'timeline' ? (
+        <MemoryTimeline />
+      ) : body ? (
         <div className="bp-state">{body}</div>
       ) : (
         <div className="bp-main">

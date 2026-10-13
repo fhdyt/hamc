@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { AgentFileKind } from '@shared/agentCfg'
 import type { MemoryFileEvent } from '@shared/events'
-import type { MemoryAuthor, MemoryVersion, MemoryVersionText } from '@shared/memory'
+import { diffCounts, type MemoryAuthor, type MemoryVersion, type MemoryVersionText } from '@shared/memory'
 import type { SettingsStore } from '../store/settingsStore'
 
 export interface MemorySnapshotDeps {
@@ -37,7 +37,8 @@ export class MemorySnapshots {
     if (conn === undefined) return false
     const latest = this.d.store.latestSnapshot(conn, profile, file)
     if (latest?.hash === hash) return false
-    this.d.store.addSnapshot({ connectionId: conn, profile, file, takenAt: (this.d.now ?? Date.now)(), hash, content: text, author: latest ? author : 'first', sessionId, mtime })
+    const counts = diffCounts(file, latest?.content ?? '', text)
+    this.d.store.addSnapshot({ connectionId: conn, profile, file, takenAt: (this.d.now ?? Date.now)(), hash, content: text, author: latest ? author : 'first', sessionId, mtime, ...counts })
     this.d.changed(profile, file)
     return true
   }

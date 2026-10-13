@@ -40,7 +40,9 @@ const MIGRATIONS: string[] = [
      session_id TEXT,
      mtime REAL
    );
-   CREATE INDEX idx_memory_snapshots_file ON memory_snapshots (connection_id, profile, file, id);`
+   CREATE INDEX idx_memory_snapshots_file ON memory_snapshots (connection_id, profile, file, id);`,
+  `ALTER TABLE memory_snapshots ADD COLUMN added INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE memory_snapshots ADD COLUMN removed INTEGER NOT NULL DEFAULT 0;`
 ]
 
 /** Retention of memory snapshots (PRD F-MEMT-2): 200 versions per file, 180 days; the newest version always stays. */
@@ -57,6 +59,8 @@ export interface MemorySnapshotRow {
   sessionId: string | null
   mtime: number | null
   chars: number
+  added: number
+  removed: number
 }
 
 export interface UpsertConnection {
@@ -270,19 +274,19 @@ export class SettingsStore {
     return this.db.prepare('SELECT value FROM settings WHERE key = ?').get(`pins.initialized.${connectionId}`) !== undefined
   }
 
-  latestSnapshot(connectionId: number, profile: string, file: string): { hash: string } | undefined {
+  latestSnapshot(connectionId: number, profile: string, file: string): { hash: string; content: string } | undefined {
     return this.db
-      .prepare('SELECT hash FROM memory_snapshots WHERE connection_id = ? AND profile = ? AND file = ? ORDER BY id DESC LIMIT 1')
-      .get(connectionId, profile, file) as { hash: string } | undefined
+      .prepare('SELECT hash, content FROM memory_snapshots WHERE connection_id = ? AND profile = ? AND file = ? ORDER BY id DESC LIMIT 1')
+      .get(connectionId, profile, file) as { hash: string; content: string } | undefined
   }
 
   /** Stores one version and applies the retention to that file. */
-  addSnapshot(s: { connectionId: number; profile: string; file: string; takenAt: number; hash: string; content: string; author: string; sessionId: string | null; mtime: number | null }): number {
+  addSnapshot(s: { connectionId: number; profile: string; file: string; takenAt: number; hash: string; content: string; author: string; sessionId: string | null; mtime: number | null; added?: number; removed?: number }): number {
     return this.db.transaction(() => {
       const id = Number(
         this.db
-          .prepare('INSERT INTO memory_snapshots (connection_id, profile, file, taken_at, hash, content, author, session_id, mtime) VALUES (?,?,?,?,?,?,?,?,?)')
-          .run(s.connectionId, s.profile, s.file, s.takenAt, s.hash, s.content, s.author, s.sessionId, s.mtime).lastInsertRowid
+          .prepare('INSERT INTO memory_snapshots (connection_id, profile, file, taken_at, hash, content, author, session_id, mtime, added, removed) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+          .run(s.connectionId, s.profile, s.file, s.takenAt, s.hash, s.content, s.author, s.sessionId, s.mtime, s.added ?? 0, s.removed ?? 0).lastInsertRowid
       )
       this.db
         .prepare(
@@ -297,7 +301,7 @@ export class SettingsStore {
   listSnapshots(connectionId: number, profile: string, file: string): MemorySnapshotRow[] {
     return this.db
       .prepare(
-        `SELECT id, profile, file, taken_at AS takenAt, hash, author, session_id AS sessionId, mtime, length(content) AS chars
+        `SELECT id, profile, file, taken_at AS takenAt, hash, author, session_id AS sessionId, mtime, length(content) AS chars, added, removed
            FROM memory_snapshots WHERE connection_id = ? AND profile = ? AND file = ? ORDER BY id DESC LIMIT ?`
       )
       .all(connectionId, profile, file, SNAPSHOTS_PER_FILE) as MemorySnapshotRow[]

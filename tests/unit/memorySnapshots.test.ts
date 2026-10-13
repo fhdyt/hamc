@@ -89,3 +89,25 @@ describe('a save racing the collector', () => {
     expect(snaps.versions('default', 'memory').map((x) => x.author)).toEqual(['you', 'first'])
   })
 })
+
+describe('memory diffs', () => {
+  it('compares MEMORY by entries as a multiset and SOUL by lines', async () => {
+    const { diffItems, memoryItems, diffCounts } = await import('@shared/memory')
+    expect(memoryItems('memory', 'a\n§\nb § c\n§\n\n')).toEqual(['a', 'b § c'])
+    const d = diffItems('memory', 'a\n§\nb\n§\nb', 'b\n§\nc\n§\na')
+    expect(d.rows).toEqual([{ t: 'add', text: 'c' }, { t: 'del', text: 'b' }])
+    expect(d.same).toEqual(['b', 'a'])
+    expect(diffCounts('soul', 'x\ny\n', 'x\nz\ny\n')).toEqual({ added: 1, removed: 0 })
+    expect(diffCounts('user', '', 'one\n§\ntwo')).toEqual({ added: 2, removed: 0 })
+  })
+
+  it('stores the counts with each version', () => {
+    const { snaps } = setup()
+    snaps.ingest(ev('a\n§\nb'))
+    snaps.ingest(ev('a\n§\nc'))
+    expect(snaps.versions('default', 'memory').map((v) => [v.added, v.removed])).toEqual([
+      [1, 1],
+      [2, 0]
+    ])
+  })
+})

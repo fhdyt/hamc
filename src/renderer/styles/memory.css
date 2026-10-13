@@ -1,0 +1,47 @@
+/* memory timeline (M10b) */
+.bh-tabs { display: flex; gap: 2px; padding: 2px; border: 1px solid #44475a; border-radius: 8px; background: #21222c; }
+.bh-tab { display: inline-flex; align-items: center; min-height: 26px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #a9b2d3; font: inherit; font-size: 11px; cursor: pointer; }
+.bh-tab[aria-selected='true'] { background: #44475a; color: #f8f8f2; }
+.mt { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.mt-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.mt-chip { text-decoration: none; }
+.mt-src { margin-left: auto; color: #8b95bd; font-size: 11px; }
+.mt-main { flex: 1; min-height: 0; display: flex; gap: 14px; }
+.mt-versions { flex: 0 1 380px; min-width: 0; min-height: 0; display: flex; flex-direction: column; border: 1px solid #44475a; border-radius: 10px; background: #21222c; overflow: hidden; }
+.mt-versions > .state, .mt-changes > .state { margin: 12px; }
+.mt-list { flex: 1; min-height: 0; overflow-y: auto; font-size: 11px; }
+.mt-day { padding: 6px 12px 2px; color: #8b95bd; }
+.mt-row { display: flex; flex-direction: column; gap: 3px; width: 100%; box-sizing: border-box; padding: 7px 12px; border: 0; border-bottom: 1px dashed #343746; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.mt-row:hover { background: #2c2e3b; }
+.mt-row[aria-selected='true'] { background: #44475a; }
+.mt-row:focus-visible { outline: 1px solid #8be9fd; outline-offset: -1px; }
+.mt-row1 { display: flex; align-items: center; gap: 8px; }
+.mt-time { color: #f8f8f2; font-weight: 600; }
+.mt-tag { margin-left: auto; color: #8b95bd; }
+.mt-row2 { padding-left: 14px; display: flex; align-items: center; gap: 8px; }
+.mt-add { color: #50fa7b; }
+.mt-del { color: #ff5555; }
+.mt-chars { color: #a9b2d3; }
+.mt-bar-track { flex: 1; height: 3px; background: #343746; }
+.mt-bar-track > span { display: block; height: 3px; }
+.mt-changes { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; border: 1px solid #44475a; border-radius: 10px; background: #21222c; overflow: hidden; }
+.mt-head { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 12px 16px 10px; border-bottom: 1px solid #44475a; }
+.mt-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.mt-name { font-size: 14px; font-weight: 600; color: #f8f8f2; }
+.mt-how { color: #a9b2d3; font-size: 11px; }
+.mt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 4px; }
+.mt-actions .cb[disabled] { opacity: 0.55; cursor: not-allowed; }
+.mt-note { color: #50fa7b; font-size: 11px; }
+.mt-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 1.55; }
+.mt-line { display: flex; gap: 10px; padding: 4px 8px; border-radius: 4px; color: #f8f8f2; }
+.mt-line.add { background: #24382d; color: #50fa7b; }
+.mt-line.del { background: #3a2530; color: #ff5555; }
+.mt-line.mt-dim { color: #8b95bd; }
+.mt-sign { flex: none; width: 10px; }
+.mt-text { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.mt-same { align-self: flex-start; text-decoration: none; }
+.mt-foot { flex: none; margin: 0; color: #8b95bd; font-size: 11px; }
+@media (max-width: 900px) {
+  .mt-main { flex-direction: column; }
+  .mt-versions { flex: 1 1 auto; max-height: 45%; }
+}

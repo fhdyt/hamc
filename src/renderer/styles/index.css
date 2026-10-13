@@ -14,6 +14,7 @@
 @import './kanban.css';
 @import './cron.css';
 @import './skills.css';
+@import './memory.css';
 
 @theme {
   --font-sans: 'JetBrains Mono', ui-monospace, monospace;

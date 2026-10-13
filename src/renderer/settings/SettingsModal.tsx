@@ -11,6 +11,7 @@ import { UnsavedDialog } from '../screens/agents/Dialogs'
 import { useAgentCfg } from '../stores/agentCfg'
 import { useUi, type SettingsTab } from '../stores/ui'
 import { AlertsTab } from './AlertsTab'
+import { DataTab } from './DataTab'
 import { UploadsTab } from './UploadsTab'
 
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -153,7 +154,8 @@ export function SettingsModal() {
           {tab === 'uploads' && <UploadsTab />}
           {tab === 'agents' && <AgentsSettings />}
           {tab === 'alerts' && <AlertsTab />}
-          {tab !== 'general' && tab !== 'connection' && tab !== 'about' && tab !== 'uploads' && tab !== 'chat' && tab !== 'agents' && tab !== 'alerts' && <UnsupportedState why="This section arrives in a later release." />}
+          {tab === 'data' && <DataTab />}
+          {tab !== 'general' && tab !== 'connection' && tab !== 'about' && tab !== 'uploads' && tab !== 'chat' && tab !== 'agents' && tab !== 'alerts' && tab !== 'data' && <UnsupportedState why="This section arrives in a later release." />}
         </div>
       </div>
     </Modal>
