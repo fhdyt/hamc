@@ -1,8 +1,8 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { join } from 'node:path'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
-import { buildFixture, type FixtureDirs } from '../helpers/fixture'
-import { connectFresh, launchApp, tmp } from './helpers'
+import { buildFixture, snapshotTree, type FixtureDirs } from '../helpers/fixture'
+import { connectFresh, launchApp, resizeWindow, tmp } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -11,9 +11,11 @@ let fx: FixtureDirs
 const userData = tmp('mc-e2e-ses-ud-')
 let app: ElectronApplication
 let page: Page
+let treeBefore: ReturnType<typeof snapshotTree>
 
 test.beforeAll(async () => {
   fx = buildFixture(join(tmp('mc-e2e-ses-fx-'), 'fx'))
+  treeBefore = snapshotTree(fx.root)
   srv = await startFakeSsh({ fixture: fx })
 })
 test.afterAll(async () => {
@@ -154,4 +156,21 @@ test('Continue in Chat opens the Chat screen on that session', async () => {
   await detail().getByRole('button', { name: 'Continue in Chat' }).click()
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /^Chat/ })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText('hello agent').first()).toBeVisible({ timeout: 15_000 })
+})
+
+test('on a narrow window the list and the transcript take turns', async () => {
+  await mainNav().getByRole('button', { name: /^Sessions/ }).click()
+  await resizeWindow(app, 800, 700)
+  await expect(detail()).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Session list' })).toBeHidden()
+  await detail().getByRole('button', { name: 'Back to the list' }).click()
+  await expect(page.getByRole('region', { name: 'Session list' })).toBeVisible()
+  await expect(detail()).toBeHidden()
+  await resizeWindow(app, 1280, 800)
+})
+
+test('browsing, pinning, renaming and exporting leave the server files untouched', async () => {
+  const verbs = new Set(srv.execLog.map((a) => a[0]))
+  for (const bad of ['rm', 'mv', 'cp', 'touch', 'mkdir', 'tee', 'sudo', 'chmod', 'curl', 'wget', 'tar', 'sed', 'cat']) expect(verbs.has(bad)).toBe(false)
+  expect(snapshotTree(fx.root)).toEqual(treeBefore)
 })
