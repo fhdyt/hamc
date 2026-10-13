@@ -6,12 +6,14 @@ import { useAgents } from '../../stores/agents'
 import { unsavedKinds, useAgentCfg, type AgentTab } from '../../stores/agentCfg'
 import { FileEditor } from './FileEditor'
 import { ModelTab } from './ModelTab'
+import { ProfileTab } from './ProfileTab'
 import { NewProfileDialog } from './NewProfile'
 import { BackupTab, FallbackTab, McpTab, ToolsetsTab } from './OpsTabs'
 import { Icon } from '../../components/Icon'
 import { useAgentOps } from '../../stores/agentOps'
 
 const TABS: { id: AgentTab; label: string }[] = [
+  { id: 'profile', label: 'Profile' },
   { id: 'model', label: 'Model' },
   { id: 'soul', label: FILE_LABEL.soul },
   { id: 'memory', label: 'Memory' },
@@ -22,7 +24,7 @@ const TABS: { id: AgentTab; label: string }[] = [
   { id: 'backup', label: 'Backup' }
 ]
 
-/** Settings → Agents: the agent list on the left, the tabs Model, Soul, Memory and User profile on the right (PRD 6.8). */
+/** Settings → Agents: the agent list on the left, the tabs Profile, Model, Soul, Memory, User profile and the agent tools on the right (PRD 6.8). */
 export function AgentsSettings() {
   const agents = useAgents((s) => s.agents)
   const selected = useAgents((s) => s.selected)
@@ -80,7 +82,9 @@ export function AgentsSettings() {
               ))}
             </div>
             <div role="tabpanel" id="agpanel" aria-labelledby={`agtab-${tab}`} key={`${current.profile}:${tab}`}>
-              {tab === 'model' ? (
+              {tab === 'profile' ? (
+                <ProfileTab profile={current.profile} />
+              ) : tab === 'model' ? (
                 <ModelTab profile={current.profile} />
               ) : tab === 'mcp' ? (
                 <McpTab profile={current.profile} />

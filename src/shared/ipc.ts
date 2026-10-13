@@ -13,6 +13,7 @@ import type { ExportExt, ExportResult, SessionAction, SessionActionResult, Sessi
 import type { SettingsMap } from './settings'
 import type { Notice, NoticeTarget } from './notify'
 import type { UpdateState } from './update'
+import type { AgentLook, AgentLooks } from './looks'
 import type { TermData, TermExit, TermOpenResult, TermSize } from './terminal'
 
 export { IPC } from './channels'
@@ -219,6 +220,14 @@ export interface MissionApi {
     profileCreate(req: NewProfileRequest): Promise<OpsText>
     /** SFTP download of one profile into a zip the user saves locally (F-CFG-23). */
     backup(req: BackupRequest): Promise<BackupResult>
+  }
+  looks: {
+    /** Local display names and photos of the agents of the saved connection (F-SHELL-6). */
+    get(): Promise<AgentLooks>
+    /** null goes back to the name Hermes reports. Answers the new look, or null without a saved connection. */
+    setName(profile: string, name: string | null): Promise<AgentLook | null>
+    /** A cropped picture as a data: URL (main turns it into a 96×96 PNG), or null to remove it. */
+    setPhoto(profile: string, photo: string | null): Promise<AgentLook | null>
   }
   update: {
     /** Null only before the main process set the service up. */

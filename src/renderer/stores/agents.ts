@@ -1,14 +1,16 @@
 import { create } from 'zustand'
 import type { AgentInfo, AgentsData } from '@shared/events'
 import type { AgentModels } from '@shared/ipc'
-import { withBusy } from '../lib/roster'
+import { withBusy, withNames } from '../lib/roster'
 
 interface AgentsState {
   /** As the server reported them. */
   raw: AgentInfo[]
   /** Agents that are answering a chat from this app right now. */
   busy: string[]
-  /** `raw` with the busy agents shown as working. */
+  /** Local display names by profile (Settings → Agents → Profile); never sent to the server. */
+  names: Record<string, string>
+  /** `raw` with the busy agents shown as working and the local names. */
   agents: AgentInfo[]
   gateway: AgentsData['gateway'] | null
   models: AgentModels
@@ -19,6 +21,7 @@ interface AgentsState {
   query: string
   applyAgents(data: AgentsData, now?: number): void
   setBusy(busy: string[]): void
+  setNames(names: Record<string, string>): void
   setModels(m: AgentModels): void
   setPins(pins: string[]): void
   select(profile: string | null): void
@@ -26,19 +29,20 @@ interface AgentsState {
   reset(): void
 }
 
-const EMPTY = { raw: [], busy: [], agents: [], gateway: null, models: {}, receivedAt: null, pins: [], pinsReady: false, selected: null, query: '' }
+const EMPTY = { raw: [], busy: [], names: {} as Record<string, string>, agents: [], gateway: null, models: {}, receivedAt: null, pins: [], pinsReady: false, selected: null, query: '' }
 
 export const useAgents = create<AgentsState>()((set) => ({
   ...EMPTY,
   applyAgents: (data, now = Date.now()) =>
     set((s) => ({
       raw: data.agents,
-      agents: withBusy(data.agents, s.busy),
+      agents: withNames(withBusy(data.agents, s.busy), s.names),
       gateway: data.gateway,
       receivedAt: now,
       selected: s.selected && data.agents.some((a) => a.profile === s.selected) ? s.selected : null
     })),
-  setBusy: (busy) => set((s) => (busy.length === s.busy.length && busy.every((p, i) => p === s.busy[i]) ? s : { busy, agents: withBusy(s.raw, busy) })),
+  setBusy: (busy) => set((s) => (busy.length === s.busy.length && busy.every((p, i) => p === s.busy[i]) ? s : { busy, agents: withNames(withBusy(s.raw, busy), s.names) })),
+  setNames: (names) => set((s) => ({ names, agents: withNames(withBusy(s.raw, s.busy), names) })),
   setModels: (models) => set({ models }),
   setPins: (pins) => set({ pins, pinsReady: true }),
   select: (selected) => set({ selected }),

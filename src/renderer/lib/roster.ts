@@ -17,6 +17,10 @@ export type RosterRow =
 export const withBusy = (agents: readonly AgentInfo[], busy: readonly string[]): AgentInfo[] =>
   busy.length === 0 ? [...agents] : agents.map((a) => (busy.includes(a.profile) && a.status !== 'parked' && a.status !== 'working' ? { ...a, status: 'working' as const } : a))
 
+/** The local display names chosen in Settings → Agents → Profile (F-SHELL-6) over the names Hermes reports. */
+export const withNames = (agents: AgentInfo[], names: Readonly<Record<string, string>>): AgentInfo[] =>
+  agents.map((a) => (names[a.profile] ? { ...a, displayName: names[a.profile]! } : a))
+
 export const isActive = (s: AgentStatus): boolean => s === 'working' || s === 'idle'
 export const activeCount = (agents: readonly AgentInfo[]): number => agents.filter((a) => isActive(a.status)).length
 

@@ -7,7 +7,7 @@
 .ag-item .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .ag-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .ag-tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid #44475a; }
-.ag-tab { display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #a9b2d3; font: inherit; cursor: pointer; }
+.ag-tab { display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #a9b2d3; font: inherit; cursor: pointer; }
 .ag-tab:hover { color: #f8f8f2; }
 .ag-tab[aria-selected='true'] { border-bottom-color: #50fa7b; color: #50fa7b; font-weight: 600; }
 .ag-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -75,3 +75,17 @@
 .ops-check { display: flex; align-items: center; gap: 8px; color: #a9b2d3; }
 .np-field { display: flex; flex-direction: column; gap: 4px; color: #a9b2d3; }
 .np-field .fld[aria-invalid='true'] { border-color: #ff5555; }
+/* Profile tab (F-SHELL-6) */
+.lk { display: flex; flex-direction: column; gap: 14px; }
+.lk-head { display: flex; align-items: center; gap: 16px; }
+.lk-who { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lk-name { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.lk-sub { color: #a9b2d3; overflow-wrap: anywhere; }
+.lk-actions { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.lk-pick { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.lk-pick[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
+input.vh:focus-visible + .lk-pick { outline: 2px solid #8be9fd; outline-offset: 1px; }
+.lk-field { display: flex; flex-direction: column; gap: 4px; max-width: 360px; color: #a9b2d3; }
+.lk-row { display: flex; gap: 6px; }
+.lk-row .fld { flex: 1; min-width: 0; }
+.lk-note { margin: 0; color: #8b95bd; font-size: 11px; }

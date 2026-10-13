@@ -1,4 +1,4 @@
-import { app, ipcMain, type BrowserWindow } from 'electron'
+import { app, ipcMain, nativeImage, type BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/channels'
 import { ConnectRequestSchema, HostKeyChallengeSchema, type AppInfo } from '@shared/ipc'
@@ -16,6 +16,8 @@ import type { MissionSession } from './session'
 import type { SettingsStore } from './store/settingsStore'
 import type { NotificationCenter } from './notify/center'
 import type { UpdateService } from './update/service'
+import { normalizePhoto } from './looks'
+import { LOOK_NAME_MAX, PHOTO_MAX_CHARS, cleanLookName } from '@shared/looks'
 import { NOTICE_BODY_MAX, NOTICE_TITLE_MAX } from '@shared/notify'
 
 const ProfileName = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
@@ -186,6 +188,26 @@ export function registerIpc(d: IpcDeps): void {
     const parsed = (SETTINGS_SCHEMA[key] as { parse(v: unknown): unknown }).parse(value)
     d.store.setSetting(key, parsed as never)
     d.onSetting?.(key, parsed)
+  })
+  // F-SHELL-6: local looks of the agents of the saved connection; nothing goes to the VPS
+  handle(IPC.looksGet, () => {
+    const c = d.store.getConnection()
+    return c ? d.store.getLooks(c.id) : {}
+  })
+  handle(IPC.looksSetName, (a) => {
+    const { profile, name } = z.object({ profile: ProfileName, name: z.string().max(LOOK_NAME_MAX * 4).nullable() }).parse(a)
+    const c = d.store.getConnection()
+    if (!c) return null
+    return d.store.setLook(c.id, profile, { name: name === null ? null : cleanLookName(name) })
+  })
+  handle(IPC.looksSetPhoto, (a) => {
+    const { profile, photo } = z.object({ profile: ProfileName, photo: z.string().max(PHOTO_MAX_CHARS).nullable() }).parse(a)
+    const c = d.store.getConnection()
+    if (!c) return null
+    if (photo === null) return d.store.setLook(c.id, profile, { photo: null })
+    const png = normalizePhoto(photo, (url) => nativeImage.createFromDataURL(url))
+    if (!png) throw new Error('not a picture')
+    return d.store.setLook(c.id, profile, { photo: png })
   })
   handle(IPC.updateGet, () => d.updates?.get() ?? null)
   handle(IPC.updateCheck, () => d.updates?.check() ?? null)

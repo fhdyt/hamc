@@ -1,3 +1,4 @@
+import { loadLooks } from './looksActions'
 import { ensurePins, refreshVault } from './actions'
 import { shouldCount } from './lib/unread'
 import { countIfAway } from './paletteActions'
@@ -54,7 +55,10 @@ export async function bootstrap(): Promise<void> {
   mc.onStatus((status) => {
     const was = useConn.getState().status.state
     useConn.setState({ status })
-    if (status.state === 'connected' && was !== 'connected') void refreshVault()
+    if (status.state === 'connected' && was !== 'connected') {
+      void refreshVault()
+      void loadLooks()
+    }
   })
   mc.onStartup((startup) => useConn.setState({ startup }))
   mc.onPreflight((preflight) => useConn.setState({ preflight }))

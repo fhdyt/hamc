@@ -44,6 +44,11 @@ const api: MissionApi = {
     profileCreate: (req) => ipcRenderer.invoke(IPC.opsProfileCreate, req),
     backup: (req) => ipcRenderer.invoke(IPC.opsBackup, req)
   },
+  looks: {
+    get: () => ipcRenderer.invoke(IPC.looksGet),
+    setName: (profile, name) => ipcRenderer.invoke(IPC.looksSetName, { profile, name }),
+    setPhoto: (profile, photo) => ipcRenderer.invoke(IPC.looksSetPhoto, { profile, photo })
+  },
   update: {
     get: () => ipcRenderer.invoke(IPC.updateGet),
     check: () => ipcRenderer.invoke(IPC.updateCheck),

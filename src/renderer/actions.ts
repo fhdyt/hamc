@@ -4,6 +4,7 @@ import type { BrainGraphSettings, SettingsMap } from '@shared/settings'
 import { fullRequest, oldestPerProfile } from './lib/feed'
 import { defaultPins, reorderPins, togglePin } from './lib/roster'
 import { stepZoom } from './lib/zoom'
+import { useLooks } from './stores/looks'
 import { useAgents } from './stores/agents'
 import { IDLE_STATUS, useConn } from './stores/conn'
 import { useBrain } from './stores/brain'
@@ -70,6 +71,7 @@ export async function trustAndRetry(): Promise<ConnectResult | null> {
 export async function forgetConnection(): Promise<void> {
   await window.mc.connection.forget()
   useAgents.getState().reset()
+  useLooks.getState().reset()
   useMetrics.getState().reset()
   useCron.getState().reset()
   useFeed.getState().reset()

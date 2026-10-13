@@ -1,3 +1,4 @@
+import type { AgentLook, AgentLooks } from '@shared/looks'
 import Database from 'better-sqlite3'
 import type { SavedConnection } from '@shared/ipc'
 import { SETTINGS_DEFAULTS, SETTINGS_SCHEMA, type SettingsMap } from '@shared/settings'
@@ -42,7 +43,15 @@ const MIGRATIONS: string[] = [
    );
    CREATE INDEX idx_memory_snapshots_file ON memory_snapshots (connection_id, profile, file, id);`,
   `ALTER TABLE memory_snapshots ADD COLUMN added INTEGER NOT NULL DEFAULT 0;
-   ALTER TABLE memory_snapshots ADD COLUMN removed INTEGER NOT NULL DEFAULT 0;`
+   ALTER TABLE memory_snapshots ADD COLUMN removed INTEGER NOT NULL DEFAULT 0;`,
+  `CREATE TABLE agent_looks (
+     connection_id INTEGER NOT NULL,
+     profile TEXT NOT NULL,
+     name TEXT,
+     photo TEXT,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (connection_id, profile)
+   );`
 ]
 
 /** Retention of memory snapshots (PRD F-MEMT-2): 200 versions per file, 180 days; the newest version always stays. */
@@ -196,6 +205,7 @@ export class SettingsStore {
       this.db.prepare('DELETE FROM settings WHERE key = ?').run(`brain.vault.${r.id}`)
       this.db.prepare('DELETE FROM settings WHERE key LIKE ?').run(`chat.session.${r.id}.%`)
       this.db.prepare('DELETE FROM memory_snapshots WHERE connection_id = ?').run(r.id)
+      this.db.prepare('DELETE FROM agent_looks WHERE connection_id = ?').run(r.id)
       this.db.prepare('DELETE FROM known_hosts WHERE host = ? AND port = ?').run(r.host, r.port)
       this.db.prepare('DELETE FROM connections WHERE id = ?').run(r.id)
     })()
@@ -215,6 +225,26 @@ export class SettingsStore {
          ON CONFLICT(host, port) DO UPDATE SET algo = excluded.algo, fingerprint = excluded.fingerprint`
       )
       .run(host, port, algo, fingerprint, now)
+  }
+
+  /** Local display names and photos of the agents of one connection (F-SHELL-6). */
+  getLooks(connectionId: number): AgentLooks {
+    const rows = this.db.prepare('SELECT profile, name, photo FROM agent_looks WHERE connection_id = ?').all(connectionId) as { profile: string; name: string | null; photo: string | null }[]
+    return Object.fromEntries(rows.map((r) => [r.profile, { name: r.name, photo: r.photo }]))
+  }
+
+  /** Changes one part of an agent's look; a look with neither a name nor a photo is removed. */
+  setLook(connectionId: number, profile: string, patch: Partial<AgentLook>): AgentLook {
+    const cur = this.getLooks(connectionId)[profile] ?? { name: null, photo: null }
+    const next: AgentLook = { ...cur, ...patch }
+    if (next.name === null && next.photo === null) {
+      this.db.prepare('DELETE FROM agent_looks WHERE connection_id = ? AND profile = ?').run(connectionId, profile)
+    } else {
+      this.db
+        .prepare('INSERT INTO agent_looks (connection_id, profile, name, photo, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(connection_id, profile) DO UPDATE SET name = excluded.name, photo = excluded.photo, updated_at = excluded.updated_at')
+        .run(connectionId, profile, next.name, next.photo, Date.now())
+    }
+    return next
   }
 
   getPins(connectionId: number): string[] {
