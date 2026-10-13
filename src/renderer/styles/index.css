@@ -8,6 +8,7 @@
 @import './chat.css';
 @import './agents.css';
 @import './sessions.css';
+@import './usage.css';
 
 @theme {
   --font-sans: 'JetBrains Mono', ui-monospace, monospace;

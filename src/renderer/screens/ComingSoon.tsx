@@ -7,7 +7,6 @@ const WHAT: Partial<Record<Route, string>> = {
   chat: 'One-on-one chat with each agent.',
   feed: 'Realtime interactions and thinking from every agent.',
   kanban: 'Read-only kanban board of agent tasks.',
-  usage: 'Cost and tool-call analytics.',
   skills: 'Installed skills and the curator.',
   logs: 'Log tail, gateway status and approvals.',
   brain: 'Obsidian-style graph of the second brain.'

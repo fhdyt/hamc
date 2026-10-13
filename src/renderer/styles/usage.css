@@ -1,0 +1,31 @@
+/* usage (M8b) */
+.us { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 20px 24px 16px; overflow-y: auto; }
+.us-filters { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.us-tabs { flex: none; display: flex; border-bottom: 1px solid #44475a; }
+.us-tab { min-height: 32px; padding: 0 14px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #a9b2d3; font: inherit; cursor: pointer; }
+.us-tab:hover { color: #f8f8f2; }
+.us-tab[aria-selected='true'] { color: #f8f8f2; border-bottom-color: #50fa7b; }
+.us-panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.us-summary { margin: 0; color: #f8f8f2; font-size: 12px; }
+.us-over { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid #ffb86c; border-radius: 6px; background: #21222c; color: #ffb86c; font-size: 11px; }
+.us-card { position: relative; min-width: 0; border: 1px solid #44475a; border-radius: 10px; background: #21222c; padding: 12px 14px; }
+.us-chart { display: block; width: 100%; height: auto; max-height: 260px; }
+.us-hit { cursor: pointer; outline: none; }
+.us-hit:hover { fill: rgba(248, 248, 242, 0.06); }
+.us-hit:focus-visible { stroke: #8be9fd; stroke-width: 1.5; }
+.us-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding-top: 6px; color: #a9b2d3; font-size: 11px; }
+.us-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.us-hint { margin-left: auto; color: #8b95bd; }
+.us-tables { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+.us-tables > .us-card { flex: 1 1 360px; }
+.us-tables > .us-card:first-child { flex-grow: 2; }
+.us-h { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: #bd93f9; }
+.us-scroll { overflow-x: auto; }
+.us-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.us-table th, .us-table td { padding: 4px 8px; text-align: left; white-space: nowrap; border-bottom: 1px solid #343746; }
+.us-table thead th { color: #8b95bd; font-weight: 400; font-size: 11px; }
+.us-table tbody th { font-weight: 600; color: #f8f8f2; }
+.us-table .num { text-align: right; }
+.us-none { color: #8b95bd; text-align: center; }
+.us-note { margin: 0; color: #8b95bd; font-size: 11px; }
+@media (max-width: 900px) { .us { padding: 12px; } }
