@@ -1,5 +1,6 @@
 import { setZoomLevel, stepZoomLevel } from '../actions'
 import { Icon } from '../components/Icon'
+import { NoticeBell } from '../components/Notices'
 import { activeCount } from '../lib/roster'
 import { zoomPercent } from '../lib/zoom'
 import { useAgents } from '../stores/agents'
@@ -66,6 +67,7 @@ export function StatusBar() {
           <Icon name="plus" size={12} />
         </button>
       </span>
+      <NoticeBell />
       <button type="button" className="sb-item" onClick={() => openSettings('general')} aria-label="Settings" title="Settings">
         <Icon name="settings" size={13} />
       </button>

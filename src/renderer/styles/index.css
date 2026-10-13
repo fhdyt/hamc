@@ -12,6 +12,7 @@
 @import './palette.css';
 @import '@xterm/xterm/css/xterm.css';
 @import './terminal.css';
+@import './notices.css';
 @import './logs.css';
 @import './kanban.css';
 @import './cron.css';

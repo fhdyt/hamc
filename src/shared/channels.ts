@@ -32,6 +32,8 @@ export const IPC = {
   opsToolsApply: 'mc:ops:tools-apply',
   opsProfileCreate: 'mc:ops:profile-create',
   opsBackup: 'mc:ops:backup',
+  notifyTest: 'mc:notify:test',
+  notifyChat: 'mc:notify:chat',
   termOpen: 'mc:term:open',
   termWrite: 'mc:term:write',
   termResize: 'mc:term:resize',
@@ -89,11 +91,10 @@ export const IPC = {
   evPreflight: 'mc:ev:preflight',
   evCapabilities: 'mc:ev:capabilities',
   evModels: 'mc:ev:models',
-  evOpenCron: 'mc:ev:open-cron',
   evCostAlert: 'mc:ev:cost-alert',
-  evOpenUsage: 'mc:ev:open-usage',
-  evOpenLogs: 'mc:ev:open-logs',
   evMemory: 'mc:ev:memory',
+  evNotice: 'mc:ev:notice',
+  evNoticeOpen: 'mc:ev:notice-open',
   evTermData: 'mc:ev:term-data',
   evTermExit: 'mc:ev:term-exit'
 } as const

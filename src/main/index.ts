@@ -1,13 +1,13 @@
-import { app, BrowserWindow, dialog, Menu, nativeImage, Notification, safeStorage, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, Menu, nativeImage, Notification, safeStorage, Tray, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { IPC } from '@shared/channels'
 import { loadCollectorScript } from './collector/channel'
 import { ConnectionManager } from './connection/manager'
 import type { CostAlertState } from '@shared/events'
 import type { CronAlert } from './cron/watcher'
 import type { GatewayAlert } from './gateway/watcher'
 import { registerIpc } from './ipc'
+import { NotificationCenter } from './notify/center'
 import { createLogger } from './log'
 import { WEB_PREFERENCES, hardenWebContents, type AppTarget } from './security'
 import { MissionSession } from './session'
@@ -29,65 +29,53 @@ function collectorPath(): string {
   return app.isPackaged ? join(process.resourcesPath, 'mc_collector.py') : join(projectRoot, 'collector', 'mc_collector.py')
 }
 
-const liveNotifications = new Set<Notification>()
+const inFront = (): boolean => !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized() && win.isFocused()
 
-/** Failed cron runs only notify when the window is not in front of the user. */
-function showCronAlert(alert: CronAlert): void {
-  const w = win
-  const inFront = !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized() && w.isFocused()
-  if (inFront || !Notification.isSupported()) return
+function focusWindow(): void {
+  if (!win || win.isDestroyed()) return
+  win.show()
+  if (win.isMinimized()) win.restore()
+  win.focus()
+}
+
+function cronNotice(alert: CronAlert): Parameters<NotificationCenter['push']>[0] {
   const reason = (alert.lastError ?? alert.lastStatus ?? 'failed').replace(/\s+/g, ' ').slice(0, 120)
-  const n = new Notification({ title: `Cron failed: ${alert.name}`, body: `${alert.profile} · ${reason}` })
-  liveNotifications.add(n)
-  n.on('close', () => liveNotifications.delete(n))
-  n.on('click', () => {
-    liveNotifications.delete(n)
-    if (!win || win.isDestroyed()) return
-    win.show()
-    if (win.isMinimized()) win.restore()
-    win.focus()
-    win.webContents.send(IPC.evOpenCron, { profile: alert.profile, jobId: alert.jobId })
-  })
-  n.show()
+  return { kind: 'cron', title: `Cron failed: ${alert.name}`, body: `${alert.profile} · ${reason}`, target: { kind: 'cron', profile: alert.profile, jobId: alert.jobId } }
 }
 
-/** The daily cost passed the threshold; like a failed cron run it only rings when the window is not in front. */
-function showCostAlert(s: CostAlertState): void {
-  const w = win
-  const inFront = !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized() && w.isFocused()
-  if (inFront || !Notification.isSupported()) return
-  const n = new Notification({ title: `Daily cost over $${s.threshold.toFixed(2)}`, body: `$${(s.total ?? 0).toFixed(2)} so far today` })
-  liveNotifications.add(n)
-  n.on('close', () => liveNotifications.delete(n))
-  n.on('click', () => {
-    liveNotifications.delete(n)
-    if (!win || win.isDestroyed()) return
-    win.show()
-    if (win.isMinimized()) win.restore()
-    win.focus()
-    win.webContents.send(IPC.evOpenUsage, null)
-  })
-  n.show()
+function costNotice(s: CostAlertState): Parameters<NotificationCenter['push']>[0] {
+  return { kind: 'cost', title: `Daily cost over $${s.threshold.toFixed(2)}`, body: `$${(s.total ?? 0).toFixed(2)} so far today`, target: { kind: 'usage' } }
 }
 
-/** A gateway stopped or a platform failed; like a failed cron run it only rings when the window is not in front. */
-function showGatewayAlert(alert: GatewayAlert): void {
-  const w = win
-  const inFront = !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized() && w.isFocused()
-  if (inFront || !Notification.isSupported()) return
-  const title = alert.kind === 'gateway' ? `Gateway stopped: ${alert.profile}` : `Platform problem: ${alert.profile} \u00b7 ${alert.platform ?? ''}`
-  const n = new Notification({ title, body: alert.detail })
-  liveNotifications.add(n)
-  n.on('close', () => liveNotifications.delete(n))
-  n.on('click', () => {
-    liveNotifications.delete(n)
-    if (!win || win.isDestroyed()) return
-    win.show()
-    if (win.isMinimized()) win.restore()
-    win.focus()
-    win.webContents.send(IPC.evOpenLogs, 'gateway')
-  })
-  n.show()
+function gatewayNotice(alert: GatewayAlert): Parameters<NotificationCenter['push']>[0] {
+  const title = alert.kind === 'gateway' ? `Gateway stopped: ${alert.profile}` : `Platform problem: ${alert.profile} · ${alert.platform ?? ''}`
+  return { kind: 'gateway', title, body: alert.detail, target: { kind: 'logs', tab: 'gateway' } }
+}
+
+let tray: Tray | null = null
+let quitting = false
+
+/** F-SHELL-3: with "keep running in the tray", closing the window hides it; the tray menu shows it again or quits. */
+function applyTray(on: boolean): void {
+  if (on && !tray) {
+    const icon = nativeImage.createFromPath(join(projectRoot, 'assets', 'brand', 'icon-1024.png'))
+    tray = new Tray(icon.isEmpty() ? icon : icon.resize({ width: 16, height: 16 }))
+    tray.setToolTip('Hermes Agent Mission Control')
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Show Mission Control', click: () => focusWindow() },
+      { type: 'separator' },
+      { label: 'Quit', click: () => { quitting = true; app.quit() } }
+    ]))
+    tray.on('click', () => focusWindow())
+  } else if (!on && tray) {
+    tray.destroy()
+    tray = null
+  }
+}
+
+function applyLoginItem(on: boolean): void {
+  // Linux has no login items in Electron; the switch is hidden there
+  if (process.platform === 'win32' || process.platform === 'darwin') app.setLoginItemSettings({ openAtLogin: on, args: on ? ['--hidden'] : [] })
 }
 
 function buildMenu(): Menu {
@@ -114,7 +102,12 @@ function createWindow(store: SettingsStore): BrowserWindow {
   })
   hardenWebContents(w.webContents, target)
   w.setMenuBarVisibility(false)
-  w.once('ready-to-show', () => w.show())
+  // started minimized (a setting, or the login item's --hidden): the window waits in the taskbar or the tray
+  const hidden = store.getSetting('app.startMinimized') || process.argv.includes('--hidden')
+  w.once('ready-to-show', () => {
+    if (!hidden) w.show()
+    else if (!store.getSetting('app.tray')) w.minimize()
+  })
   w.webContents.on('did-finish-load', () => w.webContents.setZoomFactor(store.getSetting('ui.zoom')))
   // The renderer sets a beforeunload guard while Agent settings hold unsaved edits (F-CFG-18); this asks instead of closing silently.
   w.webContents.on('will-prevent-unload', (e) => {
@@ -129,7 +122,12 @@ function createWindow(store: SettingsStore): BrowserWindow {
     })
     if (choice === 1) e.preventDefault()
   })
-  w.on('close', () => {
+  w.on('close', (e) => {
+    if (store.getSetting('app.tray') && tray && !quitting) {
+      e.preventDefault()
+      w.hide()
+      return
+    }
     if (!w.isMaximized() && !w.isMinimized()) {
       const r = w.getBounds()
       store.setSetting('window.bounds', { x: r.x, y: r.y, width: r.width, height: r.height })
@@ -143,12 +141,7 @@ function createWindow(store: SettingsStore): BrowserWindow {
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
-    if (win) {
-      if (win.isMinimized()) win.restore()
-      win.focus()
-    }
-  })
+  app.on('second-instance', () => focusWindow())
 
   void app.whenReady().then(() => {
     try {
@@ -165,18 +158,32 @@ if (!app.requestSingleInstanceLock()) {
     const store = new SettingsStore(join(userData, 'app.db'))
     const secrets = new SecretStore(safeStorage)
     const manager = new ConnectionManager({ getKnownHost: (h, p) => store.getKnownHost(h, p) })
+    const send = (channel: string, payload: unknown): void => {
+      if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
+    }
+    const center = new NotificationCenter({
+      settings: () => ({
+        desktop: store.getSetting('notify.desktop'),
+        kinds: store.getSetting('notify.kinds'),
+        preview: store.getSetting('notify.preview'),
+        sound: store.getSetting('notify.sound'),
+        quiet: store.getSetting('notify.quiet')
+      }),
+      inFront,
+      send,
+      focus: focusWindow,
+      makeOs: Notification.isSupported() ? (o) => new Notification(o) : null
+    })
     const session = new MissionSession({
       manager,
       store,
       secrets,
       collectorScript: loadCollectorScript(collectorPath()),
-      send: (channel, payload) => {
-        if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
-      },
+      send,
       log,
-      notify: showCronAlert,
-      notifyCost: showCostAlert,
-      notifyGateway: showGatewayAlert,
+      notify: (a) => center.push(cronNotice(a)),
+      notifyCost: (s) => center.push(costNotice(s)),
+      notifyGateway: (a) => center.push(gatewayNotice(a)),
       pickFiles: async () => {
         const r = await (win ? dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] }) : dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] }))
         return r.canceled ? [] : r.filePaths
@@ -192,11 +199,25 @@ if (!app.requestSingleInstanceLock()) {
         }
       }
     })
-    registerIpc({ session, store, getWindow: () => win, target })
+    registerIpc({
+      session,
+      store,
+      getWindow: () => win,
+      target,
+      center,
+      onSetting: (key, value) => {
+        if (key === 'app.tray') applyTray(value === true)
+        if (key === 'app.launchAtLogin') applyLoginItem(value === true)
+      }
+    })
+    applyTray(store.getSetting('app.tray'))
     Menu.setApplicationMenu(buildMenu())
     win = createWindow(store)
     win.on('closed', () => (win = null))
-    app.on('before-quit', () => void session.disconnect())
+    app.on('before-quit', () => {
+      quitting = true
+      void session.disconnect()
+    })
   }
 
   app.on('window-all-closed', () => app.quit())

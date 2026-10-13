@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { InteractionKind } from './events'
+import { HHMM_RE, NOTIFY_KINDS_DEFAULT, QUIET_DEFAULT, type NotifyKinds, type QuietHours } from './notify'
 import { DEFAULT_SNIPPETS, SNIPPET_COMMAND_MAX, SNIPPET_LABEL_MAX, SNIPPET_MAX, TERM_MAX_H, TERM_MIN_H, type Snippet } from './terminal'
 import { DEFAULT_LOG_LEVELS, LOG_LEVELS, LOG_RANGES, type LogLevel, type LogRange } from './logs'
 
@@ -99,6 +100,16 @@ export interface SettingsMap {
   'logs.wrap': boolean
   /** The Kanban board the reader picked: `default` or a folder name under kanban/boards; empty until they pick one. */
   'kanban.board': string
+  /** Notifications (F-SHELL-4, F-R13-4): OS notifications over other apps, which kinds, message preview, sound, quiet hours. */
+  'notify.desktop': boolean
+  'notify.kinds': NotifyKinds
+  'notify.preview': boolean
+  'notify.sound': boolean
+  'notify.quiet': QuietHours
+  /** General (F-SHELL-3): start with the computer (Windows, macOS), start minimized, keep running in the tray when closed. */
+  'app.launchAtLogin': boolean
+  'app.startMinimized': boolean
+  'app.tray': boolean
   /** The Terminal panel (F-R12-2): open or hidden, its height (0 until the user drags it) and saved snippets (F-TERM-7). */
   'terminal.open': boolean
   'terminal.height': number
@@ -135,6 +146,14 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'logs.range': '24h',
   'logs.wrap': false,
   'kanban.board': '',
+  'notify.desktop': true,
+  'notify.kinds': NOTIFY_KINDS_DEFAULT,
+  'notify.preview': true,
+  'notify.sound': true,
+  'notify.quiet': QUIET_DEFAULT,
+  'app.launchAtLogin': false,
+  'app.startMinimized': false,
+  'app.tray': false,
   'terminal.open': false,
   'terminal.height': 0,
   'terminal.snippets': DEFAULT_SNIPPETS,
@@ -186,6 +205,14 @@ export const SETTINGS_SCHEMA = {
   'logs.range': z.enum(LOG_RANGES),
   'logs.wrap': z.boolean(),
   'kanban.board': z.string().regex(/^([A-Za-z0-9._-]{1,64})?$/),
+  'notify.desktop': z.boolean(),
+  'notify.kinds': z.object({ chat: z.boolean(), cron: z.boolean(), gateway: z.boolean(), cost: z.boolean() }),
+  'notify.preview': z.boolean(),
+  'notify.sound': z.boolean(),
+  'notify.quiet': z.object({ enabled: z.boolean(), from: z.string().regex(HHMM_RE), to: z.string().regex(HHMM_RE) }),
+  'app.launchAtLogin': z.boolean(),
+  'app.startMinimized': z.boolean(),
+  'app.tray': z.boolean(),
   'terminal.open': z.boolean(),
   'terminal.height': z.number().refine((v) => v === 0 || (v >= TERM_MIN_H && v <= TERM_MAX_H)),
   'terminal.snippets': z

@@ -9,11 +9,12 @@ import { useCostAlert } from './stores/costAlert'
 import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
 import { useInteractions } from './stores/interactions'
-import { useLogs } from './stores/logs'
 import { useMetrics } from './stores/metrics'
 import { useUi } from './stores/ui'
 import { useMemoryTimeline } from './stores/memoryTimeline'
 import { memoryChanged } from './memoryActions'
+import { notifyChatReply, openNoticeTarget } from './noticeActions'
+import { useNotices } from './stores/notices'
 import { sortAgents } from './lib/roster'
 
 export async function bootstrap(): Promise<void> {
@@ -33,7 +34,7 @@ export async function bootstrap(): Promise<void> {
   mc.onChat((ev) => {
     useChat.getState().applyChat(ev)
     // a reply that finished while the user was looking elsewhere gets a badge
-    if (shouldCount(ev)) countIfAway(ev.profile)
+    if (shouldCount(ev) && countIfAway(ev.profile)) notifyChatReply(ev.profile, useChat.getState().rooms[ev.profile]?.turn?.text ?? '')
   })
   // an agent that is answering a chat from this app shows as working, whatever state.db says yet
   useChat.subscribe((s) => {
@@ -58,23 +59,12 @@ export async function bootstrap(): Promise<void> {
     const st = useMemoryTimeline.getState()
     memoryChanged(profile, file, st.profile ?? sortAgents(useAgents.getState().agents)[0]?.profile ?? null)
   })
-  mc.onOpenLogs((tab) => {
-    const route = useUi.getState().route
-    if (route === 'connect' || route === 'launch') return
-    useLogs.getState().setTab(tab)
-    useUi.getState().navigate('logs')
+  mc.onNotice((n) => {
+    // in front of the user a toast is enough; otherwise the OS showed it and the bell keeps it
+    const front = typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus()
+    useNotices.getState().add(n, front)
   })
-  mc.onOpenUsage(() => {
-    const route = useUi.getState().route
-    if (route !== 'connect' && route !== 'launch') useUi.getState().navigate('usage')
-  })
-  mc.onOpenCron(({ profile, jobId }) => {
-    const route = useUi.getState().route
-    if (route !== 'connect' && route !== 'launch') {
-      useUi.getState().navigate('dashboard')
-      useCron.getState().openModal(`${profile}/${jobId}`)
-    }
-  })
+  mc.onNoticeOpen((t) => openNoticeTarget(t))
 
   const [settings, saved, secret] = await Promise.all([mc.settings.all(), mc.connection.saved(), mc.connection.secretStatus()])
   useConn.setState({ saved, savedLoaded: true, secret })

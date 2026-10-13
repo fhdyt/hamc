@@ -1,9 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import type { AppInfo } from '@shared/ipc'
 import { resetSettings, saveSetting, setZoomLevel, stepZoomLevel } from '../actions'
 import { Icon } from '../components/Icon'
 import { Modal } from '../components/Modal'
-import { UnsupportedState } from '../components/States'
 import { zoomPercent } from '../lib/zoom'
 import { EditConnectionDialogBody } from '../screens/EditConnectionDialog'
 import { AgentsSettings } from '../screens/agents/AgentsSettings'
@@ -13,6 +12,9 @@ import { useUi, type SettingsTab } from '../stores/ui'
 import { AlertsTab } from './AlertsTab'
 import { DataTab } from './DataTab'
 import { UploadsTab } from './UploadsTab'
+import { NotificationsTab } from './NotificationsTab'
+import { WorkspaceTab } from './WorkspaceTab'
+import { Row, Switch } from './parts'
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -27,25 +29,13 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'about', label: 'About' }
 ]
 
-function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-  return <button type="button" className="sw" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)} />
-}
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 40 }}>
-      <div style={{ flex: 1 }}>
-        <div>{label}</div>
-        {hint && <div style={{ color: '#8B95BD', fontSize: 11 }}>{hint}</div>}
-      </div>
-      {children}
-    </div>
-  )
-}
-
 function General() {
   const s = useUi((st) => st.settings)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [platform, setPlatform] = useState<string | null>(null)
+  useEffect(() => {
+    void window.mc.app.info().then((i) => setPlatform(i.platform))
+  }, [])
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <Row label="Text size" hint="Ctrl + / Ctrl −, 70% to 150%">
@@ -64,6 +54,17 @@ function General() {
       </Row>
       <Row label="Reduce motion" hint="Turns off animations">
         <Switch checked={s['ui.reduceMotion']} label="Reduce motion" onChange={(v) => void saveSetting('ui.reduceMotion', v)} />
+      </Row>
+      {platform !== 'linux' && (
+        <Row label="Launch at login" hint="Starts Mission Control in the background when you sign in to this computer">
+          <Switch checked={s['app.launchAtLogin']} label="Launch at login" onChange={(v) => void saveSetting('app.launchAtLogin', v)} />
+        </Row>
+      )}
+      <Row label="Start minimized" hint="Opens in the taskbar (or the tray) instead of in front">
+        <Switch checked={s['app.startMinimized']} label="Start minimized" onChange={(v) => void saveSetting('app.startMinimized', v)} />
+      </Row>
+      <Row label="Keep running in the tray" hint="Closing the window hides it; Mission Control stays connected and keeps notifying. Quit from the tray icon.">
+        <Switch checked={s['app.tray']} label="Keep running in the tray" onChange={(v) => void saveSetting('app.tray', v)} />
       </Row>
       <Row label="Reset settings" hint="Text size, density, panel sizes, graph choices and filters go back to their defaults. Your connection, pinned agents, vault path and the window size stay.">
         {confirmReset ? (
@@ -159,7 +160,8 @@ export function SettingsModal() {
           {tab === 'agents' && <AgentsSettings />}
           {tab === 'alerts' && <AlertsTab />}
           {tab === 'data' && <DataTab />}
-          {tab !== 'general' && tab !== 'connection' && tab !== 'about' && tab !== 'uploads' && tab !== 'chat' && tab !== 'agents' && tab !== 'alerts' && tab !== 'data' && <UnsupportedState why="This section arrives in a later release." />}
+          {tab === 'notifications' && <NotificationsTab />}
+          {tab === 'workspace' && <WorkspaceTab />}
         </div>
       </div>
     </Modal>

@@ -241,6 +241,14 @@ Chat sekarang memakai gateway TUI milik Hermes (`python -m tui_gateway.entry`) l
 141. **Resume.** Disconnect lalu connect lagi, kirim pesan: percakapan lanjut di sesi yang sama (gateway baru, `session.resume`). New chat memulai sesi baru.
 142. **Zero-Change dan fallback.** Tidak ada port baru (`ss -ltnp`), tidak ada berkas baru selain catatan Hermes sendiri (`logs/tui_gateway_crash.log`, `desktop/interrupted_turns.json`, baris `gateway_heartbeats` yang hilang saat keluar). Setelah disconnect proses gateway hilang dalam beberapa detik. Matikan **Keep Hermes running between messages** di Settings → Chat: pesan kembali lewat ACP atau one-shot.
 
+## Tambahan Notifikasi dan Settings
+
+143. **Notifikasi di atas aplikasi lain.** Minimalkan aplikasi (atau taruh di belakang jendela lain), lalu buat cron gagal atau minta agent membalas: notifikasi OS muncul di atas aplikasi lain; klik membuka layar terkait (Cron, Logs → Gateway, Usage, atau chat agent). Saat aplikasi di depan hanya toast di pojok kanan bawah yang muncul.
+144. **Lonceng.** Lonceng di status bar menunjukkan jumlah belum dibaca; membukanya menampilkan riwayat (maksimal 100, hilang saat aplikasi ditutup) dan menandai semuanya terbaca. Clear mengosongkannya.
+145. **Settings → Notifications.** Matikan satu jenis (mis. Agent replies): jenis itu tidak muncul lagi di lonceng maupun OS. Matikan Show message preview: notifikasi balasan hanya menyebut agent. Do not disturb pada rentang jam sekarang: tidak ada notifikasi OS, lonceng tetap mencatat. **Send a test notification** menampilkan satu notifikasi (atau alasan bila sistem tidak mendukungnya).
+146. **Settings → Workspace.** Path vault tampil dan bisa diganti atau dihapus; home, hermes, python dan versi sama dengan hasil preflight.
+147. **General.** Keep running in the tray: menutup jendela menyembunyikannya, ikon tray membuka lagi atau Quit; koneksi dan notifikasi tetap jalan. Start minimized: aplikasi dibuka di taskbar/tray. Launch at login (Windows/macOS): aplikasi berjalan tersembunyi setelah login.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.

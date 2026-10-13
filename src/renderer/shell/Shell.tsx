@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Toasts } from '../components/Notices'
 import { TerminalPanel } from '../components/TerminalPanel'
 import { Sidebar } from './Sidebar'
 import { StatusBar } from './StatusBar'
@@ -13,6 +14,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="mc-col">{children}</div>
       </div>
       <TerminalPanel />
+      <Toasts />
       <StatusBar />
     </div>
   )

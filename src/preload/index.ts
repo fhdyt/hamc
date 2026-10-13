@@ -44,6 +44,10 @@ const api: MissionApi = {
     profileCreate: (req) => ipcRenderer.invoke(IPC.opsProfileCreate, req),
     backup: (req) => ipcRenderer.invoke(IPC.opsBackup, req)
   },
+  notify: {
+    test: () => ipcRenderer.invoke(IPC.notifyTest),
+    chat: (profile, title, body) => ipcRenderer.invoke(IPC.notifyChat, { profile, title, body })
+  },
   terminal: {
     open: (size) => ipcRenderer.invoke(IPC.termOpen, size),
     write: (id, data) => ipcRenderer.invoke(IPC.termWrite, { id, data }),
@@ -144,11 +148,10 @@ const api: MissionApi = {
   onPreflight: (cb) => on(IPC.evPreflight, cb),
   onCapabilities: (cb) => on(IPC.evCapabilities, cb),
   onModels: (cb) => on(IPC.evModels, cb),
-  onOpenCron: (cb) => on(IPC.evOpenCron, cb),
   onCostAlert: (cb) => on(IPC.evCostAlert, cb),
-  onOpenUsage: (cb) => on(IPC.evOpenUsage, cb),
-  onOpenLogs: (cb) => on(IPC.evOpenLogs, cb),
   onMemory: (cb) => on(IPC.evMemory, cb),
+  onNotice: (cb) => on(IPC.evNotice, cb),
+  onNoticeOpen: (cb) => on(IPC.evNoticeOpen, cb),
   onTermData: (cb) => on(IPC.evTermData, cb),
   onTermExit: (cb) => on(IPC.evTermExit, cb)
 }

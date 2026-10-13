@@ -1,0 +1,23 @@
+/* Notifications (F-SHELL-4): the bell's history above the status bar and toasts in the corner. */
+.nt-count { min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: #ff5555; color: #f8f8f2; font-size: 9px; line-height: 14px; text-align: center; }
+.nt-panel { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 45; width: 360px; max-height: min(480px, 70vh); display: flex; flex-direction: column; border: 1px solid #6272a4; border-radius: 10px; background: #21222c; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); font-size: 11px; }
+.nt-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #343746; }
+.nt-title { color: #f8f8f2; font-weight: 600; }
+.nt-empty { margin: 0; padding: 14px 12px; color: #8b95bd; line-height: 1.5; }
+.nt-list { list-style: none; margin: 0; padding: 4px; overflow-y: auto; }
+.nt-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: #f8f8f2; font: inherit; text-align: left; cursor: pointer; }
+.nt-item:hover:not(:disabled) { background: #343746; }
+.nt-item:disabled { cursor: default; }
+.nt-ico { display: flex; padding-top: 2px; }
+.nt-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nt-t { color: #f8f8f2; overflow-wrap: anywhere; }
+.nt-b { color: #a9b2d3; overflow-wrap: anywhere; }
+.nt-when { color: #8b95bd; white-space: nowrap; }
+.nt-toasts { position: fixed; right: 16px; bottom: 40px; z-index: 50; display: flex; flex-direction: column; gap: 8px; width: 320px; }
+.nt-toast { display: flex; align-items: flex-start; gap: 4px; padding: 8px 6px 8px 10px; border: 1px solid #44475a; border-left: 3px solid #bd93f9; border-radius: 8px; background: #21222c; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45); font-size: 11px; animation: ntIn 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.nt-toast-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.nt-toast-body:disabled { cursor: default; }
+@keyframes ntIn { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+.mc-nomotion .nt-toast { animation: none; }
+@media (prefers-reduced-motion: reduce) { .nt-toast { animation: none; } }
+.ws-path { display: block; padding: 6px 8px; border: 1px solid #44475a; border-radius: 6px; background: #191a21; color: #f1fa8c; font-size: 11px; overflow-wrap: anywhere; }

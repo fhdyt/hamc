@@ -87,10 +87,11 @@ export function runItem(item: PaletteItem): void {
 }
 
 /** A chat turn ended cleanly: it is unread when that agent's room is not on screen in a window the user can see. */
-export function countIfAway(profile: string): void {
+export function countIfAway(profile: string): boolean {
   const ui = useUi.getState()
   const visible = typeof document === 'undefined' ? true : document.visibilityState === 'visible'
   const focused = typeof document === 'undefined' ? true : document.hasFocus()
   const viewing = isViewing({ route: ui.route, chatCurrent: useChat.getState().current, agentSelected: useAgents.getState().selected, visible, focused }, profile)
   if (!viewing) useUnread.getState().add(profile)
+  return !viewing
 }

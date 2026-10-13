@@ -11,6 +11,7 @@ import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs,
 import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
 import type { SettingsMap } from './settings'
+import type { Notice, NoticeTarget } from './notify'
 import type { TermData, TermExit, TermOpenResult, TermSize } from './terminal'
 
 export { IPC } from './channels'
@@ -173,11 +174,6 @@ export interface UploadProgress {
   error?: string
 }
 
-export interface OpenCronTarget {
-  profile: string
-  jobId: string
-}
-
 type Unsub = () => void
 
 export interface MissionApi {
@@ -222,6 +218,12 @@ export interface MissionApi {
     profileCreate(req: NewProfileRequest): Promise<OpsText>
     /** SFTP download of one profile into a zip the user saves locally (F-CFG-23). */
     backup(req: BackupRequest): Promise<BackupResult>
+  }
+  notify: {
+    /** Shows one OS notification now (Settings → Notifications). */
+    test(): Promise<{ shown: boolean; reason?: string }>
+    /** A chat reply finished while that agent was not on screen. */
+    chat(profile: string, title: string, body: string): Promise<void>
   }
   terminal: {
     /** Starts a login shell with a PTY on the current connection (F-TERM-1). */
@@ -337,12 +339,13 @@ export interface MissionApi {
   onPreflight(cb: (p: PreflightResult) => void): Unsub
   onCapabilities(cb: (c: Capabilities) => void): Unsub
   onModels(cb: (m: AgentModels) => void): Unsub
-  onOpenCron(cb: (t: OpenCronTarget) => void): Unsub
   onCostAlert(cb: (s: CostAlertState) => void): () => void
-  onOpenUsage(cb: () => void): () => void
-  onOpenLogs(cb: (tab: 'logs' | 'gateway' | 'approvals') => void): () => void
   /** A memory file got a new local version. */
   onMemory(cb: (e: { profile: string; file: AgentFileKind }) => void): Unsub
+  /** A notification for the bell (and a toast when the window is in front). */
+  onNotice(cb: (n: Notice) => void): Unsub
+  /** An OS notification was clicked: open what it is about. */
+  onNoticeOpen(cb: (t: NoticeTarget) => void): Unsub
   onTermData(cb: (e: TermData) => void): Unsub
   onTermExit(cb: (e: TermExit) => void): Unsub
 }

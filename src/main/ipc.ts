@@ -14,6 +14,8 @@ import { EXPORT_MAX_BYTES } from './sessions/export'
 import { isTrustedSender, type AppTarget } from './security'
 import type { MissionSession } from './session'
 import type { SettingsStore } from './store/settingsStore'
+import type { NotificationCenter } from './notify/center'
+import { NOTICE_BODY_MAX, NOTICE_TITLE_MAX } from '@shared/notify'
 
 const ProfileName = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
 const FeedMessageArgs = z.object({
@@ -123,6 +125,10 @@ export interface IpcDeps {
   store: SettingsStore
   getWindow: () => BrowserWindow | null
   target: AppTarget
+  /** Notifications (F-SHELL-4); the test button and finished chat replies. */
+  center?: NotificationCenter
+  /** A setting that the main process must act on (tray, login item) changed. */
+  onSetting?: (key: string, value: unknown) => void
 }
 
 const SetSetting = z.object({ key: z.string(), value: z.unknown() })
@@ -174,7 +180,15 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.settingsSet, (a) => {
     const { key, value } = SetSetting.parse(a)
     if (!isSettingKey(key)) throw new Error(`unknown setting ${key}`)
-    d.store.setSetting(key, (SETTINGS_SCHEMA[key] as { parse(v: unknown): unknown }).parse(value) as never)
+    const parsed = (SETTINGS_SCHEMA[key] as { parse(v: unknown): unknown }).parse(value)
+    d.store.setSetting(key, parsed as never)
+    d.onSetting?.(key, parsed)
+  })
+  handle(IPC.notifyTest, () => d.center?.test() ?? { shown: false, reason: 'Notifications are not available.' })
+  handle(IPC.notifyChat, (a) => {
+    // the renderer tells when a reply finished while that agent was not on screen; it never names a target of its own
+    const { profile, title, body } = z.object({ profile: ProfileName, title: z.string().min(1).max(NOTICE_TITLE_MAX), body: z.string().max(NOTICE_BODY_MAX) }).parse(a)
+    d.center?.push({ kind: 'chat', title, body, target: { kind: 'chat', profile } })
   })
 
   handle(IPC.pinsGet, () => {
