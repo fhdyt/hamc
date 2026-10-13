@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult, ModelReadResult, ModelSaveRequest, RestartResult, SaveModelResult, TestModelResult } from './agentCfg'
 import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, SessionDetail, SessionsList, SessionTranscript, UploadsList, VaultCheck } from './events'
-import type { SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
+import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
 import type { SettingsMap } from './settings'
 
 export { IPC } from './channels'
@@ -214,6 +214,8 @@ export interface MissionApi {
     list(args: SessionsListArgs): Promise<QueryResult<SessionsList>>
     search(args: SessionsSearchArgs): Promise<QueryResult<SessionsList>>
     transcript(args: TranscriptArgs): Promise<QueryResult<SessionTranscript>>
+    action(req: { action: SessionAction; profile: string; sessionId: string; title?: string }): Promise<SessionActionResult>
+    export(req: { name: string; ext: ExportExt; content: string }): Promise<ExportResult>
   }
   brain: {
     get(): Promise<{ vault: string | null }>

@@ -73,3 +73,31 @@ describe('sessions over the session', () => {
     expect(snapshotTree(fx.root)).toEqual(before)
   })
 })
+
+describe('session actions over the session', () => {
+  it('pins, unpins and renames through the hermes CLI with each argument separate', async () => {
+    const { session } = await setup()
+    expect(await session.sessionAction({ action: 'pin', profile: 'scout', sessionId: 's-scout-1' })).toEqual({ ok: true })
+    expect(await session.sessionAction({ action: 'unpin', profile: 'default', sessionId: 's-default-1' })).toEqual({ ok: true })
+    expect(await session.sessionAction({ action: 'rename', profile: 'scout', sessionId: 's-scout-1', title: 'a "b"; rm -rf /' })).toEqual({ ok: true })
+    expect(srv.hermes.sessionCalls).toEqual([
+      ['-p', 'scout', 'sessions', 'pin', 's-scout-1'],
+      ['sessions', 'unpin', 's-default-1'],
+      ['-p', 'scout', 'sessions', 'rename', 's-scout-1', 'a "b"; rm -rf /']
+    ])
+  })
+
+  it('refuses bad input before running anything', async () => {
+    const { session } = await setup()
+    expect(await session.sessionAction({ action: 'rename', profile: 'scout', sessionId: 's1', title: '  ' })).toMatchObject({ ok: false, error: 'bad-input' })
+    expect(await session.sessionAction({ action: 'pin', profile: '../x', sessionId: 's1' })).toMatchObject({ ok: false, error: 'bad-input' })
+    expect(await session.sessionAction({ action: 'pin', profile: 'default', sessionId: 'a b' })).toMatchObject({ ok: false, error: 'bad-input' })
+    expect(srv.hermes.sessionCalls).toEqual([])
+  })
+
+  it('reports a CLI failure with its message', async () => {
+    const { session } = await setup()
+    srv.hermes.failOn['sessions'] = 'no such session'
+    expect(await session.sessionAction({ action: 'pin', profile: 'default', sessionId: 'zz' })).toEqual({ ok: false, error: 'failed', detail: 'no such session' })
+  })
+})

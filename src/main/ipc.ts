@@ -4,6 +4,7 @@ import { IPC } from '@shared/channels'
 import { ConnectRequestSchema, HostKeyChallengeSchema, type AppInfo } from '@shared/ipc'
 import { CUSTOM_NAME_RE, CUSTOM_SLUG, EFFORT_RE, FILE_KINDS, MAX_FILE_BYTES, PRESETS, type AgentFileKind } from '@shared/agentCfg'
 import { SETTINGS_SCHEMA, isSettingKey } from '@shared/settings'
+import { EXPORT_MAX_BYTES } from './sessions/export'
 import { isTrustedSender, type AppTarget } from './security'
 import type { MissionSession } from './session'
 import type { SettingsStore } from './store/settingsStore'
@@ -41,6 +42,14 @@ const SessionsListSchema = z.object({
 })
 const SessionsSearchSchema = z.object({ ...SessionFilter, q: z.string().trim().min(1).max(200), limit: z.number().int().min(1).max(200) })
 const TranscriptSchema = z.object({ profile: ProfileName, sessionId: SessionIdArg, afterId: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(200) })
+
+const SessionActionSchema = z.object({
+  action: z.enum(['pin', 'unpin', 'rename']),
+  profile: ProfileName,
+  sessionId: SessionIdArg,
+  title: z.string().max(200).optional()
+})
+const ExportSchema = z.object({ name: z.string().min(1).max(200), ext: z.enum(['jsonl', 'md', 'html']), content: z.string().max(EXPORT_MAX_BYTES) })
 
 const VaultPath = z.string().min(1).max(4096).refine((s) => !s.includes('\u0000'))
 const BrowsePath = z.string().max(4096).refine((s) => !s.includes('\u0000'))
@@ -133,6 +142,8 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.sessionsList, (a) => d.session.sessionsList(SessionsListSchema.parse(a)))
   handle(IPC.sessionsSearch, (a) => d.session.sessionsSearch(SessionsSearchSchema.parse(a)))
   handle(IPC.sessionsTranscript, (a) => d.session.sessionsTranscript(TranscriptSchema.parse(a)))
+  handle(IPC.sessionsAction, (a) => d.session.sessionAction(SessionActionSchema.parse(a)))
+  handle(IPC.sessionsExport, (a) => d.session.sessionExport(ExportSchema.parse(a), d.getWindow()))
   handle(IPC.interactionDetail, (a) => d.session.interactionDetail(InteractionArgs.parse(a)))
   handle(IPC.brainGet, () => d.session.brainGet())
   handle(IPC.brainSetVault, (a) => d.session.brainSetVault(a === null ? null : VaultPath.parse(a)))

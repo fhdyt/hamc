@@ -20,6 +20,8 @@ export const IPC = {
   sessionsList: 'mc:sessions:list',
   sessionsSearch: 'mc:sessions:search',
   sessionsTranscript: 'mc:sessions:transcript',
+  sessionsAction: 'mc:sessions:action',
+  sessionsExport: 'mc:sessions:export',
   brainGet: 'mc:brain:get',
   brainSetVault: 'mc:brain:set-vault',
   brainValidate: 'mc:brain:validate',

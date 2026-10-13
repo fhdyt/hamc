@@ -44,7 +44,9 @@ const api: MissionApi = {
   sessions: {
     list: (args) => ipcRenderer.invoke(IPC.sessionsList, args),
     search: (args) => ipcRenderer.invoke(IPC.sessionsSearch, args),
-    transcript: (args) => ipcRenderer.invoke(IPC.sessionsTranscript, args)
+    transcript: (args) => ipcRenderer.invoke(IPC.sessionsTranscript, args),
+    action: (req) => ipcRenderer.invoke(IPC.sessionsAction, req),
+    export: (req) => ipcRenderer.invoke(IPC.sessionsExport, req)
   },
   brain: {
     get: () => ipcRenderer.invoke(IPC.brainGet),

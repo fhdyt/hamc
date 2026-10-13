@@ -1,13 +1,16 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
 import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, VaultCheck } from '@shared/events'
-import type { SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from '@shared/sessions'
+import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from '@shared/sessions'
+import type { BrowserWindow } from 'electron'
 import type {
   ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, InteractionDetailArgs, QueryResult, SavedConnection
 } from '@shared/ipc'
 import { BrainService } from './brain/service'
 import { AgentFileService } from './agentcfg/files'
 import { ModelService } from './agentcfg/model'
+import { SessionActionService } from './sessions/actions'
+import { saveExport } from './sessions/export'
 import { ChatService } from './chat/service'
 import { UploadService } from './uploads/service'
 import type { AgentFileKind, ModelSaveRequest } from '@shared/agentCfg'
@@ -94,6 +97,7 @@ export class MissionSession {
   private readonly uploads: UploadService
   private readonly agentFiles: AgentFileService
   private readonly agentModel: ModelService
+  private readonly sessionActions: SessionActionService
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -115,6 +119,12 @@ export class MissionSession {
     this.agentModel = new ModelService({
       conn: d.manager,
       hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath, python: this.hermes.python } : null),
+      isConnected: () => d.manager.isConnected(),
+      log: (m) => d.log?.(m)
+    })
+    this.sessionActions = new SessionActionService({
+      conn: d.manager,
+      hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
       isConnected: () => d.manager.isConnected(),
       log: (m) => d.log?.(m)
     })
@@ -477,6 +487,14 @@ export class MissionSession {
 
   sessionsTranscript(args: TranscriptArgs): Promise<QueryResult<SessionTranscript>> {
     return this.queries.run('session_transcript', args, SessionTranscript)
+  }
+
+  sessionAction(req: { action: SessionAction; profile: string; sessionId: string; title?: string }): Promise<SessionActionResult> {
+    return this.sessionActions.run(req.action, req.profile, req.sessionId, req.title)
+  }
+
+  sessionExport(req: { name: string; ext: ExportExt; content: string }, win: BrowserWindow | null): Promise<ExportResult> {
+    return saveExport(req, win)
   }
 
   interactionDetail(args: InteractionDetailArgs): Promise<QueryResult<InteractionDetail>> {

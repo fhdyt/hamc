@@ -12,11 +12,13 @@ export interface FakeHermesState {
   keyVia: ('stdin' | 'argument')[]
   /** Profiles whose gateway was restarted. */
   restarts: string[]
-  /** `config set` of these keys fails with this message. */
+  /** `config set` of these keys fails with this message. The key `sessions` fails `hermes sessions pin|unpin|rename`. */
   failOn: Record<string, string>
+  /** Every `hermes sessions pin|unpin|rename` call, as the arguments after `hermes`. */
+  sessionCalls: string[][]
 }
 
-export const newHermesState = (): FakeHermesState => ({ config: new Map(), env: new Map(), keyVia: [], restarts: [], failOn: {} })
+export const newHermesState = (): FakeHermesState => ({ config: new Map(), env: new Map(), keyVia: [], restarts: [], failOn: {}, sessionCalls: [] })
 
 export interface FakeHermesOptions {
   st: FakeHermesState
@@ -85,6 +87,13 @@ export function runConfigCommands(rest: string[], stream: ServerChannel, o: Fake
   if (tail[0] === 'gateway' && tail[1] === 'restart') {
     o.st.restarts.push(profile)
     reply(stream, `Gateway for ${profile} restarted\n`)
+    return true
+  }
+  if (tail[0] === 'sessions' && ['pin', 'unpin', 'rename'].includes(tail[1] ?? '')) {
+    o.st.sessionCalls.push(rest)
+    const fail = o.st.failOn['sessions']
+    if (fail) reply(stream, '', 1, `${fail}\n`)
+    else reply(stream, `OK ${tail[1]}\n`)
     return true
   }
   if (tail[0] !== 'config') return false
