@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { stepZoomLevel } from '../actions'
+import { togglePalette } from '../paletteActions'
 import { useUi } from '../stores/ui'
 import { routeForShortcut } from './nav'
 
@@ -19,6 +20,11 @@ export function useShortcuts(): void {
         return
       }
       if (route === 'connect' || route === 'launch') return
+      if ((e.key === 'k' || e.key === 'K') && !e.shiftKey) {
+        e.preventDefault()
+        togglePalette()
+        return
+      }
       const target = routeForShortcut(e.key)
       if (target) {
         e.preventDefault()

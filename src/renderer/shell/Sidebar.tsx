@@ -2,6 +2,7 @@ import { Fragment } from 'react'
 import logoUrl from '../assets/logo-mark.png'
 import { saveSetting } from '../actions'
 import { Icon } from '../components/Icon'
+import { openPalette } from '../paletteActions'
 import { useUi } from '../stores/ui'
 import { NAV } from './nav'
 
@@ -44,7 +45,7 @@ export function Sidebar() {
           <Icon name="terminal" size={15} />
           <span className="tl">Terminal</span>
         </button>
-        <button type="button" className="sn" aria-disabled="true" title="Search · coming in a later release" style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+        <button type="button" className="sn" aria-haspopup="dialog" title={`Search · ${mod}+K`} onClick={openPalette}>
           <Icon name="search" size={15} />
           <span className="tl">Search</span>
         </button>

@@ -9,6 +9,7 @@
 @import './agents.css';
 @import './sessions.css';
 @import './usage.css';
+@import './palette.css';
 
 @theme {
   --font-sans: 'JetBrains Mono', ui-monospace, monospace;
