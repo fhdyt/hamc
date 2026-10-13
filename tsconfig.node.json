@@ -33,6 +33,7 @@
     "src/renderer/lib/**/*",
     "src/renderer/stores/**/*",
     "src/renderer/shell/nav.ts",
+    "src/renderer/env.d.ts",
     "tests/**/*.ts",
     "electron.vite.config.ts",
     "vitest.config.ts",
