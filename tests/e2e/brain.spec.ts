@@ -161,6 +161,15 @@ test('clicking a node opens the note with its backlinks and outgoing links', asy
   await expect(preview.getByRole('region', { name: 'Backlinks' })).toContainText('Gamma')
   await expect(preview.getByRole('region', { name: 'Outgoing links' })).toContainText('Beta')
   await expect(preview.locator('.tag', { hasText: '#project/x' })).toBeVisible()
+  // a long note scrolls the panel instead of being squeezed under the link lists
+  const fits = await preview.evaluate((el) => {
+    const md = el.querySelector('.md-note') as HTMLElement
+    md.insertAdjacentHTML('beforeend', '<p>line</p>'.repeat(120))
+    const body = el.querySelector('.bn-body') as HTMLElement
+    const links = el.querySelector('.bn-links') as HTMLElement
+    return { inside: body.scrollHeight <= body.clientHeight + 1, below: links.getBoundingClientRect().top >= md.getBoundingClientRect().bottom, scrolls: el.scrollHeight > el.clientHeight }
+  })
+  expect(fits).toEqual({ inside: true, below: true, scrolls: true })
   // following a wikilink in the text selects the target
   await preview.locator('a.wikilink', { hasText: 'Alpha' }).first().click()
   await expect(preview.getByRole('heading', { name: 'Alpha', level: 2 })).toBeVisible()
