@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { InteractionKind } from './events'
+import { DEFAULT_LOG_LEVELS, LOG_LEVELS, LOG_RANGES, type LogLevel, type LogRange } from './logs'
 
 export interface WindowBounds {
   x?: number
@@ -87,6 +88,12 @@ export interface SettingsMap {
   /** The daily cost alert (F-SHELL-5): on or off, and the USD per local day that all agents together must pass. */
   'alerts.cost.enabled': boolean
   'alerts.cost.usd': number
+  /** Notify when an agent's gateway stops or a platform fails. */
+  'alerts.gateway.enabled': boolean
+  /** Logs screen: levels shown (DEBUG off by default), time range and line wrap. */
+  'logs.levels': LogLevel[]
+  'logs.range': LogRange
+  'logs.wrap': boolean
   'window.bounds': WindowBounds | null
 }
 
@@ -113,6 +120,10 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'filters.range': '7d',
   'alerts.cost.enabled': false,
   'alerts.cost.usd': 10,
+  'alerts.gateway.enabled': true,
+  'logs.levels': DEFAULT_LOG_LEVELS,
+  'logs.range': '24h',
+  'logs.wrap': false,
   'window.bounds': null
 }
 
@@ -155,6 +166,10 @@ export const SETTINGS_SCHEMA = {
   'filters.range': z.enum(['today', '7d', '14d', '30d', 'all']),
   'alerts.cost.enabled': z.boolean(),
   'alerts.cost.usd': z.number().min(0.01).max(100000),
+  'alerts.gateway.enabled': z.boolean(),
+  'logs.levels': z.array(z.enum(LOG_LEVELS)).max(6),
+  'logs.range': z.enum(LOG_RANGES),
+  'logs.wrap': z.boolean(),
   'window.bounds': z
     .object({ x: z.number().optional(), y: z.number().optional(), width: z.number(), height: z.number() })
     .nullable()

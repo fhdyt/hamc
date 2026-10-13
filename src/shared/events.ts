@@ -14,6 +14,20 @@ export const AgentStats = z.object({
 })
 export type AgentStats = z.infer<typeof AgentStats>
 
+export const GatewayPlatform = z.object({ name: z.string(), state: z.string().nullable(), errorCode: z.string().nullable() })
+export type GatewayPlatform = z.infer<typeof GatewayPlatform>
+
+/** From the profile's own gateway_state.json. Unknown fields are ignored by the collector. */
+export const GatewayInfo = z.object({
+  state: z.string().nullable(),
+  pidAlive: z.boolean().nullable(),
+  updatedAgeS: z.number().nullable(),
+  exitReason: z.string().nullable(),
+  restartRequested: z.boolean(),
+  platforms: z.array(GatewayPlatform)
+})
+export type GatewayInfo = z.infer<typeof GatewayInfo>
+
 export const AgentInfo = z.object({
   profile: z.string(),
   displayName: z.string(),
@@ -24,7 +38,10 @@ export const AgentInfo = z.object({
   hasSoul: z.boolean(),
   hasMemory: z.boolean(),
   hasUser: z.boolean(),
-  stats: AgentStats.nullable().optional()
+  stats: AgentStats.nullable().optional(),
+  gateway: GatewayInfo.nullable().optional(),
+  /** ERROR and CRITICAL lines of errors.log in the last hour; null when it cannot be told. */
+  errors1h: z.number().int().nonnegative().nullable().optional()
 })
 export type AgentInfo = z.infer<typeof AgentInfo>
 
@@ -273,6 +290,28 @@ export const CostAlertState = z.object({
   checkedAt: z.number()
 })
 export type CostAlertState = z.infer<typeof CostAlertState>
+
+export const LogFileInfo = z.object({ profile: z.string(), name: z.string(), size: z.number().int().nonnegative(), mtime: z.number().nullable() })
+export type LogFileInfo = z.infer<typeof LogFileInfo>
+
+export const LogsList = z.object({ files: z.array(LogFileInfo), errors: z.array(z.object({ profile: z.string(), code: z.string() })) })
+export type LogsList = z.infer<typeof LogsList>
+
+export const LogsRead = z.object({
+  lines: z.array(z.string()),
+  /** Where the next read continues (the end of the last whole line). */
+  offset: z.number().int().nonnegative(),
+  size: z.number().int().nonnegative(),
+  mtime: z.number().nullable(),
+  /** Where the first returned line begins. */
+  startOffset: z.number().int().nonnegative(),
+  more: z.boolean(),
+  /** The file is shorter than the offset asked for: it was rotated, and these are its last lines. */
+  reset: z.boolean(),
+  /** More than the cap was new, so only the newest part is returned. */
+  skipped: z.boolean()
+})
+export type LogsRead = z.infer<typeof LogsRead>
 
 export const BrainNote = z.object({
   id: z.string(),
