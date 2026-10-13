@@ -1461,6 +1461,103 @@ def q_sessions_list(home, a):
     return {"rows": rows[:limit], "sources": sorted(sources)[:SESSIONS_SOURCES_MAX], "errors": errors, "more": len(rows) > limit, "fallback": None}
 
 
+SEARCH_QUERY_MAX = 200
+
+
+def fts_expression(text):
+    """Every word becomes a quoted FTS5 phrase, so user text can never be FTS syntax."""
+    words = [w for w in text.split() if w]
+    return " ".join('"%s"' % w.replace('"', '""') for w in words[:12])
+
+
+def _like_pattern(text):
+    esc = text.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return "%" + esc + "%"
+
+
+def _has_table(con, name):
+    return con.execute("SELECT 1 FROM sqlite_master WHERE name = ? AND type IN ('table','view')", (name,)).fetchone() is not None
+
+
+def _search_fts(con, scols, source, since, expr, limit):
+    mcols = table_columns(con, "messages")
+    where, params = ["messages_fts MATCH ?"], [expr]
+    if "active" in mcols:
+        where.append("m.active = 1")
+    if since is not None:
+        where.append("s.started_at >= ?")
+        params.append(since)
+    if source is not None and "source" in scols:
+        where.append("s.source = ?")
+        params.append(source)
+    sql = ("SELECT m.session_id AS sid, snippet(messages_fts, -1, char(2), char(3), '...', 14) AS snip FROM messages_fts "
+           "JOIN messages m ON m.id = messages_fts.rowid JOIN sessions s ON s.id = m.session_id "
+           "WHERE %s ORDER BY rank LIMIT ?" % " AND ".join(where))
+    return [(r[0], r[1]) for r in con.execute(sql, params + [limit])]
+
+
+def _search_titles(con, scols, source, since, text, limit):
+    if "title" not in scols:
+        return []
+    where, params = ["s.title LIKE ? ESCAPE '\\'"], [_like_pattern(text)]
+    if since is not None:
+        where.append("s.started_at >= ?")
+        params.append(since)
+    if source is not None and "source" in scols:
+        where.append("s.source = ?")
+        params.append(source)
+    sql = "SELECT s.id FROM sessions s WHERE %s ORDER BY s.started_at DESC LIMIT ?" % " AND ".join(where)
+    return [(r[0], None) for r in con.execute(sql, params + [limit])]
+
+
+def q_sessions_search(home, a):
+    profiles, source, since = _filters(a)
+    text = a.get("q")
+    if not isinstance(text, str) or not text.strip() or len(text) > SEARCH_QUERY_MAX:
+        raise QueryError("bad_args")
+    limit = _limit(a, SESSIONS_SEARCH_MAX, SESSIONS_SEARCH_MAX)
+    expr = fts_expression(text)
+    rows, errors, sources, readable, fallback = [], [], set(), 0, None
+    for name, db in _each_profile(home, profiles):
+        con = None
+        try:
+            con = open_ro(db)
+            scols = table_columns(con, "sessions")
+            if not _has_sessions(scols):
+                errors.append({"profile": name, "code": "unsupported_schema"})
+                continue
+            hits = None
+            if _has_table(con, "messages_fts") and _has_table(con, "messages"):
+                try:
+                    hits = _search_fts(con, scols, source, since, expr, limit)
+                except sqlite3.OperationalError:
+                    hits = None
+            if hits is None:
+                fallback = "title"
+                hits = _search_titles(con, scols, source, since, text, limit)
+            snippets = {}
+            for sid, snip in hits:
+                snippets.setdefault(sid, snip)
+            sids = list(snippets)
+            for i in range(0, len(sids), 200):
+                chunk = sids[i:i + 200]
+                marks = ",".join("?" * len(chunk))
+                got = _dict_rows(con.execute("SELECT %s FROM sessions s WHERE s.id IN (%s)" % (_session_select(scols), marks), chunk))
+                kids = _children_of(con, scols, chunk)
+                rows.extend(_session_row(name, g, g["id"] in kids, snippets.get(g["id"])) for g in got)
+            sources.update(_source_list(con, scols))
+            readable += 1
+        except sqlite3.Error:
+            errors.append({"profile": name, "code": "db_unreadable"})
+        finally:
+            if con is not None:
+                con.close()
+    if errors and readable == 0:
+        raise QueryError(errors[0]["code"])
+    _sort_rows(rows)
+    return {"rows": rows[:limit], "sources": sorted(sources)[:SESSIONS_SOURCES_MAX], "errors": errors, "more": len(rows) > limit, "fallback": fallback}
+
+
 # ---- chat ----------------------------------------------------------------
 
 CHAT_SOURCE = "mission-control"
@@ -2037,7 +2134,7 @@ def run_query(home, cmd, raw):
         "message": q_message, "history": q_history, "session": q_session,
         "vault_check": q_vault_check, "browse": q_browse, "note": q_note,
         "chat_sessions": q_chat_sessions, "uploads_list": q_uploads_list, "interaction": q_interaction,
-        "sessions_list": q_sessions_list,
+        "sessions_list": q_sessions_list, "sessions_search": q_sessions_search,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}

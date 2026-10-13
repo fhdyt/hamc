@@ -116,3 +116,45 @@ def test_list_bad_args(fx):
     assert q(fx, "sessions_list", {"profiles": [], "limit": 0})["error"] == "bad_args"
     assert q(fx, "sessions_list", {"profiles": [], "limit": 5, "sinceTs": "x"})["error"] == "bad_args"
     assert q(fx, "sessions_list", {"profiles": [], "limit": 5, "before": {"ts": 1, "id": "a b"}})["error"] == "bad_args"
+
+
+# ---- search ---------------------------------------------------------------
+
+def test_search_finds_sessions_by_message_text_with_marked_snippet(fx):
+    r = q(fx, "sessions_search", {"profiles": [], "q": "digest"})
+    assert r["ok"] is True and ids(r) == ["s-scout-1"]
+    assert "\x02digest\x03" in r["data"]["rows"][0]["snippet"].lower()
+    assert r["data"]["fallback"] is None
+
+
+def test_search_respects_filters(fx):
+    assert ids(q(fx, "sessions_search", {"profiles": ["default"], "q": "digest"})) == []
+    assert ids(q(fx, "sessions_search", {"profiles": [], "q": "hello", "source": "telegram"})) == ["s-default-1"]
+    assert ids(q(fx, "sessions_search", {"profiles": [], "q": "hello", "sinceTs": fx.now - 100})) == []
+
+
+def test_search_ignores_inactive_messages(fx):
+    mf.add_message(fx.home / "state.db", "s-default-1", "assistant", "zebra stripes", fx.now - 1, active=0)
+    sql(fx, "default", "INSERT INTO messages_fts(rowid, content) SELECT id, content FROM messages WHERE content = 'zebra stripes'")
+    assert ids(q(fx, "sessions_search", {"profiles": [], "q": "zebra"})) == []
+
+
+def test_search_text_is_never_sql_or_fts_syntax(fx):
+    for hostile in ['" OR 1=1 --', "digest AND (", "NEAR(", "*", "a'b", "\\"]:
+        r = q(fx, "sessions_search", {"profiles": [], "q": hostile})
+        assert r["ok"] is True, hostile
+
+
+def test_search_falls_back_to_titles_without_the_index(fx):
+    sql(fx, "default", "DROP TABLE messages_fts")
+    sql(fx, "scout", "DROP TABLE messages_fts")
+    r = q(fx, "sessions_search", {"profiles": [], "q": "briefing"})
+    assert ids(r) == ["s-default-1"] and r["data"]["fallback"] == "title"
+    assert r["data"]["rows"][0]["snippet"] is None
+    assert ids(q(fx, "sessions_search", {"profiles": [], "q": "100%"})) == []
+
+
+def test_search_bad_args(fx):
+    assert q(fx, "sessions_search", {"profiles": [], "q": ""})["error"] == "bad_args"
+    assert q(fx, "sessions_search", {"profiles": [], "q": "x" * 201})["error"] == "bad_args"
+    assert q(fx, "sessions_search", {"profiles": [], "q": 5})["error"] == "bad_args"
