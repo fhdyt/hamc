@@ -1,7 +1,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { join } from 'node:path'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
-import { addLogs, appendLog, buildFixture, setGateway, snapshotTree, type FixtureDirs } from '../helpers/fixture'
+import { addLogs, appendLog, buildFixture, setGateway, type FixtureDirs } from '../helpers/fixture'
 import { connectFresh, launchApp, resizeWindow, tmp } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
@@ -11,12 +11,10 @@ let fx: FixtureDirs
 const userData = tmp('mc-e2e-logs-ud-')
 let app: ElectronApplication
 let page: Page
-let treeBefore: ReturnType<typeof snapshotTree>
 
 test.beforeAll(async () => {
   fx = buildFixture(join(tmp('mc-e2e-logs-fx-'), 'fx'))
   addLogs(fx.root)
-  treeBefore = snapshotTree(fx.root)
   srv = await startFakeSsh({ fixture: fx })
 })
 test.afterAll(async () => {
@@ -207,6 +205,23 @@ test('a gateway problem is a GATEWAY row in the Dashboard alerts, and the Settin
   await expect(activity().getByRole('listitem', { name: /^GATEWAY:/ })).toHaveCount(0, { timeout: 30_000 })
 })
 
-// The closing checks are added in the last task.
-void resizeWindow
-void treeBefore
+test('on a narrow window the Logs screen does not scroll sideways', async () => {
+  await resizeWindow(app, 800, 700)
+  await mainNav().getByRole('button', { name: /^Logs/ }).click()
+  await page.getByRole('tab', { name: 'Logs' }).click()
+  await expect(rows().first()).toBeVisible({ timeout: 15_000 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
+  await page.getByRole('tab', { name: 'Gateway' }).click()
+  await expect(gwCard('default')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0)
+  await resizeWindow(app, 1280, 800)
+})
+
+test('reading logs, gateways and approvals only ever ran read-only commands, apart from the confirmed gateway actions', async () => {
+  const verbs = new Set(srv.execLog.map((a) => a[0]))
+  for (const bad of ['rm', 'mv', 'cp', 'touch', 'mkdir', 'tee', 'sudo', 'chmod', 'curl', 'wget', 'tar', 'sed', 'cat', 'tail']) expect(verbs.has(bad)).toBe(false)
+  const hermes = srv.execLog.filter((a) => a[0]?.endsWith('/hermes'))
+  const writes = hermes.filter((a) => a.includes('gateway')).map((a) => a.slice(a.indexOf('gateway')).join(' '))
+  // one restart, and the stop twice: the first attempt was made to fail on purpose
+  expect(writes.sort()).toEqual(['gateway restart', 'gateway stop', 'gateway stop'])
+})
