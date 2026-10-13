@@ -9,6 +9,7 @@ import { useCostAlert } from './stores/costAlert'
 import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
 import { useInteractions } from './stores/interactions'
+import { useLogs } from './stores/logs'
 import { useMetrics } from './stores/metrics'
 import { useUi } from './stores/ui'
 
@@ -50,6 +51,12 @@ export async function bootstrap(): Promise<void> {
   mc.onCapabilities((capabilities) => useConn.setState({ capabilities }))
   mc.onModels((models) => useAgents.getState().setModels(models))
   mc.onCostAlert((state) => useCostAlert.getState().apply(state))
+  mc.onOpenLogs((tab) => {
+    const route = useUi.getState().route
+    if (route === 'connect' || route === 'launch') return
+    useLogs.getState().setTab(tab)
+    useUi.getState().navigate('logs')
+  })
   mc.onOpenUsage(() => {
     const route = useUi.getState().route
     if (route !== 'connect' && route !== 'launch') useUi.getState().navigate('usage')

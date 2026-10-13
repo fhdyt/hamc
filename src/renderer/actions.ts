@@ -13,6 +13,7 @@ import { useFeed } from './stores/feed'
 import { useInteractions } from './stores/interactions'
 import { useMetrics } from './stores/metrics'
 import { useCostAlert } from './stores/costAlert'
+import { useLogs } from './stores/logs'
 import { usePalette } from './stores/palette'
 import { useSessions } from './stores/sessions'
 import { useUnread } from './stores/unread'
@@ -31,6 +32,7 @@ export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
     useSessions.getState().reset()
     useUsage.getState().reset()
     usePalette.getState().reset()
+    useLogs.getState().reset()
     useUnread.getState().reset()
     useCostAlert.getState().reset()
   }
@@ -67,6 +69,7 @@ export async function forgetConnection(): Promise<void> {
   useSessions.getState().reset()
   useUsage.getState().reset()
   usePalette.getState().reset()
+  useLogs.getState().reset()
   useUnread.getState().reset()
   useCostAlert.getState().reset()
   useBrain.getState().reset()
