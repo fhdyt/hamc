@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { AgentFileKind } from '@shared/agentCfg'
 import { anyDirty, draftKey, emptyDraft, isDirty, type Draft } from '../lib/agentCfg'
 
-export type AgentTab = 'model' | AgentFileKind
+export type AgentTab = 'model' | AgentFileKind | 'mcp' | 'toolsets' | 'fallback' | 'backup'
 
 interface AgentCfgState {
   /** The agent whose settings are open. */

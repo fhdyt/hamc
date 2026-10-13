@@ -21,6 +21,7 @@ import { useUnread } from './stores/unread'
 import { useUsage } from './stores/usage'
 import { useSkills } from './stores/skills'
 import { useMemoryTimeline } from './stores/memoryTimeline'
+import { useAgentOps } from './stores/agentOps'
 import { useUi } from './stores/ui'
 
 export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
@@ -39,6 +40,7 @@ export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
     useKanban.getState().reset()
     useSkills.getState().reset()
     useMemoryTimeline.getState().reset()
+    useAgentOps.getState().reset()
     useUnread.getState().reset()
     useCostAlert.getState().reset()
   }

@@ -6,12 +6,20 @@ import { useAgents } from '../../stores/agents'
 import { unsavedKinds, useAgentCfg, type AgentTab } from '../../stores/agentCfg'
 import { FileEditor } from './FileEditor'
 import { ModelTab } from './ModelTab'
+import { NewProfileDialog } from './NewProfile'
+import { BackupTab, FallbackTab, McpTab, ToolsetsTab } from './OpsTabs'
+import { Icon } from '../../components/Icon'
+import { useAgentOps } from '../../stores/agentOps'
 
 const TABS: { id: AgentTab; label: string }[] = [
   { id: 'model', label: 'Model' },
   { id: 'soul', label: FILE_LABEL.soul },
   { id: 'memory', label: 'Memory' },
-  { id: 'user', label: 'User profile' }
+  { id: 'user', label: 'User profile' },
+  { id: 'mcp', label: 'MCP' },
+  { id: 'toolsets', label: 'Toolsets' },
+  { id: 'fallback', label: 'Fallback' },
+  { id: 'backup', label: 'Backup' }
 ]
 
 /** Settings → Agents: the agent list on the left, the tabs Model, Soul, Memory and User profile on the right (PRD 6.8). */
@@ -54,7 +62,12 @@ export function AgentsSettings() {
             <span className="nm">{a.displayName}</span>
           </button>
         ))}
+        <button type="button" className="ag-item ag-new" onClick={() => useAgentOps.getState().set({ newProfile: { ...useAgentOps.getState().newProfile, open: true, result: null } })}>
+          <Icon name="plus" size={14} />
+          <span className="nm">New profile</span>
+        </button>
       </div>
+      <NewProfileDialog />
       <div className="ag-main">
         {current && (
           <>
@@ -67,7 +80,19 @@ export function AgentsSettings() {
               ))}
             </div>
             <div role="tabpanel" id="agpanel" aria-labelledby={`agtab-${tab}`} key={`${current.profile}:${tab}`}>
-              {tab === 'model' ? <ModelTab profile={current.profile} /> : <FileEditor profile={current.profile} kind={tab} />}
+              {tab === 'model' ? (
+                <ModelTab profile={current.profile} />
+              ) : tab === 'mcp' ? (
+                <McpTab profile={current.profile} />
+              ) : tab === 'toolsets' ? (
+                <ToolsetsTab profile={current.profile} />
+              ) : tab === 'fallback' ? (
+                <FallbackTab profile={current.profile} />
+              ) : tab === 'backup' ? (
+                <BackupTab profile={current.profile} />
+              ) : (
+                <FileEditor profile={current.profile} kind={tab} />
+              )}
             </div>
           </>
         )}
