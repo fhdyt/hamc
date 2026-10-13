@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Server, utils, type Connection, type ServerChannel } from 'ssh2'
 import { pythonExe, type FixtureDirs } from './fixture'
@@ -208,6 +208,25 @@ function runChat(argv: string[], stream: ServerChannel, o: Resolved): void {
   stream.on('close', () => child.kill())
 }
 
+/** `hermes [-p P] cron ...`: recorded, then done for real on the fixture by fake_hermes_cron.py. */
+function runCron(argv: string[], stream: ServerChannel, o: Resolved): void {
+  o.st.cronCalls.push(argv.slice(1))
+  const fail = o.st.failOn['cron']
+  if (fail) return reply(stream, '', 1, `${fail}\n`)
+  const child = spawn(pythonExe, [resolve('tests/fixtures/fake_hermes_cron.py'), ...argv.slice(1)], {
+    env: { ...process.env, MC_FAKE_HOME: o.fixture.home, PYTHONIOENCODING: 'utf-8' },
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  child.stdout.pipe(stream, { end: false })
+  child.stderr.on('data', (d: Buffer) => stream.stderr.write(d))
+  child.on('close', (code) => {
+    if (!stream.writable) return
+    stream.exit(code ?? 0)
+    stream.end()
+  })
+  stream.on('close', () => child.kill())
+}
+
 /** A signal request (Stop) ends the fake chat the way Hermes does: a result with exit code 130. */
 function interruptChat(stream: ServerChannel): void {
   const child = chats.get(stream)
@@ -232,14 +251,6 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
     if (script.includes('profiles')) return reply(stream, String(countProfiles(o.fixture.home)))
   }
   if (cmd === 'test' && rest[0] === '-d') return reply(stream, '', o.hasHome && rest[1] === o.remoteHome ? 0 : 1)
-  if (cmd === 'head' && rest[0] === '-c') {
-    const remote = rest[2] ?? ''
-    const root = o.remoteHome.replace(/\/+$/, '')
-    if (!remote.startsWith(root + '/')) return reply(stream, '', 1, 'No such file\n')
-    const local = join(o.fixture.home, ...remote.slice(root.length + 1).split('/'))
-    if (!existsSync(local) || !statSync(local).isFile()) return reply(stream, '', 1, 'No such file\n')
-    return reply(stream, readFileSync(local).subarray(0, Number(rest[1])).toString('utf8'))
-  }
   if (cmd === 'head') return reply(stream, `#!${o.pythonPath}\n`)
   if (cmd === o.hermesPath) {
     if (rest.includes('acp')) {
@@ -254,6 +265,7 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
       const key = rest.slice(0, -1).join(' ')
       return o.capabilities?.[key] === false ? reply(stream, '', 2, 'unknown command\n') : reply(stream, 'usage\n')
     }
+    if ((rest[0] === 'cron' || rest[2] === 'cron') && rest[rest.length - 1] !== '--help') return runCron(argv, stream, o)
     if (runConfigCommands(rest, stream, o)) return
   }
   if (cmd === o.pythonPath || cmd === 'python3') {

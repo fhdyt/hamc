@@ -104,6 +104,22 @@ export type ErrorData = z.infer<typeof ErrorData>
 export const CronState = z.enum(['scheduled', 'paused', 'running', 'completed'])
 export type CronState = z.infer<typeof CronState>
 
+/** A failure incident of the Hermes cron ledger (`cron_incidents` in cron/executions.db). */
+export const CronIncident = z.object({
+  id: z.string(),
+  /** detected, alerted (a failure ping reached the operator), resolved (a later run was good) or closed (acknowledged). */
+  state: z.string(),
+  failureType: z.string(),
+  firstSeenTs: z.number().nullable(),
+  lastSeenTs: z.number().nullable(),
+  ackedTs: z.number().nullable(),
+  closedTs: z.number().nullable(),
+  error: z.string(),
+  /** File name of the output of the failed run, when Hermes kept one. */
+  output: z.string().nullable()
+})
+export type CronIncident = z.infer<typeof CronIncident>
+
 export const CronJob = z.object({
   profile: z.string(),
   id: z.string(),
@@ -124,7 +140,11 @@ export const CronJob = z.object({
   skills: z.array(z.string()),
   repeat: z.object({ times: z.number().int().nullable(), completed: z.number().int() }),
   prompt: z.string(),
-  lastOutput: z.object({ rel: z.string(), mtime: z.number() }).nullable()
+  lastOutput: z.object({ rel: z.string(), mtime: z.number() }).nullable(),
+  /** The newest attempt in the ledger is still claimed or running. */
+  inflight: z.boolean().default(false),
+  /** The newest open (detected or alerted) incident of this job. */
+  incident: CronIncident.nullable().default(null)
 })
 export type CronJob = z.infer<typeof CronJob>
 
@@ -133,6 +153,40 @@ export const CronData = z.object({
   profiles: z.array(z.object({ profile: z.string(), ok: z.boolean(), error: z.string().nullable() }))
 })
 export type CronData = z.infer<typeof CronData>
+
+export const CronRun = z.object({
+  id: z.string(),
+  /** claimed, running, completed, failed or unknown (Hermes could not prove the outcome). */
+  status: z.string(),
+  source: z.string().nullable(),
+  trigger: z.enum(['scheduled', 'manual']).nullable(),
+  claimedTs: z.number().nullable(),
+  startedTs: z.number().nullable(),
+  finishedTs: z.number().nullable(),
+  error: z.string().nullable(),
+  delivery: z.string().nullable(),
+  /** Name of the output file written by this run (from `outputs`). */
+  output: z.string().nullable()
+})
+export type CronRun = z.infer<typeof CronRun>
+
+export const CronRuns = z.object({
+  ledger: z.enum(['ok', 'absent', 'unreadable']),
+  runs: z.array(CronRun),
+  incidents: z.array(CronIncident),
+  outputs: z.array(z.object({ name: z.string(), mtime: z.number(), size: z.number() }))
+})
+export type CronRuns = z.infer<typeof CronRuns>
+
+export const CronOutputFiles = z.object({
+  files: z.array(
+    z.union([
+      z.object({ name: z.string(), text: z.string(), truncated: z.boolean(), mtime: z.number(), size: z.number() }),
+      z.object({ name: z.string(), error: z.string() })
+    ])
+  )
+})
+export type CronOutputFiles = z.infer<typeof CronOutputFiles>
 
 export const FeedKind = z.enum(['user', 'thinking', 'tool', 'result', 'reply'])
 export type FeedKind = z.infer<typeof FeedKind>

@@ -2,7 +2,8 @@ import { z } from 'zod'
 import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult, ModelReadResult, ModelSaveRequest, RestartResult, SaveModelResult, TestModelResult } from './agentCfg'
 import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, SessionDetail, SessionsList, SessionTranscript, UploadsList, VaultCheck } from './events'
 import type { KanbanTaskArgs, KanbanTasksArgs } from './kanban'
-import type { CostAlertState, KanbanBoards, KanbanTaskDetail, KanbanTasks, LogsList, LogsRead, UsageSummary, UsageTools } from './events'
+import type { CronActionRequest, CronActionResult } from './cron'
+import type { CostAlertState, CronOutputFiles, CronRuns, KanbanBoards, KanbanTaskDetail, KanbanTasks, LogsList, LogsRead, UsageSummary, UsageTools } from './events'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from './logs'
 import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
@@ -110,10 +111,6 @@ export interface AppInfo {
   platform: string
 }
 
-export type CronOutputResult =
-  | { ok: true; text: string; truncated: boolean; name: string; mtime: number }
-  | { ok: false; reason: 'no-output' | 'not-found' | 'unreadable' | 'not-connected' }
-
 /** What the renderer may ask about one edge or node of the agent graph; the main process checks it again. */
 export type InteractionDetailArgs =
   | { kind: 'message'; from: string; to: string }
@@ -203,7 +200,12 @@ export interface MissionApi {
     info(): Promise<AppInfo>
   }
   cron: {
-    output(profile: string, jobId: string): Promise<CronOutputResult>
+    /** One write through `hermes cron` after the user confirmed it; a fresh `cron` event follows. */
+    action(req: CronActionRequest): Promise<CronActionResult>
+    /** The newest attempts of a job from the Hermes run ledger, its output files and its incidents. */
+    runs(args: { profile: string; jobId: string; limit: number }): Promise<QueryResult<CronRuns>>
+    /** One or two output files of a job, by the names `runs` listed. */
+    output(args: { profile: string; jobId: string; names: string[] }): Promise<QueryResult<CronOutputFiles>>
   }
   interactions: {
     detail(args: InteractionDetailArgs): Promise<QueryResult<InteractionDetail>>

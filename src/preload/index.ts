@@ -31,7 +31,9 @@ const api: MissionApi = {
     info: () => ipcRenderer.invoke(IPC.appInfo)
   },
   cron: {
-    output: (profile, jobId) => ipcRenderer.invoke(IPC.cronOutput, { profile, jobId })
+    action: (req) => ipcRenderer.invoke(IPC.cronAction, req),
+    runs: (args) => ipcRenderer.invoke(IPC.cronRuns, args),
+    output: (args) => ipcRenderer.invoke(IPC.cronRunOutput, args)
   },
   feed: {
     message: (profile, messageId, field, index) => ipcRenderer.invoke(IPC.feedMessage, { profile, messageId, field, index }),

@@ -1,6 +1,6 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
-import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, LogsList, LogsRead, KanbanBoards, KanbanTasks, KanbanTaskDetail, VaultCheck } from '@shared/events'
+import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, LogsList, LogsRead, KanbanBoards, KanbanTasks, KanbanTaskDetail, VaultCheck, CronData, CronRuns, CronOutputFiles } from '@shared/events'
 import type { CostAlertState } from '@shared/events'
 import type { KanbanTaskArgs, KanbanTasksArgs } from '@shared/kanban'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from '@shared/logs'
@@ -8,7 +8,7 @@ import type { UsageSummaryArgs, UsageToolsArgs } from '@shared/usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from '@shared/sessions'
 import type { BrowserWindow } from 'electron'
 import type {
-  ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, InteractionDetailArgs, QueryResult, SavedConnection
+  ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, HostKeyChallenge, InteractionDetailArgs, QueryResult, SavedConnection
 } from '@shared/ipc'
 import { BrainService } from './brain/service'
 import { AgentFileService } from './agentcfg/files'
@@ -26,7 +26,8 @@ import { FeedCursors } from './feed/cursors'
 import { QueryRunner } from './query'
 import { CollectorChannel } from './collector/channel'
 import { ModelResolver } from './collector/models'
-import { readCronOutput } from './cron/output'
+import { CronActionService } from './cron/actions'
+import type { CronActionRequest, CronActionResult } from '@shared/cron'
 import { CronStore } from './cron/store'
 import { CronWatcher, type CronAlert } from './cron/watcher'
 import { backoffDelay } from './connection/backoff'
@@ -114,6 +115,7 @@ export class MissionSession {
   private readonly gatewayWatcher = new GatewayWatcher()
   private readonly gateways: GatewayService
   private readonly approvals: ApprovalsService
+  private readonly cronActions: CronActionService
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -148,6 +150,13 @@ export class MissionSession {
       conn: d.manager,
       hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
       isConnected: () => d.manager.isConnected(),
+      log: (m) => d.log?.(m)
+    })
+    this.cronActions = new CronActionService({
+      conn: d.manager,
+      hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
+      isConnected: () => d.manager.isConnected(),
+      store: this.cronStore,
       log: (m) => d.log?.(m)
     })
     this.approvals = new ApprovalsService({
@@ -383,10 +392,7 @@ export class MissionSession {
         if (this.d.store.getSetting('alerts.gateway.enabled')) for (const alert of gateway) this.d.notifyGateway?.(alert)
       }
       if (ev.type === 'feed') this.feedCursors.apply(ev.data.cursors)
-      if (ev.type === 'cron') {
-        this.cronStore.apply(ev.data.jobs)
-        for (const alert of this.cronWatcher.ingest(ev.data.jobs)) this.d.notify?.(alert)
-      }
+      if (ev.type === 'cron') this.applyCron(ev.data)
     })
     ch.on('closed', () => {
       if (this.collector !== ch) return
@@ -493,6 +499,7 @@ export class MissionSession {
     this.pending = null
     this.costAlert.reset()
     this.gatewayWatcher.reset()
+    this.cronActions.clear()
     await this.teardown()
     this.everConnected = false
     this.setStatus({ ...IDLE })
@@ -696,9 +703,31 @@ export class MissionSession {
     return this.queries.run('note', { root, id }, NoteText)
   }
 
-  async cronOutput(profile: string, jobId: string): Promise<CronOutputResult> {
-    const h = this.hermes
-    if (!h || !this.d.manager.isConnected()) return { ok: false, reason: 'not-connected' }
-    return readCronOutput(this.d.manager, h.home, this.cronStore, profile, jobId)
+  private applyCron(data: CronData): void {
+    this.cronStore.apply(data.jobs)
+    for (const alert of this.cronWatcher.ingest(data.jobs)) this.d.notify?.(alert)
+  }
+
+  /** One cron write after the user confirmed it, then a fresh snapshot so counts and states follow at once (F-CRON-12). */
+  async cronAction(req: CronActionRequest): Promise<CronActionResult> {
+    const res = await this.cronActions.run(req)
+    if (res.ok || res.error === 'failed') await this.refreshCron()
+    return res
+  }
+
+  /** Reads the cron jobs now (the collector polls every 10 s) and hands them on like a collector event. */
+  async refreshCron(): Promise<void> {
+    const res = await this.queries.run('cron_jobs', {}, CronData)
+    if (!res.ok) return
+    this.applyCron(res.data)
+    this.d.send(IPC.evEvent, { type: 'cron', ts: Date.now() / 1000, profile: null, data: res.data } satisfies CollectorEvent)
+  }
+
+  cronRuns(args: { profile: string; jobId: string; limit: number }): Promise<QueryResult<CronRuns>> {
+    return this.queries.run('cron_runs', args, CronRuns)
+  }
+
+  cronRunOutput(args: { profile: string; jobId: string; names: string[] }): Promise<QueryResult<CronOutputFiles>> {
+    return this.queries.run('cron_output', args, CronOutputFiles)
   }
 }

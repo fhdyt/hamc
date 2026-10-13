@@ -1,18 +1,9 @@
 import type { CronJob } from '@shared/events'
 import { Icon } from '../../components/Icon'
-import { useCronOutput } from '../../hooks/useCronOutput'
 import { agentColor } from '../../lib/agentColor'
 import { agentLabel, formatLocal, formatOffset, stateColor, stateLabel, statusColor, statusLabel } from '../../lib/cron'
 
-const OUTPUT_MESSAGES = {
-  'no-output': 'This job has not produced any output yet.',
-  'not-found': 'This job is no longer reported by the server.',
-  unreadable: 'The output file could not be read.',
-  'not-connected': 'Reconnect to read the output.'
-} as const
-
 export function CronDetail({ job, names }: { job: CronJob | null; names: Record<string, string> }) {
-  const output = useCronOutput(job)
   if (!job) {
     return (
       <aside className="cron-card" aria-label="Job detail" style={{ flex: '1 1 300px', minWidth: 0 }}>
@@ -78,18 +69,6 @@ export function CronDetail({ job, names }: { job: CronJob | null; names: Record<
         </>
       )}
 
-      <span style={{ color: '#A9B2D3' }}>
-        Last output{job.lastOutput ? ` · ${job.lastOutput.rel.split('/').pop()}` : ''}
-      </span>
-      {output.status === 'loading' && <div role="status" style={{ color: '#8B95BD' }}>Loading output…</div>}
-      {output.status === 'idle' && <div style={{ color: '#8B95BD' }}>{OUTPUT_MESSAGES['no-output']}</div>}
-      {output.status === 'done' && !output.result.ok && <div role="status" style={{ color: '#FFB86C' }}>{OUTPUT_MESSAGES[output.result.reason]}</div>}
-      {output.status === 'done' && output.result.ok && (
-        <>
-          <pre className="cron-pre cron-out" aria-label="Last output">{output.result.text || '(empty file)'}</pre>
-          {output.result.truncated && <span style={{ color: '#8B95BD' }}>Output truncated to the first 64 KiB.</span>}
-        </>
-      )}
     </aside>
   )
 }

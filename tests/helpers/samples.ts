@@ -45,6 +45,8 @@ export function sampleJob(over: Partial<CronJob> = {}): CronJob {
     repeat: { times: null, completed: 39 },
     prompt: 'do the thing',
     lastOutput: { rel: '09358c101c91/2026-10-10_23-00-25.md', mtime: 1_791_648_025 },
+    inflight: false,
+    incident: null,
     ...over
   }
 }

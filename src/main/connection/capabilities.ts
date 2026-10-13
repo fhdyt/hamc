@@ -4,6 +4,7 @@ import { probeCmd, runSafe } from './remote'
 
 export const PROBES: { id: string; sub: string[] }[] = [
   { id: 'cron runs', sub: ['cron', 'runs'] },
+  { id: 'cron incidents', sub: ['cron', 'incidents'] },
   { id: 'curator status', sub: ['curator', 'status'] },
   { id: 'sessions list', sub: ['sessions', 'list'] },
   { id: 'tools --summary', sub: ['tools'] },

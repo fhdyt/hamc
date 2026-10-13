@@ -6,6 +6,7 @@ import { CUSTOM_NAME_RE, CUSTOM_SLUG, EFFORT_RE, FILE_KINDS, MAX_FILE_BYTES, PRE
 import { SETTINGS_SCHEMA, isSettingKey } from '@shared/settings'
 import { LOG_FILES } from '@shared/logs'
 import { BOARD_RE, TASK_ID_RE } from '@shared/kanban'
+import { CRON_ACTIONS, INCIDENT_ID_RE, JOB_ID_RE, SCHEDULE_MAX } from '@shared/cron'
 import { EXPORT_MAX_BYTES } from './sessions/export'
 import { isTrustedSender, type AppTarget } from './security'
 import type { MissionSession } from './session'
@@ -124,7 +125,16 @@ export interface IpcDeps {
 const SetSetting = z.object({ key: z.string(), value: z.unknown() })
 const Pins = z.array(z.string().max(128)).max(500)
 const Zoom = z.number().min(0.7).max(1.5)
-const CronOutputArgs = z.object({ profile: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/), jobId: z.string().regex(/^[A-Za-z0-9._-]{1,128}$/) })
+const JobId = z.string().regex(JOB_ID_RE).refine((s) => s !== '.' && s !== '..')
+const CronActionSchema = z.object({
+  action: z.enum(CRON_ACTIONS),
+  profile: ProfileName,
+  jobId: JobId,
+  schedule: z.string().max(SCHEDULE_MAX).optional(),
+  incidentId: z.string().regex(INCIDENT_ID_RE).optional()
+})
+const CronRunsSchema = z.object({ profile: ProfileName, jobId: JobId, limit: z.number().int().min(1).max(20) })
+const CronOutputSchema = z.object({ profile: ProfileName, jobId: JobId, names: z.array(z.string().min(1).max(300)).min(1).max(2) })
 
 export function registerIpc(d: IpcDeps): void {
   const handle = (channel: string, fn: (arg: unknown) => unknown): void => {
@@ -161,10 +171,9 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.setZoom, (a) => {
     d.getWindow()?.webContents.setZoomFactor(Zoom.parse(a))
   })
-  handle(IPC.cronOutput, (a) => {
-    const { profile, jobId } = CronOutputArgs.parse(a)
-    return d.session.cronOutput(profile, jobId)
-  })
+  handle(IPC.cronAction, (a) => d.session.cronAction(CronActionSchema.parse(a)))
+  handle(IPC.cronRuns, (a) => d.session.cronRuns(CronRunsSchema.parse(a)))
+  handle(IPC.cronRunOutput, (a) => d.session.cronRunOutput(CronOutputSchema.parse(a)))
   handle(IPC.feedMessage, (a) => d.session.feedMessage(FeedMessageArgs.parse(a)))
   handle(IPC.feedHistory, (a) => d.session.feedHistory(FeedHistoryArgs.parse(a)))
   handle(IPC.feedSession, (a) => d.session.feedSession(FeedSessionArgs.parse(a)))

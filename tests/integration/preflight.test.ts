@@ -93,7 +93,7 @@ describe('probeCapabilities', () => {
     expect(caps.supported['cron runs']).toBe(false)
     expect(caps.supported['mcp list']).toBe(true)
     expect(Object.keys(caps.supported).sort()).toEqual(
-      ['approvals suggest', 'cron runs', 'curator status', 'fallback list', 'mcp list', 'sessions list', 'tools --summary'].sort()
+      ['approvals suggest', 'cron incidents', 'cron runs', 'curator status', 'fallback list', 'mcp list', 'sessions list', 'tools --summary'].sort()
     )
   })
 
