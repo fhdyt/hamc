@@ -183,7 +183,7 @@ def make_db(path: Path, messages=(), sessions=(), wal: bool = False) -> sqlite3.
     con.execute(
         "CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, parent_session_id TEXT, model TEXT, title TEXT, started_at REAL, ended_at REAL, "
         "message_count INTEGER, tool_call_count INTEGER, input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, "
-        "estimated_cost_usd REAL, actual_cost_usd REAL, cache_read_tokens INTEGER, end_reason TEXT, cost_status TEXT, pinned INTEGER DEFAULT 0)"
+        "estimated_cost_usd REAL, actual_cost_usd REAL, cache_read_tokens INTEGER, end_reason TEXT, cost_status TEXT, pinned INTEGER DEFAULT 0, billing_provider TEXT, api_call_count INTEGER)"
     )
     for ts, active in messages:
         con.execute("INSERT INTO messages (role, content, timestamp, active) VALUES ('user', 'x', ?, ?)", (ts, active))
@@ -213,6 +213,37 @@ def add_fts(db: Path) -> None:
     con.execute("INSERT INTO messages_fts(rowid, content) SELECT id, content FROM messages WHERE content IS NOT NULL")
     con.commit()
     con.close()
+
+
+def add_usage_data(fx, base: float) -> None:
+    """Sessions on four irregular days starting at `base`, with models, providers and costs, in two profiles."""
+    d, sd = fx.home / "state.db", fx.home / "profiles" / "scout" / "state.db"
+    add_session(d, "u1", "cli", base + 100, model="m-a", estimated_cost_usd=1.0, input_tokens=100, output_tokens=10, cache_read_tokens=5, billing_provider="prov-a", api_call_count=3)
+    add_session(d, "u2", "cli", base + 200, model="m-a", actual_cost_usd=2.0, estimated_cost_usd=9.0, input_tokens=200, output_tokens=20, billing_provider="prov-a", api_call_count=4)
+    add_session(d, "u3", "cli", base + 90000, model="m-b", estimated_cost_usd=0.5, input_tokens=50, output_tokens=5, billing_provider="prov-b")
+    add_session(sd, "u4", "cron", base + 90100, model="m-a", actual_cost_usd=4.0, input_tokens=400, output_tokens=40, billing_provider="prov-a", api_call_count=2)
+    add_session(sd, "u5", "cron", base + 200000, model="m-a", estimated_cost_usd=3.0, cost_status="weird", input_tokens=30, output_tokens=3, billing_provider="prov-a")
+
+
+def add_tool_data(fx, base: float) -> None:
+    """A session with tool calls in the default profile and one in scout; results follow their calls by a few seconds."""
+    d, sd = fx.home / "state.db", fx.home / "profiles" / "scout" / "state.db"
+
+    def call(db, sid, name, ts):
+        add_message(db, sid, "assistant", None, ts, tool_calls=[{"id": "c", "type": "function", "function": {"name": name, "arguments": "{}"}}])
+
+    add_session(d, "t1", "cli", base)
+    add_message(d, "t1", "user", "go", base + 1)
+    call(d, "t1", "web_search", base + 10)
+    add_message(d, "t1", "tool", "3 results", base + 12, tool_name="web_search")
+    call(d, "t1", "web_search", base + 20)
+    add_message(d, "t1", "tool", "Error: rate limited (429)", base + 25, tool_name="web_search")
+    call(d, "t1", "terminal", base + 30)
+    add_message(d, "t1", "tool", "done", base + 31, tool_name="terminal")
+    add_message(d, "t1", "tool", "x", base + 40, tool_name="hidden", active=0)
+    add_session(sd, "t2", "cron", base)
+    call(sd, "t2", "terminal", base + 50)
+    add_message(sd, "t2", "tool", "Traceback (most recent call last):\n  boom", base + 54, tool_name="terminal")
 
 
 def add_message(db: Path, sid: str | None, role: str, content=None, ts: float = 0.0, tool_calls=None, tool_name=None,

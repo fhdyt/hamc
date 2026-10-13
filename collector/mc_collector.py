@@ -5,6 +5,7 @@ Read-only, stdlib only, ASCII only. The desktop app streams this file over SSH
 stdin (`python -u - <hermes_home>`); nothing is ever written to the VPS.
 Emits one JSON object per line on stdout.
 """
+import bisect
 import calendar
 import datetime
 import glob
@@ -1605,6 +1606,104 @@ def q_session_transcript(home, a):
     }
 
 
+# ---- usage (M8b) ------------------------------------------------------------
+
+USAGE_COLS = ["model", "billing_provider", "input_tokens", "output_tokens", "cache_read_tokens", "api_call_count",
+              "estimated_cost_usd", "actual_cost_usd", "cost_status"]
+USAGE_SESSIONS_MAX = 50000
+USAGE_ROWS_MAX = 5000
+USAGE_DAYS_MAX = 31
+
+
+def _usage_cost(r):
+    """(cost, estimated part, unknown flag) for one session, by the same rules as the session list."""
+    if r.get("cost_status") not in (None, "", "actual", "estimated"):
+        return 0.0, 0.0, 1
+    actual, est = _opt_num(r.get("actual_cost_usd")), _opt_num(r.get("estimated_cost_usd"))
+    if actual is not None:
+        return actual, 0.0, 0
+    if est is not None:
+        return est, est, 0
+    return 0.0, 0.0, 0
+
+
+def _day_starts(a):
+    starts = a.get("dayStarts")
+    if not isinstance(starts, list) or not 1 <= len(starts) <= USAGE_DAYS_MAX:
+        raise QueryError("bad_args")
+    for v in starts:
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise QueryError("bad_args")
+    if any(b <= x for x, b in zip(starts, starts[1:])):
+        raise QueryError("bad_args")
+    end = a.get("endTs")
+    if isinstance(end, bool) or not isinstance(end, (int, float)) or end <= starts[-1]:
+        raise QueryError("bad_args")
+    return starts, end
+
+
+def _select_cols(scols, wanted):
+    return ", ".join(["s.started_at AS started_at"] + [("s.%s AS %s" % (c, c)) if c in scols else ("NULL AS %s" % c) for c in wanted])
+
+
+def q_usage_summary(home, a):
+    profiles = _filters({"profiles": a.get("profiles", [])})[0]
+    starts, end = _day_starts(a)
+    groups, errors, readable, truncated = {}, [], 0, False
+    for name, db in _each_profile(home, profiles):
+        con = None
+        try:
+            con = open_ro(db)
+            scols = table_columns(con, "sessions")
+            if not _has_sessions(scols):
+                errors.append({"profile": name, "code": "unsupported_schema"})
+                continue
+            sql = "SELECT %s FROM sessions s WHERE s.started_at >= ? AND s.started_at < ? ORDER BY s.started_at DESC LIMIT ?" % _select_cols(scols, USAGE_COLS)
+            got = _dict_rows(con.execute(sql, (starts[0], end, USAGE_SESSIONS_MAX + 1)))
+            if len(got) > USAGE_SESSIONS_MAX:
+                truncated = True
+                got = got[:USAGE_SESSIONS_MAX]
+            for r in got:
+                ts = to_epoch(r.get("started_at"))
+                if ts is None:
+                    continue
+                day = bisect.bisect_right(starts, ts) - 1
+                if day < 0:
+                    continue
+                k = (day, name, _text(r.get("billing_provider"), 64), _text(r.get("model"), 128))
+                g = groups.setdefault(k, {"sessions": 0, "inputTokens": 0, "outputTokens": 0, "cacheReadTokens": 0, "apiCalls": None,
+                                          "cost": 0.0, "estimatedCost": 0.0, "unknownCost": 0})
+                cost, est, unknown = _usage_cost(r)
+                g["sessions"] += 1
+                g["inputTokens"] += _opt_int(r.get("input_tokens")) or 0
+                g["outputTokens"] += _opt_int(r.get("output_tokens")) or 0
+                g["cacheReadTokens"] += _opt_int(r.get("cache_read_tokens")) or 0
+                calls = _opt_int(r.get("api_call_count"))
+                if calls is not None:
+                    g["apiCalls"] = (g["apiCalls"] or 0) + calls
+                g["cost"] += cost
+                g["estimatedCost"] += est
+                g["unknownCost"] += unknown
+            readable += 1
+        except sqlite3.Error:
+            errors.append({"profile": name, "code": "db_unreadable"})
+        finally:
+            if con is not None:
+                con.close()
+    if errors and readable == 0:
+        raise QueryError(errors[0]["code"])
+    rows = []
+    for k, g in groups.items():
+        row = {"day": k[0], "profile": k[1], "provider": k[2], "model": k[3]}
+        row.update({f: (round(v, 6) if isinstance(v, float) else v) for f, v in g.items()})
+        rows.append(row)
+    rows.sort(key=lambda r: (r["day"], r["profile"], r["model"] or "", r["provider"] or ""))
+    if len(rows) > USAGE_ROWS_MAX:
+        truncated = True
+        rows = rows[:USAGE_ROWS_MAX]
+    return {"rows": rows, "truncated": truncated, "errors": errors}
+
+
 # ---- chat ----------------------------------------------------------------
 
 CHAT_SOURCE = "mission-control"
@@ -2183,6 +2282,7 @@ def run_query(home, cmd, raw):
         "chat_sessions": q_chat_sessions, "uploads_list": q_uploads_list, "interaction": q_interaction,
         "sessions_list": q_sessions_list, "sessions_search": q_sessions_search,
         "session_transcript": q_session_transcript,
+        "usage_summary": q_usage_summary,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}
