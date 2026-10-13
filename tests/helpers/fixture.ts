@@ -61,6 +61,21 @@ export function addToolData(root: string, base: number): void {
   execFileSync(pythonExe, [script, 'add-tool-data', root, String(base)])
 }
 
+/** Adds the sample log files (agent.log, errors.log, scout gateway.log) with timestamps relative to now (pass the fixture root). */
+export function addLogs(root: string): void {
+  execFileSync(pythonExe, [script, 'add-logs', root])
+}
+
+/** Appends one line to a log file of a profile, like Hermes would. */
+export function appendLog(root: string, profile: string, file: string, line: string): void {
+  execFileSync(pythonExe, [script, 'append-log', root, profile, file, line])
+}
+
+/** Rewrites a profile's gateway_state.json with one platform (error code `-` for none). */
+export function setGateway(root: string, profile: string, state: string, platform: string, platformState: string, errorCode = '-'): void {
+  execFileSync(pythonExe, [script, 'set-gateway', root, profile, state, platform, platformState, errorCode])
+}
+
 export function snapshotTree(dir: string): Record<string, string> {
   const out: Record<string, string> = {}
   const walk = (d: string): void => {

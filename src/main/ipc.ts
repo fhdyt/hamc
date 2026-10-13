@@ -4,6 +4,7 @@ import { IPC } from '@shared/channels'
 import { ConnectRequestSchema, HostKeyChallengeSchema, type AppInfo } from '@shared/ipc'
 import { CUSTOM_NAME_RE, CUSTOM_SLUG, EFFORT_RE, FILE_KINDS, MAX_FILE_BYTES, PRESETS, type AgentFileKind } from '@shared/agentCfg'
 import { SETTINGS_SCHEMA, isSettingKey } from '@shared/settings'
+import { LOG_FILES } from '@shared/logs'
 import { EXPORT_MAX_BYTES } from './sessions/export'
 import { isTrustedSender, type AppTarget } from './security'
 import type { MissionSession } from './session'
@@ -64,6 +65,15 @@ const UsageSummarySchema = z
   })
   .refine((a) => DaySpan(a.dayStarts, a.endTs))
 const UsageToolsSchema = z.object({ profiles: z.array(ProfileName).max(50), sinceTs: z.number().finite(), endTs: z.number().finite() }).refine((a) => a.endTs > a.sinceTs)
+
+const LogsListSchema = z.object({ profiles: z.array(ProfileName).max(50) })
+const LogsReadSchema = z.object({
+  profile: ProfileName,
+  file: z.enum(LOG_FILES),
+  after: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).max(2000)
+})
+const GatewayActionSchema = z.object({ action: z.enum(['restart', 'stop']), profile: ProfileName })
 
 const VaultPath = z.string().min(1).max(4096).refine((s) => !s.includes('\u0000'))
 const BrowsePath = z.string().max(4096).refine((s) => !s.includes('\u0000'))
@@ -158,6 +168,10 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.sessionsTranscript, (a) => d.session.sessionsTranscript(TranscriptSchema.parse(a)))
   handle(IPC.sessionsAction, (a) => d.session.sessionAction(SessionActionSchema.parse(a)))
   handle(IPC.sessionsExport, (a) => d.session.sessionExport(ExportSchema.parse(a), d.getWindow()))
+  handle(IPC.logsList, (a) => d.session.logsList(LogsListSchema.parse(a)))
+  handle(IPC.logsRead, (a) => d.session.logsRead(LogsReadSchema.parse(a)))
+  handle(IPC.gatewayAction, (a) => d.session.gatewayAction(GatewayActionSchema.parse(a)))
+  handle(IPC.approvalsRead, (a) => d.session.approvalsRead(ProfileName.parse(a)))
   handle(IPC.alertsRecheck, () => d.session.alertsRecheck())
   handle(IPC.usageSummary, (a) => d.session.usageSummary(UsageSummarySchema.parse(a)))
   handle(IPC.usageTools, (a) => d.session.usageTools(UsageToolsSchema.parse(a)))

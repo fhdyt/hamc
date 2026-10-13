@@ -34,3 +34,14 @@ export function platformIssues(agents: readonly { profile: string; gateway?: Gat
   }
   return out
 }
+
+/** Why a gateway counts as down, in a few words. */
+export function describeGatewayDown(g: GatewayInfo): string {
+  const word = (g.state ?? '').toLowerCase()
+  const base = DOWN_STATES.has(word) ? word : g.pidAlive === false ? 'process is gone' : (g.state ?? 'not running')
+  return g.exitReason ? `${base} (${g.exitReason})` : base
+}
+
+export function describePlatform(p: { state: string | null; errorCode: string | null }): string {
+  return `${p.state ?? 'error'}${p.errorCode ? ` (${p.errorCode})` : ''}`
+}

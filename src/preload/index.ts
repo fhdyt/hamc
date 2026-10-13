@@ -52,6 +52,16 @@ const api: MissionApi = {
     summary: (args) => ipcRenderer.invoke(IPC.usageSummary, args),
     tools: (args) => ipcRenderer.invoke(IPC.usageTools, args)
   },
+  logs: {
+    list: (args) => ipcRenderer.invoke(IPC.logsList, args),
+    read: (args) => ipcRenderer.invoke(IPC.logsRead, args)
+  },
+  gateway: {
+    action: (req) => ipcRenderer.invoke(IPC.gatewayAction, req)
+  },
+  approvals: {
+    read: (profile) => ipcRenderer.invoke(IPC.approvalsRead, profile)
+  },
   alerts: {
     recheck: () => ipcRenderer.invoke(IPC.alertsRecheck)
   },
@@ -100,7 +110,8 @@ const api: MissionApi = {
   onModels: (cb) => on(IPC.evModels, cb),
   onOpenCron: (cb) => on(IPC.evOpenCron, cb),
   onCostAlert: (cb) => on(IPC.evCostAlert, cb),
-  onOpenUsage: (cb) => on(IPC.evOpenUsage, cb)
+  onOpenUsage: (cb) => on(IPC.evOpenUsage, cb),
+  onOpenLogs: (cb) => on(IPC.evOpenLogs, cb)
 }
 
 contextBridge.exposeInMainWorld('mc', api)

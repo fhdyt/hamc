@@ -517,6 +517,16 @@ if __name__ == "__main__":
         add_usage_data(load(Path(sys.argv[2])), float(sys.argv[3]))
     elif cmd == "add-tool-data":
         add_tool_data(load(Path(sys.argv[2])), float(sys.argv[3]))
+    elif cmd == "add-logs":
+        add_logs(load(Path(sys.argv[2])))
+    elif cmd == "append-log":
+        write_log(load(Path(sys.argv[2])), sys.argv[3], sys.argv[4], [sys.argv[5]], mode="a")
+    elif cmd == "set-gateway":
+        fx = load(Path(sys.argv[2]))
+        profile, state, platform, pstate, code = sys.argv[3:8]
+        pdir = fx.home if profile == "default" else fx.home / "profiles" / profile
+        pid = GATEWAY_PID if profile == "default" else (SCOUT_GATEWAY_PID if profile == "scout" else 99999)
+        write_gateway_state(pdir, pid, state=state, platforms={platform: {"state": pstate, "error_code": None if code == "-" else code}})
     elif cmd == "advance":
         advance(load(Path(sys.argv[2])), int(sys.argv[3]))
     else:

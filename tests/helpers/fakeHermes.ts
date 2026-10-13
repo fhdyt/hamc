@@ -12,13 +12,15 @@ export interface FakeHermesState {
   keyVia: ('stdin' | 'argument')[]
   /** Profiles whose gateway was restarted. */
   restarts: string[]
+  /** Profiles whose gateway was stopped. */
+  stops: string[]
   /** `config set` of these keys fails with this message. The key `sessions` fails `hermes sessions pin|unpin|rename`. */
   failOn: Record<string, string>
   /** Every `hermes sessions pin|unpin|rename` call, as the arguments after `hermes`. */
   sessionCalls: string[][]
 }
 
-export const newHermesState = (): FakeHermesState => ({ config: new Map(), env: new Map(), keyVia: [], restarts: [], failOn: {}, sessionCalls: [] })
+export const newHermesState = (): FakeHermesState => ({ config: new Map(), env: new Map(), keyVia: [], restarts: [], stops: [], failOn: {}, sessionCalls: [] })
 
 export interface FakeHermesOptions {
   st: FakeHermesState
@@ -84,9 +86,21 @@ export function runConfigCommands(rest: string[], stream: ServerChannel, o: Fake
     reply(stream, statusText(profile, o))
     return true
   }
-  if (tail[0] === 'gateway' && tail[1] === 'restart') {
-    o.st.restarts.push(profile)
-    reply(stream, `Gateway for ${profile} restarted\n`)
+  if (tail[0] === 'gateway' && (tail[1] === 'restart' || tail[1] === 'stop')) {
+    const fail = o.st.failOn['gateway']
+    if (fail) {
+      reply(stream, '', 1, `${fail}\n`)
+      return true
+    }
+    if (tail[1] === 'restart') o.st.restarts.push(profile)
+    else o.st.stops.push(profile)
+    reply(stream, `Gateway for ${profile} ${tail[1] === 'restart' ? 'restarted' : 'stopped'}\n`)
+    return true
+  }
+  if (tail[0] === 'approvals' && tail[1] === 'suggest') {
+    const fail = o.st.failOn['approvals']
+    if (fail) reply(stream, '', 1, `${fail}\n`)
+    else reply(stream, 'terminal: git status (approved 14 times)\nterminal: ls -la (approved 9 times)\n')
     return true
   }
   if (tail[0] === 'sessions' && ['pin', 'unpin', 'rename'].includes(tail[1] ?? '')) {
@@ -104,6 +118,7 @@ export function runConfigCommands(rest: string[], stream: ServerChannel, o: Fake
   if (tail[1] === 'get') {
     const key = tail[2] ?? ''
     if (key === 'model') reply(stream, JSON.stringify(modelOf(profile, o)) + '\n')
+    else if (key === 'approvals') reply(stream, JSON.stringify({ mode: 'manual', cron_mode: 'deny', single_query_mode: 'manual', unattended_mode: 'deny', timeout: 60, deny: ['rm -rf /'], command_allowlist: [] }) + '\n')
     else if (key === 'agent.reasoning_effort') reply(stream, JSON.stringify(o.st.config.get(profile)?.['agent.reasoning_effort'] ?? null) + '\n')
     else reply(stream, '{}\n')
     return true

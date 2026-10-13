@@ -6,6 +6,7 @@ import { loadCollectorScript } from './collector/channel'
 import { ConnectionManager } from './connection/manager'
 import type { CostAlertState } from '@shared/events'
 import type { CronAlert } from './cron/watcher'
+import type { GatewayAlert } from './gateway/watcher'
 import { registerIpc } from './ipc'
 import { createLogger } from './log'
 import { WEB_PREFERENCES, hardenWebContents, type AppTarget } from './security'
@@ -65,6 +66,26 @@ function showCostAlert(s: CostAlertState): void {
     if (win.isMinimized()) win.restore()
     win.focus()
     win.webContents.send(IPC.evOpenUsage, null)
+  })
+  n.show()
+}
+
+/** A gateway stopped or a platform failed; like a failed cron run it only rings when the window is not in front. */
+function showGatewayAlert(alert: GatewayAlert): void {
+  const w = win
+  const inFront = !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized() && w.isFocused()
+  if (inFront || !Notification.isSupported()) return
+  const title = alert.kind === 'gateway' ? `Gateway stopped: ${alert.profile}` : `Platform problem: ${alert.profile} \u00b7 ${alert.platform ?? ''}`
+  const n = new Notification({ title, body: alert.detail })
+  liveNotifications.add(n)
+  n.on('close', () => liveNotifications.delete(n))
+  n.on('click', () => {
+    liveNotifications.delete(n)
+    if (!win || win.isDestroyed()) return
+    win.show()
+    if (win.isMinimized()) win.restore()
+    win.focus()
+    win.webContents.send(IPC.evOpenLogs, 'gateway')
   })
   n.show()
 }
@@ -155,6 +176,7 @@ if (!app.requestSingleInstanceLock()) {
       log,
       notify: showCronAlert,
       notifyCost: showCostAlert,
+      notifyGateway: showGatewayAlert,
       pickFiles: async () => {
         const r = await (win ? dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] }) : dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] }))
         return r.canceled ? [] : r.filePaths

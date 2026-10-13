@@ -25,6 +25,10 @@ export const IPC = {
   usageSummary: 'mc:usage:summary',
   usageTools: 'mc:usage:tools',
   alertsRecheck: 'mc:alerts:recheck',
+  logsList: 'mc:logs:list',
+  logsRead: 'mc:logs:read',
+  gatewayAction: 'mc:gateway:action',
+  approvalsRead: 'mc:approvals:read',
   brainGet: 'mc:brain:get',
   brainSetVault: 'mc:brain:set-vault',
   brainValidate: 'mc:brain:validate',
@@ -61,5 +65,6 @@ export const IPC = {
   evModels: 'mc:ev:models',
   evOpenCron: 'mc:ev:open-cron',
   evCostAlert: 'mc:ev:cost-alert',
-  evOpenUsage: 'mc:ev:open-usage'
+  evOpenUsage: 'mc:ev:open-usage',
+  evOpenLogs: 'mc:ev:open-logs'
 } as const

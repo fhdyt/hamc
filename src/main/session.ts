@@ -1,7 +1,8 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
-import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, VaultCheck } from '@shared/events'
+import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, LogsList, LogsRead, VaultCheck } from '@shared/events'
 import type { CostAlertState } from '@shared/events'
+import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from '@shared/logs'
 import type { UsageSummaryArgs, UsageToolsArgs } from '@shared/usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from '@shared/sessions'
 import type { BrowserWindow } from 'electron'
@@ -14,6 +15,9 @@ import { ModelService } from './agentcfg/model'
 import { SessionActionService } from './sessions/actions'
 import { saveExport } from './sessions/export'
 import { CostAlertService } from './usage/costAlert'
+import { ApprovalsService } from './approvals/service'
+import { GatewayService } from './gateway/service'
+import { GatewayWatcher, type GatewayAlert } from './gateway/watcher'
 import { ChatService } from './chat/service'
 import { UploadService } from './uploads/service'
 import type { AgentFileKind, ModelSaveRequest } from '@shared/agentCfg'
@@ -46,6 +50,8 @@ export interface SessionDeps {
   notify?: (alert: CronAlert) => void
   /** Called once per local day when the daily cost passes the alert threshold. */
   notifyCost?: (state: CostAlertState) => void
+  /** Called once per gateway or platform that went from healthy to failed (after the baseline). */
+  notifyGateway?: (alert: GatewayAlert) => void
   backoff?: (attempt: number) => number
   /** The native file picker for attachments; returns local paths. */
   pickFiles?: () => Promise<string[]>
@@ -104,6 +110,9 @@ export class MissionSession {
   private readonly agentModel: ModelService
   private readonly sessionActions: SessionActionService
   private readonly costAlert: CostAlertService
+  private readonly gatewayWatcher = new GatewayWatcher()
+  private readonly gateways: GatewayService
+  private readonly approvals: ApprovalsService
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -133,6 +142,17 @@ export class MissionSession {
       hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
       isConnected: () => d.manager.isConnected(),
       log: (m) => d.log?.(m)
+    })
+    this.gateways = new GatewayService({
+      conn: d.manager,
+      hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
+      isConnected: () => d.manager.isConnected(),
+      log: (m) => d.log?.(m)
+    })
+    this.approvals = new ApprovalsService({
+      conn: d.manager,
+      hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
+      isConnected: () => d.manager.isConnected()
     })
     this.costAlert = new CostAlertService({
       query: (a) => this.usageSummary(a),
@@ -356,7 +376,11 @@ export class MissionSession {
     })
     ch.on('event', (ev: CollectorEvent) => {
       this.d.send(IPC.evEvent, ev)
-      if (ev.type === 'agents') void this.models?.update(ev.data.agents)
+      if (ev.type === 'agents') {
+        void this.models?.update(ev.data.agents)
+        const gateway = this.gatewayWatcher.ingest(ev.data.agents)
+        if (this.d.store.getSetting('alerts.gateway.enabled')) for (const alert of gateway) this.d.notifyGateway?.(alert)
+      }
       if (ev.type === 'feed') this.feedCursors.apply(ev.data.cursors)
       if (ev.type === 'cron') {
         this.cronStore.apply(ev.data.jobs)
@@ -467,6 +491,7 @@ export class MissionSession {
     this.params = null
     this.pending = null
     this.costAlert.reset()
+    this.gatewayWatcher.reset()
     await this.teardown()
     this.everConnected = false
     this.setStatus({ ...IDLE })
@@ -503,6 +528,22 @@ export class MissionSession {
 
   sessionsTranscript(args: TranscriptArgs): Promise<QueryResult<SessionTranscript>> {
     return this.queries.run('session_transcript', args, SessionTranscript)
+  }
+
+  logsList(args: LogsListArgs): Promise<QueryResult<LogsList>> {
+    return this.queries.run('logs_list', args, LogsList)
+  }
+
+  logsRead(args: LogsReadArgs): Promise<QueryResult<LogsRead>> {
+    return this.queries.run('logs_read', args, LogsRead)
+  }
+
+  gatewayAction(req: { action: GatewayAction; profile: string }): Promise<GatewayActionResult> {
+    return this.gateways.run(req.action, req.profile)
+  }
+
+  approvalsRead(profile: string): Promise<ApprovalsResult> {
+    return this.approvals.read(profile)
   }
 
   alertsRecheck(): Promise<void> {
