@@ -26,6 +26,8 @@ const chatItem = () => mainNav().getByRole('button', { name: /^Chat/ })
 const box = () => page.getByRole('textbox', { name: /^Message / })
 
 async function say(text: string): Promise<void> {
+  // Enter is ignored while a turn still runs (the reply text can show before the turn ends), so wait for Send
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeVisible({ timeout: 20_000 })
   await box().fill(text)
   await box().press('Enter')
 }
