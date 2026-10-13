@@ -539,6 +539,96 @@ def add_cron_ledger(home: Path, now: float) -> None:
     con.close()
 
 
+SKILL_NOTION = """---
+name: notion
+description: "Notion API + ntn CLI: pages, databases, markdown, Workers."
+version: 2.0.0
+author: community
+platforms: [linux, macos, windows]
+prerequisites:
+  env_vars: [NOTION_API_KEY]
+metadata:
+  hermes:
+    tags: [Notion, Productivity, Notes]
+    homepage: https://developers.notion.com
+---
+
+# Notion
+
+Talk to Notion two ways.
+"""
+
+SKILL_MAPS = """---
+name: maps
+description: Geocode, POIs, routes.
+version: 1.2.0
+metadata:
+  hermes:
+    tags:
+      - maps
+      - routing
+    requires_toolsets: [terminal]
+required_environment_variables:
+  - name: MAPS_TOKEN
+    prompt: Token for the tile server
+---
+
+# Maps
+
+Location intelligence.
+"""
+
+
+def skill_md(name: str, description: str, body: str = "Body.\n", extra: str = "") -> str:
+    return f"---\nname: {name}\ndescription: {description}\n{extra}---\n\n# {name}\n\n{body}"
+
+
+def add_skill_blob(home: Path, text: str) -> str:
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    w(home / ".curator_backups" / "blobs" / digest, text)
+    return digest
+
+
+def add_skills(home: Path, now: float) -> None:
+    """Skills of the default profile shaped like a real Hermes install: an agent-written skill with a ledger history,
+    a pinned and a stale one, a hub and two bundled skills, an archived one, and a support folder that is not a skill."""
+    sk = home / "skills"
+    v1 = skill_md("arxiv-digest", "Summarise new arXiv papers.", "Read cs.CL.\n")
+    v2 = skill_md("arxiv-digest", "Summarise new arXiv papers.", "Read cs.CL and cs.LG.\nLink related notes.\n")
+    w(sk / "research" / "arxiv-digest" / "SKILL.md", v2)
+    w(sk / "research" / "arxiv-digest" / "references" / "SKILL.md", skill_md("not-a-skill", "support file"))
+    w(sk / "research" / "pinned-helper" / "SKILL.md", skill_md("pinned-helper", "A pinned agent skill.", extra="tags: [helper, pin]\n"))
+    w(sk / "research" / "old-scraper" / "SKILL.md", skill_md("old-scraper", "Scrapes a site that is gone."))
+    w(sk / "productivity" / "notion" / "SKILL.md", SKILL_NOTION)
+    w(sk / "productivity" / "maps" / "SKILL.md", SKILL_MAPS)
+    w(sk / "community" / "hub-tool" / "SKILL.md", skill_md("hub-tool", "Installed from the hub."))
+    w(sk / ".archive" / "retired" / "SKILL.md", skill_md("retired", "Archived by the curator."))
+    w(sk / ".git" / "x" / "SKILL.md", skill_md("ignored", "inside .git"))
+    w(sk / ".bundled_manifest", "notion:abc123\nmaps:def456\n")
+    w(sk / ".hub" / "lock.json", json.dumps({"version": 1, "installed": {"hub-tool": {"source": "official", "install_path": "community/hub-tool"}}}))
+    usage = {
+        "arxiv-digest": {"created_by": "agent", "use_count": 14, "view_count": 20, "patch_count": 2, "created_at": iso(now - 86400 * 20, 0),
+                         "last_used_at": iso(now - 3600, 0), "state": "active", "pinned": False},
+        "pinned-helper": {"created_by": "agent", "use_count": 3, "state": "active", "pinned": True, "last_used_at": iso(now - 86400 * 2, 0)},
+        "old-scraper": {"created_by": "agent", "use_count": 1, "state": "stale", "pinned": False, "last_used_at": iso(now - 86400 * 40, 0)},
+        "retired": {"created_by": "agent", "use_count": 0, "state": "archived", "archived_at": iso(now - 86400, 0)},
+        "notion": {"use_count": 5, "last_used_at": iso(now - 7200, 0)},
+        "ghost": "not a record",
+    }
+    w(sk / ".usage.json", json.dumps(usage))
+    b1, b2 = add_skill_blob(home, v1), add_skill_blob(home, v2)
+    path = str(sk / "research" / "arxiv-digest" / "SKILL.md")
+    entries = [
+        {"id": "aaa111bbb222", "ts": iso(now - 86400 * 20, 0), "actor": "agent", "action": "create", "skill": "arxiv-digest",
+         "evidence": {"session_id": "s-default-1"}, "before": [], "after": [{"path": path, "sha256": b1}]},
+        {"id": "ccc333ddd444", "ts": iso(now - 86400, 0), "actor": "agent", "action": "patch", "skill": "arxiv-digest",
+         "evidence": {"note": "added cs.LG"}, "before": [{"path": path, "sha256": b1}], "after": [{"path": path, "sha256": b2}]},
+        {"id": "eee555fff666", "ts": iso(now - 3600, 0), "actor": "curator", "action": "archive", "skill": "retired",
+         "evidence": {"reason": "unused for 30 days"}, "before": [], "after": []},
+    ]
+    w(sk / ".curator_ledger.jsonl", "".join(json.dumps(e) + "\n" for e in entries) + "not json\n")
+
+
 def make_fixture(root: Path, now: float | None = None) -> Fixture:
     now = time.time() if now is None else now
     root = Path(root)
@@ -579,6 +669,7 @@ def make_fixture(root: Path, now: float | None = None) -> Fixture:
     add_output(home, "09358c101c91", "2026-10-09_23-00-45.md", "older run\n", mtime=now - 90000)
     add_output(home, "09358c101c91", "2026-10-10_23-00-25.md", "latest run\nline two\n", mtime=now - 3600)
     add_cron_ledger(home, now)
+    add_skills(home, now)
     add_cron_jobs(scout, [
         real_job(id="aaaaaaaaaaaa", name="never-ran", last_status=None, last_run_at=None, failure_streak=0,
                  repeat={"times": None, "completed": 0}),

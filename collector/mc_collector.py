@@ -2974,6 +2974,404 @@ def q_cron_output(home, a):
     return {"files": files}
 
 
+# ---- skills (M10a, read-only) -------------------------------------------------
+
+SKILL_EXCLUDED = {".git", ".github", ".hub", ".archive", ".curator_backups", ".locks", ".venv", "venv", "node_modules",
+                  "site-packages", "__pycache__", ".tox", ".nox", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
+SKILL_SUPPORT = {"references", "templates", "assets", "scripts"}
+SKILLS_MAX = 2000
+SKILL_HEAD = 8192
+SKILL_BODY_MAX = 262144
+SKILL_LEDGER_TAIL = 2 * 1024 * 1024
+SKILL_BLOB_MAX = 65536
+SKILL_PATH_RE = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+){0,9}$")
+SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
+YAML_KEY_RE = re.compile(r"^([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*:(?:\s+(.*))?$")
+
+
+def _split_inline(s):
+    out, cur, quote = [], "", None
+    for ch in s:
+        if quote:
+            cur += ch
+            if ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+            cur += ch
+        elif ch == ",":
+            out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        out.append(cur)
+    return out
+
+
+def _yaml_scalar(v):
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        return v[1:-1]
+    if v.startswith("[") and v.endswith("]"):
+        return [_yaml_scalar(x) for x in _split_inline(v[1:-1])]
+    if " #" in v:
+        v = v.split(" #", 1)[0].rstrip()
+    return v
+
+
+def _yaml_node(lines, i, ind):
+    if lines[i][1] == "-" or lines[i][1].startswith("- "):
+        out = []
+        while i < len(lines) and lines[i][0] == ind and (lines[i][1] == "-" or lines[i][1].startswith("- ")):
+            item = lines[i][1][1:].strip()
+            if item and YAML_KEY_RE.match(item) and not item.startswith(("\"", "'", "[")):
+                lines[i] = (ind + 2, item)
+                val, i = _yaml_map(lines, i, ind + 2)
+                out.append(val)
+            elif item:
+                out.append(_yaml_scalar(item))
+                i += 1
+            else:
+                i += 1
+                if i < len(lines) and lines[i][0] > ind:
+                    val, i = _yaml_node(lines, i, lines[i][0])
+                    out.append(val)
+        return out, i
+    return _yaml_map(lines, i, ind)
+
+
+def _yaml_map(lines, i, ind):
+    out = {}
+    while i < len(lines) and lines[i][0] == ind and not lines[i][1].startswith("- "):
+        m = YAML_KEY_RE.match(lines[i][1])
+        i += 1
+        if not m:
+            continue
+        key, rest = m.group(1), (m.group(2) or "").strip()
+        if rest in ("|", ">", "|-", ">-", "|+", ">+"):
+            parts = []
+            while i < len(lines) and lines[i][0] > ind:
+                parts.append(lines[i][1])
+                i += 1
+            out[key] = ("\n" if rest.startswith("|") else " ").join(parts)
+        elif rest:
+            out[key] = _yaml_scalar(rest)
+        elif i < len(lines) and (lines[i][0] > ind or (lines[i][0] == ind and lines[i][1].startswith("- "))):
+            out[key], i = _yaml_node(lines, i, lines[i][0])
+        else:
+            out[key] = None
+        while i < len(lines) and lines[i][0] > ind:
+            i += 1  # whatever this subset did not understand
+    return out, i
+
+
+def parse_frontmatter(text):
+    """(frontmatter dict, body) of a SKILL.md, read with a small YAML subset: scalars, inline and block lists, nested
+    maps by indentation and block scalars. Anything else is skipped; a file without frontmatter gives ({}, text)."""
+    t = text.lstrip("\ufeff")
+    lines = t.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return {}, text
+    try:
+        end = next(k for k in range(1, len(lines)) if lines[k].strip() == "---")
+    except StopIteration:
+        end = len(lines)
+    raw = []
+    for ln in lines[1:end]:
+        s = ln.rstrip("\r")
+        if s.strip() and not s.strip().startswith("#"):
+            raw.append((len(s) - len(s.lstrip(" ")), s.strip()))
+    body = "\n".join(lines[end + 1:])
+    if not raw:
+        return {}, body
+    try:
+        fm, _ = _yaml_map(raw, 0, raw[0][0])
+    except (IndexError, ValueError, RecursionError):
+        fm = {}
+    return fm, body
+
+
+def _str_list(v, limit=40):
+    if isinstance(v, str):
+        v = [x.strip() for x in v.split(",")]
+    if not isinstance(v, list):
+        return []
+    return [str(x)[:80] for x in v if isinstance(x, (str, int, float)) and str(x).strip()][:limit]
+
+
+def _hermes_meta(fm):
+    meta = fm.get("metadata") if isinstance(fm.get("metadata"), dict) else {}
+    return meta.get("hermes") if isinstance(meta.get("hermes"), dict) else {}
+
+
+def skill_env_names(fm):
+    """Names (never values) of the environment variables a skill asks for, as Hermes merges them."""
+    names = []
+    for item in fm.get("required_environment_variables") or [] if isinstance(fm.get("required_environment_variables"), list) else []:
+        names.append(item if isinstance(item, str) else (item.get("name") or item.get("env_var")) if isinstance(item, dict) else None)
+    setup = fm.get("setup") if isinstance(fm.get("setup"), dict) else {}
+    for item in setup.get("collect_secrets") or [] if isinstance(setup.get("collect_secrets"), list) else []:
+        names.append(item.get("env_var") if isinstance(item, dict) else None)
+    pre = fm.get("prerequisites") if isinstance(fm.get("prerequisites"), dict) else {}
+    names += _str_list(pre.get("env_vars"))
+    out = []
+    for n in names:
+        if isinstance(n, str) and ENV_NAME_RE.match(n.strip()) and n.strip() not in out:
+            out.append(n.strip())
+    return out
+
+
+def _skill_lines(path):
+    try:
+        with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
+            return [s.strip() for s in f.read().splitlines() if s.strip()]
+    except OSError:
+        return []
+
+
+def _skill_names_from(sk):
+    """(bundled names, hub names) by Hermes's own provenance rules."""
+    bundled = {ln.split(":", 1)[0].strip() for ln in _skill_lines(os.path.join(sk, ".bundled_manifest"))}
+    bundled |= {ln for ln in _skill_lines(os.path.join(sk, ".curator_suppressed")) if not ln.startswith("#")}
+    hub = set()
+    lock = read_text(os.path.join(sk, ".hub", "lock.json"))
+    try:
+        installed = (json.loads(lock) or {}).get("installed") if lock else None
+    except ValueError:
+        installed = None
+    if isinstance(installed, dict):
+        hub |= {str(k) for k in installed}
+        for e in installed.values():
+            p = e.get("install_path") if isinstance(e, dict) else None
+            if isinstance(p, str) and SKILL_PATH_RE.match(p.strip("/")) and ".." not in p.split("/"):
+                fm, _ = parse_frontmatter(_read_head(os.path.join(sk, p.strip("/"), "SKILL.md")) or "")
+                if isinstance(fm.get("name"), str) and fm["name"].strip():
+                    hub.add(fm["name"].strip())
+    return {n for n in bundled if n}, hub
+
+
+def _read_head(path, n=SKILL_HEAD):
+    try:
+        with open(path, "rb") as f:
+            return f.read(n).decode("utf-8", "replace")
+    except OSError:
+        return None
+
+
+def _skill_dirs(sk):
+    """Posix paths (relative to skills/) of every skill folder, Hermes's scanner rules: excluded folders are skipped,
+    support folders directly inside a skill are not skills, symlinked folders are not followed."""
+    found = []
+    for dirpath, dirnames, filenames in os.walk(sk):
+        dirnames[:] = sorted(d for d in dirnames if d not in SKILL_EXCLUDED)
+        if "SKILL.md" in filenames and dirpath != sk:
+            dirnames[:] = [d for d in dirnames if d not in SKILL_SUPPORT]
+            found.append(os.path.relpath(dirpath, sk).replace(os.sep, "/"))
+            if len(found) > SKILLS_MAX:
+                break
+    arch = os.path.join(sk, ".archive")
+    try:
+        names = sorted(os.listdir(arch))
+    except OSError:
+        names = []
+    for name in names:
+        if os.path.isfile(os.path.join(arch, name, "SKILL.md")) and not os.path.islink(os.path.join(arch, name)):
+            found.append(".archive/" + name)
+    return found
+
+
+def _usage_records(sk):
+    text = read_text(os.path.join(sk, ".usage.json"))
+    try:
+        data = json.loads(text) if text else {}
+    except ValueError:
+        return {}
+    return {str(k): v for k, v in data.items() if isinstance(v, dict)} if isinstance(data, dict) else {}
+
+
+def _skill_row(profile, sk, rel, bundled, hub, usage):
+    path = os.path.join(sk, *rel.split("/"), "SKILL.md")
+    real = os.path.realpath(path)
+    if not real.startswith(os.path.realpath(sk) + os.sep):
+        return None
+    head = _read_head(real)
+    if head is None:
+        return None
+    fm, body = parse_frontmatter(head)
+    hm = _hermes_meta(fm)
+    parts = rel.split("/")
+    archived_dir = parts[0] == ".archive"
+    name = fm.get("name").strip() if isinstance(fm.get("name"), str) and fm.get("name").strip() else parts[-1]
+    rec = usage.get(name, {})
+    state = str(rec.get("state") or "").lower()
+    if archived_dir:
+        state = "archived"
+    elif state not in ("active", "stale", "archived"):
+        state = "active"
+    category = "/".join(parts[:-1]) if not archived_dir else (str(hm.get("category") or "") if isinstance(hm.get("category"), str) else "")
+    try:
+        st = os.stat(real)
+    except OSError:
+        return None
+    desc = fm.get("description")
+    if not isinstance(desc, str) or not desc.strip():
+        desc = next((ln.strip() for ln in body.split("\n") if ln.strip() and not ln.startswith("#")), "")
+    return {
+        "profile": profile, "path": rel, "category": category[:120], "dir": parts[-1], "name": name[:100],
+        "description": desc.strip()[:300], "version": _text(fm.get("version"), 40) if isinstance(fm.get("version"), (str, int, float)) else None,
+        "author": _text(fm.get("author"), 80) if isinstance(fm.get("author"), str) else None,
+        "tags": _str_list(fm.get("tags") or hm.get("tags")), "platforms": _str_list(fm.get("platforms")),
+        "requiresToolsets": _str_list(fm.get("requires_toolsets") or hm.get("requires_toolsets")),
+        "envNames": skill_env_names(fm),
+        "origin": "hub" if name in hub else "bundled" if name in bundled else "agent",
+        "createdBy": _text(rec.get("created_by"), 40) if isinstance(rec.get("created_by"), str) else None,
+        "state": state, "pinned": rec.get("pinned") is True,
+        "useCount": _kb_int(rec.get("use_count")), "viewCount": _kb_int(rec.get("view_count")), "patchCount": _kb_int(rec.get("patch_count")),
+        "createdAt": _epoch(rec.get("created_at")), "lastUsedAt": _epoch(rec.get("last_used_at")), "lastViewedAt": _epoch(rec.get("last_viewed_at")),
+        "lastPatchedAt": _epoch(rec.get("last_patched_at")), "archivedAt": _epoch(rec.get("archived_at")),
+        "size": st.st_size, "mtime": st.st_mtime,
+    }
+
+
+def _skills_dir_of(home, name):
+    pdir = profile_dir(home, name)
+    return os.path.join(pdir, "skills") if pdir else None
+
+
+def q_skills_list(home, a):
+    profiles = a.get("profiles", [])
+    if not isinstance(profiles, list) or len(profiles) > 50 or not all(valid_profile(p) for p in profiles):
+        raise QueryError("bad_args")
+    skills, out_profiles = [], []
+    for name, pdir in list_profiles(home):
+        if profiles and name not in profiles:
+            continue
+        sk = os.path.join(pdir, "skills")
+        if not os.path.isdir(sk):
+            out_profiles.append({"profile": name, "ok": True, "error": None, "total": 0, "truncated": False})
+            continue
+        try:
+            dirs = _skill_dirs(sk)
+            bundled, hub = _skill_names_from(sk)
+            usage = _usage_records(sk)
+            rows = [r for r in (_skill_row(name, sk, rel, bundled, hub, usage) for rel in dirs[:SKILLS_MAX]) if r]
+        except OSError:
+            out_profiles.append({"profile": name, "ok": False, "error": "unreadable", "total": 0, "truncated": False})
+            continue
+        skills += rows
+        out_profiles.append({"profile": name, "ok": True, "error": None, "total": len(rows), "truncated": len(dirs) > SKILLS_MAX})
+    return {"skills": skills, "profiles": out_profiles}
+
+
+def _skill_file(home, a):
+    name, rel = a.get("profile"), a.get("path")
+    if not valid_profile(name) or not isinstance(rel, str) or not SKILL_PATH_RE.match(rel) or any(p in (".", "..") for p in rel.split("/")):
+        raise QueryError("bad_args")
+    sk = _skills_dir_of(home, name)
+    if not sk:
+        raise QueryError("not_found")
+    real = os.path.realpath(os.path.join(sk, *rel.split("/"), "SKILL.md"))
+    if not real.startswith(os.path.realpath(sk) + os.sep) or not os.path.isfile(real):
+        raise QueryError("not_found")
+    return real
+
+
+def q_skill_read(home, a):
+    real = _skill_file(home, a)
+    with open(real, "rb") as f:
+        data = f.read(SKILL_BODY_MAX + 1)
+    st = os.stat(real)
+    return {"path": a["path"], "text": data[:SKILL_BODY_MAX].decode("utf-8", "replace"), "truncated": len(data) > SKILL_BODY_MAX,
+            "size": st.st_size, "mtime": st.st_mtime}
+
+
+def _ledger_files(items, sk):
+    out = []
+    for it in items if isinstance(items, list) else []:
+        if not isinstance(it, dict):
+            continue
+        p, sha = it.get("path"), it.get("sha256")
+        if not isinstance(p, str):
+            continue
+        base = next((b for b in (sk, os.path.realpath(sk)) if p.startswith(b + "/")), None)
+        rel = p[len(base) + 1:] if base else p.rsplit("/", 1)[-1]
+        out.append((rel[:200], sha if isinstance(sha, str) and SHA_RE.match(sha) else None))
+    return out
+
+
+def _ledger_note(ev):
+    if not isinstance(ev, dict):
+        return None, None
+    note = next((ev[k] for k in ("note", "reason", "summary", "message", "why") if isinstance(ev.get(k), str) and ev[k].strip()), None)
+    sid = ev.get("session_id") if isinstance(ev.get("session_id"), str) and ID_RE.match(ev["session_id"]) else None
+    return (note.strip()[:300] if note else None), sid
+
+
+def q_skills_ledger(home, a):
+    name = a.get("profile")
+    if not valid_profile(name):
+        raise QueryError("bad_args")
+    limit = _limit(a, 200, 500)
+    sk = _skills_dir_of(home, name)
+    if not sk:
+        raise QueryError("not_found")
+    path = os.path.join(sk, ".curator_ledger.jsonl")
+    if not os.path.isfile(path):
+        return {"profile": name, "entries": [], "exists": False, "truncated": False}
+    with open(path, "rb") as f:
+        size = os.fstat(f.fileno()).st_size
+        start = max(0, size - SKILL_LEDGER_TAIL)
+        f.seek(start)
+        data = f.read()
+    lines = data.split(b"\n")
+    if start > 0:
+        lines = lines[1:]  # the first line may be cut
+    entries = []
+    for ln in reversed(lines):
+        try:
+            e = json.loads(ln.decode("utf-8", "replace")) if ln.strip() else None
+        except ValueError:
+            e = None
+        if not isinstance(e, dict) or not isinstance(e.get("id"), str):
+            continue
+        before, after = dict(_ledger_files(e.get("before"), sk)), dict(_ledger_files(e.get("after"), sk))
+        files = [{"path": p, "before": before.get(p), "after": after.get(p)} for p in sorted(set(before) | set(after))][:20]
+        note, sid = _ledger_note(e.get("evidence"))
+        entries.append({"id": e["id"][:40], "ts": _epoch(e.get("ts")), "actor": _text(e.get("actor"), 20) or "unknown",
+                        "action": _text(e.get("action"), 40) or "unknown", "skill": _text(e.get("skill"), 100) or "?",
+                        "note": note, "sessionId": sid, "files": files})
+        if len(entries) >= limit:
+            break
+    return {"profile": name, "entries": entries, "exists": True, "truncated": start > 0 or len(entries) >= limit}
+
+
+def q_skills_blobs(home, a):
+    name, shas = a.get("profile"), a.get("shas")
+    if not valid_profile(name) or not isinstance(shas, list) or not 1 <= len(shas) <= 4 or not all(isinstance(s, str) and SHA_RE.match(s) for s in shas):
+        raise QueryError("bad_args")
+    pdir = profile_dir(home, name)
+    if not pdir:
+        raise QueryError("not_found")
+    base = os.path.join(pdir, ".curator_backups", "blobs")
+    out = []
+    for sha in shas:
+        p = os.path.join(base, sha)
+        real = os.path.realpath(p)
+        if not real.startswith(os.path.realpath(base) + os.sep) or not os.path.isfile(real):
+            out.append({"sha": sha, "error": "not_found"})
+            continue
+        try:
+            with open(real, "rb") as f:
+                data = f.read(SKILL_BLOB_MAX + 1)
+        except OSError:
+            out.append({"sha": sha, "error": "unreadable"})
+            continue
+        out.append({"sha": sha, "text": data[:SKILL_BLOB_MAX].decode("utf-8", "replace"), "truncated": len(data) > SKILL_BLOB_MAX})
+    return {"blobs": out}
+
+
 def run_query(home, cmd, raw):
     try:
         args = json.loads(raw)
@@ -2991,6 +3389,7 @@ def run_query(home, cmd, raw):
         "logs_list": q_logs_list, "logs_read": q_logs_read,
         "kanban_boards": q_kanban_boards, "kanban_tasks": q_kanban_tasks, "kanban_task": q_kanban_task,
         "cron_jobs": q_cron_jobs, "cron_runs": q_cron_runs, "cron_output": q_cron_output,
+        "skills_list": q_skills_list, "skill_read": q_skill_read, "skills_ledger": q_skills_ledger, "skills_blobs": q_skills_blobs,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}
