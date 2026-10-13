@@ -78,3 +78,7 @@ More: [release guide](docs/release.md), [manual test on a real VPS](docs/manual-
 Version 0.x. The real Hermes output formats were checked against the Hermes v0.21 source and one real install; anything that still looks wrong on your server is worth an issue, with your Hermes version (`hermes --version`).
 
 Hermes Agent is a project of Nous Research. This app is an independent tool and is not affiliated with Nous Research.
+
+## License
+
+[MIT](LICENSE)

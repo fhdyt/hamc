@@ -1,12 +1,12 @@
 {
   "name": "hermes-mission-control",
   "productName": "Hermes Agent Mission Control",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Mission Control for Hermes Agent",
   "author": "fhdyt <fhdyt@users.noreply.github.com>",
   "homepage": "https://github.com/fhdyt/hamc",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

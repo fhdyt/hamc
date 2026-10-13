@@ -51,9 +51,10 @@ mac:
   icon: assets/brand/icon-1024.png
   category: public.app-category.developer-tools
   hardenedRuntime: true
-  # better-sqlite3 ships N-API prebuilds for both architectures, identical in the x64 and arm64 builds; the universal
-  # merge must be told they may stay as they are
-  x64ArchFiles: '**/node_modules/better-sqlite3/prebuilds/**'
+  # Native files that come out the same in the x64 and arm64 builds; the universal merge must be told they may stay as
+  # they are: better-sqlite3's N-API prebuilds (one per architecture, both shipped) and ssh2's optional sshcrypto
+  # addon (ssh2 falls back to its JavaScript crypto when the addon cannot load on one of the two).
+  x64ArchFiles: '{**/node_modules/better-sqlite3/prebuilds/**,**/node_modules/ssh2/lib/protocol/crypto/build/Release/*.node}'
   gatekeeperAssess: false
 linux:
   target:
