@@ -51,6 +51,16 @@ export function addInteractions(root: string): void {
   execFileSync(pythonExe, [script, 'add-interactions', root])
 }
 
+/** Adds sessions with models, providers and costs on four irregular days from `base` (epoch seconds; pass the fixture root). */
+export function addUsageData(root: string, base: number): void {
+  execFileSync(pythonExe, [script, 'add-usage-data', root, String(base)])
+}
+
+/** Adds sessions with tool calls, results and a failure from `base` (epoch seconds; pass the fixture root). */
+export function addToolData(root: string, base: number): void {
+  execFileSync(pythonExe, [script, 'add-tool-data', root, String(base)])
+}
+
 export function snapshotTree(dir: string): Record<string, string> {
   const out: Record<string, string> = {}
   const walk = (d: string): void => {

@@ -51,6 +51,20 @@ const SessionActionSchema = z.object({
 })
 const ExportSchema = z.object({ name: z.string().min(1).max(200), ext: z.enum(['jsonl', 'md', 'html']), content: z.string().max(EXPORT_MAX_BYTES) })
 
+const DaySpan = (a: number[], end: number): boolean => end - a[a.length - 1]! >= 82800 && end - a[a.length - 1]! <= 90000
+const UsageSummarySchema = z
+  .object({
+    profiles: z.array(ProfileName).max(50),
+    dayStarts: z
+      .array(z.number().finite())
+      .min(1)
+      .max(31)
+      .refine((a) => a.every((v, i) => i === 0 || (v - a[i - 1]! >= 82800 && v - a[i - 1]! <= 90000))),
+    endTs: z.number().finite()
+  })
+  .refine((a) => DaySpan(a.dayStarts, a.endTs))
+const UsageToolsSchema = z.object({ profiles: z.array(ProfileName).max(50), sinceTs: z.number().finite(), endTs: z.number().finite() }).refine((a) => a.endTs > a.sinceTs)
+
 const VaultPath = z.string().min(1).max(4096).refine((s) => !s.includes('\u0000'))
 const BrowsePath = z.string().max(4096).refine((s) => !s.includes('\u0000'))
 const NoteId = z.string().min(1).max(4096).refine((s) => !s.includes('\u0000'))
@@ -144,6 +158,8 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.sessionsTranscript, (a) => d.session.sessionsTranscript(TranscriptSchema.parse(a)))
   handle(IPC.sessionsAction, (a) => d.session.sessionAction(SessionActionSchema.parse(a)))
   handle(IPC.sessionsExport, (a) => d.session.sessionExport(ExportSchema.parse(a), d.getWindow()))
+  handle(IPC.usageSummary, (a) => d.session.usageSummary(UsageSummarySchema.parse(a)))
+  handle(IPC.usageTools, (a) => d.session.usageTools(UsageToolsSchema.parse(a)))
   handle(IPC.interactionDetail, (a) => d.session.interactionDetail(InteractionArgs.parse(a)))
   handle(IPC.brainGet, () => d.session.brainGet())
   handle(IPC.brainSetVault, (a) => d.session.brainSetVault(a === null ? null : VaultPath.parse(a)))

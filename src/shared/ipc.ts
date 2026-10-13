@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult, ModelReadResult, ModelSaveRequest, RestartResult, SaveModelResult, TestModelResult } from './agentCfg'
 import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, SessionDetail, SessionsList, SessionTranscript, UploadsList, VaultCheck } from './events'
+import type { UsageSummary, UsageTools } from './events'
+import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
 import type { SettingsMap } from './settings'
 
@@ -216,6 +218,10 @@ export interface MissionApi {
     transcript(args: TranscriptArgs): Promise<QueryResult<SessionTranscript>>
     action(req: { action: SessionAction; profile: string; sessionId: string; title?: string }): Promise<SessionActionResult>
     export(req: { name: string; ext: ExportExt; content: string }): Promise<ExportResult>
+  }
+  usage: {
+    summary(args: UsageSummaryArgs): Promise<QueryResult<UsageSummary>>
+    tools(args: UsageToolsArgs): Promise<QueryResult<UsageTools>>
   }
   brain: {
     get(): Promise<{ vault: string | null }>

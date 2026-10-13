@@ -1,6 +1,7 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
-import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, VaultCheck } from '@shared/events'
+import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, VaultCheck } from '@shared/events'
+import type { UsageSummaryArgs, UsageToolsArgs } from '@shared/usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from '@shared/sessions'
 import type { BrowserWindow } from 'electron'
 import type {
@@ -487,6 +488,14 @@ export class MissionSession {
 
   sessionsTranscript(args: TranscriptArgs): Promise<QueryResult<SessionTranscript>> {
     return this.queries.run('session_transcript', args, SessionTranscript)
+  }
+
+  usageSummary(args: UsageSummaryArgs): Promise<QueryResult<UsageSummary>> {
+    return this.queries.run('usage_summary', args, UsageSummary)
+  }
+
+  usageTools(args: UsageToolsArgs): Promise<QueryResult<UsageTools>> {
+    return this.queries.run('usage_tools', args, UsageTools)
   }
 
   sessionAction(req: { action: SessionAction; profile: string; sessionId: string; title?: string }): Promise<SessionActionResult> {

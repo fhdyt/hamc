@@ -22,6 +22,8 @@ export const IPC = {
   sessionsTranscript: 'mc:sessions:transcript',
   sessionsAction: 'mc:sessions:action',
   sessionsExport: 'mc:sessions:export',
+  usageSummary: 'mc:usage:summary',
+  usageTools: 'mc:usage:tools',
   brainGet: 'mc:brain:get',
   brainSetVault: 'mc:brain:set-vault',
   brainValidate: 'mc:brain:validate',

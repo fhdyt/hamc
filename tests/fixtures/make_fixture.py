@@ -470,6 +470,10 @@ if __name__ == "__main__":
         print(make_synthetic_vault(Path(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]) if len(sys.argv) > 4 else 4))
     elif cmd == "add-interactions":
         add_interactions(load(Path(sys.argv[2])))
+    elif cmd == "add-usage-data":
+        add_usage_data(load(Path(sys.argv[2])), float(sys.argv[3]))
+    elif cmd == "add-tool-data":
+        add_tool_data(load(Path(sys.argv[2])), float(sys.argv[3]))
     elif cmd == "advance":
         advance(load(Path(sys.argv[2])), int(sys.argv[3]))
     else:

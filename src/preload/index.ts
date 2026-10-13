@@ -48,6 +48,10 @@ const api: MissionApi = {
     action: (req) => ipcRenderer.invoke(IPC.sessionsAction, req),
     export: (req) => ipcRenderer.invoke(IPC.sessionsExport, req)
   },
+  usage: {
+    summary: (args) => ipcRenderer.invoke(IPC.usageSummary, args),
+    tools: (args) => ipcRenderer.invoke(IPC.usageTools, args)
+  },
   brain: {
     get: () => ipcRenderer.invoke(IPC.brainGet),
     setVault: (path) => ipcRenderer.invoke(IPC.brainSetVault, path),
