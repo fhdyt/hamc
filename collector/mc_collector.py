@@ -1558,6 +1558,53 @@ def q_sessions_search(home, a):
     return {"rows": rows[:limit], "sources": sorted(sources)[:SESSIONS_SOURCES_MAX], "errors": errors, "more": len(rows) > limit, "fallback": fallback}
 
 
+def q_session_transcript(home, a):
+    name, sid = a.get("profile"), a.get("sessionId")
+    if not valid_profile(name) or not isinstance(sid, str) or not ID_RE.match(sid):
+        raise QueryError("bad_args")
+    after = a.get("afterId", 0)
+    if not valid_int(after, 0):
+        raise QueryError("bad_args")
+    limit = _limit(a, TRANSCRIPT_PAGE, TRANSCRIPT_PAGE)
+    con = open_profile(home, name)
+    try:
+        parts = feed_select(con)
+        scols = table_columns(con, "sessions")
+        if parts is None or "id" not in scols:
+            raise QueryError("unsupported_schema")
+        base, where = parts
+        got = _dict_rows(con.execute("SELECT %s FROM sessions s WHERE s.id = ?" % _session_select(scols), (sid,)))
+        rows = fetch_rows(con, base, where, ["m.session_id = ?", "m.id > ?"], [sid, after], "m.id ASC", limit)
+        if not got and not rows:
+            raise QueryError("not_found")
+        srow = got[0] if got else {"id": sid}
+        kids = _children_of(con, scols, [sid])
+        parent = None
+        pid = srow.get("parent_session_id")
+        if pid:
+            prow = con.execute("SELECT title FROM sessions WHERE id = ?", (pid,)).fetchone() if "title" in scols else None
+            parent = {"id": pid, "title": _text(prow[0], 200) if prow else None}
+        children = []
+        if "parent_session_id" in scols:
+            tcol = "title" if "title" in scols else "NULL"
+            scol = "source" if "source" in scols else "NULL"
+            children = [{"id": r[0], "title": _text(r[1], 200), "source": _text(r[2], 64)} for r in
+                        con.execute("SELECT id, %s, %s FROM sessions WHERE parent_session_id = ? ORDER BY started_at LIMIT 50" % (tcol, scol), (sid,))]
+    finally:
+        con.close()
+    items = []
+    for r in rows:
+        items.extend(row_items(name, r))
+    row_ids = [r["id"] for r in rows if isinstance(r["id"], int)]
+    return {
+        "session": _session_row(name, srow, sid in kids),
+        "items": items,
+        "nextAfter": max(row_ids) if len(rows) >= limit and row_ids else None,
+        "chain": {"parent": parent, "children": children},
+        "total": _opt_int(srow.get("message_count")),
+    }
+
+
 # ---- chat ----------------------------------------------------------------
 
 CHAT_SOURCE = "mission-control"
@@ -2135,6 +2182,7 @@ def run_query(home, cmd, raw):
         "vault_check": q_vault_check, "browse": q_browse, "note": q_note,
         "chat_sessions": q_chat_sessions, "uploads_list": q_uploads_list, "interaction": q_interaction,
         "sessions_list": q_sessions_list, "sessions_search": q_sessions_search,
+        "session_transcript": q_session_transcript,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}

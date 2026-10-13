@@ -158,3 +158,46 @@ def test_search_bad_args(fx):
     assert q(fx, "sessions_search", {"profiles": [], "q": ""})["error"] == "bad_args"
     assert q(fx, "sessions_search", {"profiles": [], "q": "x" * 201})["error"] == "bad_args"
     assert q(fx, "sessions_search", {"profiles": [], "q": 5})["error"] == "bad_args"
+
+
+# ---- transcript -----------------------------------------------------------
+
+def test_transcript_returns_items_session_and_chain(fx):
+    r = q(fx, "session_transcript", {"profile": "scout", "sessionId": "s-scout-1"})
+    assert r["ok"] is True
+    d = r["data"]
+    assert d["session"]["id"] == "s-scout-1" and d["session"]["title"] == "Digest run"
+    assert [i["kind"] for i in d["items"]] == ["user", "thinking", "reply"]
+    assert d["nextAfter"] is None and d["total"] == 2
+    assert d["chain"]["parent"] is None
+    assert [c["id"] for c in d["chain"]["children"]] == ["s-scout-child"]
+
+
+def test_transcript_child_points_to_parent(fx):
+    d = q(fx, "session_transcript", {"profile": "scout", "sessionId": "s-scout-child"})["data"]
+    assert d["chain"]["parent"] == {"id": "s-scout-1", "title": "Digest run"}
+
+
+def test_transcript_pages_by_message_id(fx):
+    full = q(fx, "session_transcript", {"profile": "default", "sessionId": "s-default-1"})["data"]
+    assert [i["kind"] for i in full["items"]] == ["user", "thinking", "reply", "tool", "result", "reply"]
+    first = q(fx, "session_transcript", {"profile": "default", "sessionId": "s-default-1", "limit": 2})["data"]
+    assert {i["messageId"] for i in first["items"]} == {first["nextAfter"] - 1, first["nextAfter"]}
+    assert first["nextAfter"] is not None
+    rest = q(fx, "session_transcript", {"profile": "default", "sessionId": "s-default-1", "afterId": first["nextAfter"]})["data"]
+    assert [i["id"] for i in first["items"] + rest["items"]] == [i["id"] for i in full["items"]]
+    assert rest["nextAfter"] is None
+
+
+def test_transcript_skips_inactive_messages(fx):
+    mf.add_message(fx.home / "state.db", "s-default-1", "assistant", "hidden", fx.now, active=0)
+    texts = [i["text"] for i in q(fx, "session_transcript", {"profile": "default", "sessionId": "s-default-1"})["data"]["items"]]
+    assert "hidden" not in texts
+
+
+def test_transcript_errors(fx):
+    assert q(fx, "session_transcript", {"profile": "default", "sessionId": "nope"})["error"] == "not_found"
+    assert q(fx, "session_transcript", {"profile": "ghost", "sessionId": "x"})["error"] == "not_found"
+    assert q(fx, "session_transcript", {"profile": "../x", "sessionId": "x"})["error"] == "bad_args"
+    assert q(fx, "session_transcript", {"profile": "default", "sessionId": "a b"})["error"] == "bad_args"
+    assert q(fx, "session_transcript", {"profile": "default", "sessionId": "x", "afterId": -1})["error"] == "bad_args"
