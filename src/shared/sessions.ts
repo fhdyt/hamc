@@ -22,13 +22,14 @@ export function sessionCommandPreview(action: SessionAction, profile: string, id
   return `$ hermes ${shown.join(' ')}`
 }
 
-export const RANGES = ['today', '7d', '30d', 'all'] as const
+export const RANGES = ['today', '7d', '14d', '30d', 'all'] as const
 export type Range = (typeof RANGES)[number]
 
 /** Start of the range in epoch seconds, or undefined for "all". */
 export function sinceFor(range: Range, now: number): number | undefined {
   if (range === 'all') return undefined
   if (range === '7d') return now - 7 * 86400
+  if (range === '14d') return now - 14 * 86400
   if (range === '30d') return now - 30 * 86400
   const d = new Date(now * 1000)
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 1000

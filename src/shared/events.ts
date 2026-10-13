@@ -221,6 +221,59 @@ export const SessionTranscript = z.object({
 })
 export type SessionTranscript = z.infer<typeof SessionTranscript>
 
+export const UsageRow = z.object({
+  /** Index into the `dayStarts` of the request. */
+  day: z.number().int().nonnegative(),
+  profile: z.string(),
+  provider: z.string().nullable(),
+  model: z.string().nullable(),
+  sessions: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  cacheReadTokens: z.number().int().nonnegative(),
+  apiCalls: z.number().int().nonnegative().nullable(),
+  cost: z.number(),
+  /** The part of `cost` that is an estimate. */
+  estimatedCost: z.number(),
+  /** Sessions with no usable cost figure. */
+  unknownCost: z.number().int().nonnegative()
+})
+export type UsageRow = z.infer<typeof UsageRow>
+
+const QueryErrors = z.array(z.object({ profile: z.string(), code: z.string() }))
+
+export const UsageSummary = z.object({ rows: z.array(UsageRow), truncated: z.boolean(), errors: QueryErrors })
+export type UsageSummary = z.infer<typeof UsageSummary>
+
+export const ToolFailure = z.object({ profile: z.string(), sessionId: z.string(), ts: z.number().nullable(), text: z.string() })
+export type ToolFailure = z.infer<typeof ToolFailure>
+
+export const ToolStat = z.object({
+  name: z.string(),
+  calls: z.number().int().nonnegative(),
+  errors: z.number().int().nonnegative(),
+  avgMs: z.number().nullable(),
+  maxMs: z.number().nullable(),
+  lastTs: z.number().nullable(),
+  byProfile: z.record(z.string(), z.number().int().nonnegative()),
+  failures: z.array(ToolFailure)
+})
+export type ToolStat = z.infer<typeof ToolStat>
+
+export const UsageTools = z.object({ tools: z.array(ToolStat), scanned: z.number().int().nonnegative(), truncated: z.boolean(), errors: QueryErrors })
+export type UsageTools = z.infer<typeof UsageTools>
+
+/** What the main process knows about today's cost against the daily alert. `total` is null until the first successful check. */
+export const CostAlertState = z.object({
+  enabled: z.boolean(),
+  day: z.string(),
+  total: z.number().nullable(),
+  threshold: z.number(),
+  over: z.boolean(),
+  checkedAt: z.number()
+})
+export type CostAlertState = z.infer<typeof CostAlertState>
+
 export const BrainNote = z.object({
   id: z.string(),
   title: z.string(),

@@ -7,7 +7,7 @@ import { useAgents } from '../../stores/agents'
 import { useSessions } from '../../stores/sessions'
 
 const MAX_AGENT_CHIPS = 8
-const RANGE_LABEL: Record<Range, string> = { today: 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days', all: 'All time' }
+const RANGE_LABEL: Record<Range, string> = { today: 'Today', '7d': 'Last 7 days', '14d': 'Last 14 days', '30d': 'Last 30 days', all: 'All time' }
 
 export function SessionFilters() {
   const query = useSessions((s) => s.query)

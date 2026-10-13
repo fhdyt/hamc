@@ -83,7 +83,10 @@ export interface SettingsMap {
   'brain.graph': BrainGraphSettings
   /** Agent and time range shared by Sessions, Usage, Logs and Skills (F-NAV-8). `all` or a profile name. */
   'filters.agent': string
-  'filters.range': 'today' | '7d' | '30d' | 'all'
+  'filters.range': 'today' | '7d' | '14d' | '30d' | 'all'
+  /** The daily cost alert (F-SHELL-5): on or off, and the USD per local day that all agents together must pass. */
+  'alerts.cost.enabled': boolean
+  'alerts.cost.usd': number
   'window.bounds': WindowBounds | null
 }
 
@@ -108,6 +111,8 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'brain.graph': BRAIN_GRAPH_DEFAULTS,
   'filters.agent': 'all',
   'filters.range': '7d',
+  'alerts.cost.enabled': false,
+  'alerts.cost.usd': 10,
   'window.bounds': null
 }
 
@@ -147,7 +152,9 @@ export const SETTINGS_SCHEMA = {
     previewOpen: z.boolean()
   }),
   'filters.agent': z.string().min(1).max(64),
-  'filters.range': z.enum(['today', '7d', '30d', 'all']),
+  'filters.range': z.enum(['today', '7d', '14d', '30d', 'all']),
+  'alerts.cost.enabled': z.boolean(),
+  'alerts.cost.usd': z.number().min(0.01).max(100000),
   'window.bounds': z
     .object({ x: z.number().optional(), y: z.number().optional(), width: z.number(), height: z.number() })
     .nullable()
