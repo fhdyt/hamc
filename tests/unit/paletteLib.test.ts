@@ -39,7 +39,7 @@ describe('buildItems', () => {
     expect(screens).toHaveLength(NAV.length)
     const sessions = screens.find((i) => i.target.kind === 'screen' && i.target.route === 'sessions')!
     expect(sessions.hint).toContain('Ctrl+4')
-    for (const route of ['kanban', 'skills']) {
+    for (const route of ['skills']) {
       expect(screens.find((i) => i.target.kind === 'screen' && i.target.route === route)!.hint).toContain('Coming in a later release')
     }
   })

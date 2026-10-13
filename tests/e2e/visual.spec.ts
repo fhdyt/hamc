@@ -64,7 +64,7 @@ test('captures Settings, the coming-later screen and narrow layouts', async () =
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0)
 
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /^Kanban/ }).click()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /^Skills/ }).click()
   await shot('coming-later')
 
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /^Dashboard/ }).click()

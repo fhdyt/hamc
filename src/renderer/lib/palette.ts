@@ -26,7 +26,7 @@ export interface PaletteItem {
 }
 
 const GROUP_ORDER: Record<PaletteGroup, number> = { screen: 0, action: 1, agent: 2, session: 3, note: 4 }
-const NOT_BUILT: readonly Route[] = ['kanban', 'skills']
+const NOT_BUILT: readonly Route[] = ['skills']
 const AGENT_TABS: { tab: AgentTab; label: string }[] = [
   { tab: 'model', label: 'Model' },
   { tab: 'soul', label: FILE_LABEL.soul },

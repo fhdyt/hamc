@@ -10,6 +10,19 @@ export const UNASSIGNED = '__none__'
 
 export type ColumnKey = ColumnId | 'other'
 
+/** The colour of a column's dot and of the left edge of its cards. */
+export const COLUMN_COLOR: Record<ColumnKey, string> = {
+  triage: '#8b95bd',
+  todo: '#a9b2d3',
+  ready: '#f1fa8c',
+  running: '#8be9fd',
+  blocked: '#ff5555',
+  scheduled: '#ffb86c',
+  review: '#bd93f9',
+  done: '#50fa7b',
+  other: '#a9b2d3'
+}
+
 export interface Column {
   id: ColumnKey
   label: string

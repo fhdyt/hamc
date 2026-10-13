@@ -13,6 +13,7 @@ import { NoteModal } from './screens/brain/NoteModal'
 import { SessionModal } from './screens/feed/SessionModal'
 import { Launch } from './screens/Launch'
 import { Server } from './screens/Server'
+import { Kanban } from './screens/Kanban'
 import { Logs } from './screens/Logs'
 import { Sessions } from './screens/Sessions'
 import { Usage } from './screens/Usage'
@@ -39,7 +40,7 @@ export function App() {
 
   return (
     <Framed>
-      <Shell>{route === 'dashboard' ? <Dashboard /> : route === 'server' ? <Server /> : route === 'chat' ? <Chat /> : route === 'feed' ? <Feed /> : route === 'brain' ? <Brain /> : route === 'sessions' ? <Sessions /> : route === 'usage' ? <Usage /> : route === 'logs' ? <Logs /> : <ComingSoon route={route} />}</Shell>
+      <Shell>{route === 'dashboard' ? <Dashboard /> : route === 'server' ? <Server /> : route === 'chat' ? <Chat /> : route === 'feed' ? <Feed /> : route === 'brain' ? <Brain /> : route === 'sessions' ? <Sessions /> : route === 'usage' ? <Usage /> : route === 'logs' ? <Logs /> : route === 'kanban' ? <Kanban /> : <ComingSoon route={route} />}</Shell>
       <CronModal />
       <FeedModal />
       <SessionModal />
