@@ -69,6 +69,7 @@ export interface SettingsMap {
   'ui.sidebarCollapsed': boolean
   'agents.panelCollapsed': boolean
   'dashboard.cronOpen': boolean
+  'dashboard.notesOpen': boolean
   'chat.uploadDir': string
   'chat.maxUploadMb': number
   /** Chat through `hermes acp` when the server has it, so Hermes can ask before risky actions. */
@@ -130,6 +131,7 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'ui.sidebarCollapsed': false,
   'agents.panelCollapsed': false,
   'dashboard.cronOpen': true,
+  'dashboard.notesOpen': true,
   'chat.uploadDir': '~/hermes-uploads',
   'chat.maxUploadMb': 50,
   'chat.useAcp': true,
@@ -177,6 +179,7 @@ export const SETTINGS_SCHEMA = {
   'ui.sidebarCollapsed': z.boolean(),
   'agents.panelCollapsed': z.boolean(),
   'dashboard.cronOpen': z.boolean(),
+  'dashboard.notesOpen': z.boolean(),
   'chat.uploadDir': z.string().min(1).max(300),
   'chat.maxUploadMb': z.number().int().min(1).max(2048),
   'chat.useAcp': z.boolean(),

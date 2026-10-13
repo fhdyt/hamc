@@ -521,6 +521,11 @@ export const BrainNote = z.object({
   title: z.string(),
   mtime: z.number(),
   size: z.number(),
+  /** When the file was created (statx), epoch seconds; null where the server's file system does not keep it. */
+  born: z.number().nullable().optional(),
+  /** The day the note says it was written (`YYYY-MM-DD` from the frontmatter `created`/`date` or a dated file name). */
+  dated: z.string().nullable().optional(),
+  datedFrom: z.enum(['frontmatter', 'name']).nullable().optional(),
   tags: z.array(z.string()),
   aliases: z.array(z.string()),
   links: z.array(z.string()),

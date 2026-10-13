@@ -2602,17 +2602,93 @@ def parse_note(text):
         if t:
             links.append(t)
     aliases = fm_list(fm, ("aliases", "alias"))
-    return {"links": links, "tags": tags, "aliases": aliases}
+    return {"links": links, "tags": tags, "aliases": aliases, "dated": fm_date(fm)}
+
+
+DATE_KEYS = ("created", "date created", "created_at", "createdat", "creation_date", "date")
+DAY_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})(?!\d)")
+
+
+def valid_day(y, m, d):
+    try:
+        return datetime.date(int(y), int(m), int(d)).isoformat()
+    except ValueError:
+        return None
+
+
+def fm_date(fm):
+    """The day a note was written according to its frontmatter (`created`, then `date`), as YYYY-MM-DD, else None."""
+    if not fm:
+        return None
+    found = {}
+    for line in fm.split("\n"):
+        m = re.match(r"^([A-Za-z_ ]+?)\s*:\s*(.+)$", line)
+        if not m:
+            continue
+        key = m.group(1).strip().lower()
+        if key in DATE_KEYS and key not in found:
+            d = DAY_RE.match(_fm_clean(m.group(2)))
+            if d:
+                day = valid_day(d.group(1), d.group(2), d.group(3))
+                if day:
+                    found[key] = day
+    for key in DATE_KEYS:
+        if key in found:
+            return found[key]
+    return None
+
+
+def name_date(nid):
+    """A leading YYYY-MM-DD in the file name (daily notes, dated notes), else None."""
+    d = DAY_RE.match(nid.rsplit("/", 1)[-1])
+    return valid_day(d.group(1), d.group(2), d.group(3)) if d else None
+
+
+_STATX = []
+
+
+def birth_time(path):
+    """When the file was created, in epoch seconds, or None when the system does not keep it. Python's os.stat has
+    no birth time on Linux, so this asks statx(2) through libc (read-only; any failure means None)."""
+    if not _STATX:
+        fn = None
+        if sys.platform.startswith("linux"):
+            try:
+                import ctypes
+                libc = ctypes.CDLL(None, use_errno=True)
+                fn = libc.statx
+                fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_uint, ctypes.c_void_p]
+                fn.restype = ctypes.c_int
+                _STATX.append(ctypes)
+            except (OSError, AttributeError, ImportError):
+                fn = None
+        _STATX.insert(0, fn)
+    fn = _STATX[0]
+    if fn is None:
+        return None
+    ctypes = _STATX[1]
+    buf = ctypes.create_string_buffer(256)
+    try:
+        # AT_FDCWD, AT_SYMLINK_NOFOLLOW, STATX_BTIME
+        if fn(-100, os.fsencode(path), 0x100, 0x800, buf) != 0:
+            return None
+    except Exception:
+        return None
+    mask = int.from_bytes(buf.raw[0:4], "little")
+    if not mask & 0x800:
+        return None
+    sec = int.from_bytes(buf.raw[80:88], "little", signed=True)
+    return sec if sec > 0 else None
 
 
 def parse_file(path, size):
     if size > VAULT_BIG_FILE:
-        return {"links": [], "tags": [], "aliases": []}
+        return {"links": [], "tags": [], "aliases": [], "dated": None}
     try:
         with open(path, "rb") as f:
             text = f.read(VAULT_PARSE_BYTES).decode("utf-8", "replace")
     except OSError:
-        return {"links": [], "tags": [], "aliases": []}
+        return {"links": [], "tags": [], "aliases": [], "dated": None}
     return parse_note(text)
 
 
@@ -2694,6 +2770,9 @@ def build_records(raw):
             "title": nid[:-3].rsplit("/", 1)[-1],
             "mtime": r["mtime"],
             "size": r["size"],
+            "born": r.get("born"),
+            "dated": p.get("dated") or name_date(nid),
+            "datedFrom": "frontmatter" if p.get("dated") else ("name" if name_date(nid) else None),
             "tags": p["tags"][:200],
             "aliases": p["aliases"][:50],
             "links": sorted(linked)[:VAULT_MAX_LINKS],
@@ -2723,7 +2802,8 @@ class VaultState:
             cur = self.raw.get(nid)
             if cur is not None and cur["mtime"] == mtime and cur["size"] == size:
                 continue
-            self.raw[nid] = {"mtime": mtime, "size": size, "parsed": parse_file(path, size)}
+            born = birth_time(path)
+            self.raw[nid] = {"mtime": mtime, "size": size, "born": born, "parsed": parse_file(path, size)}
         for nid in [k for k in self.raw if k not in seen]:
             del self.raw[nid]
 

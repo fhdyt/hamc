@@ -249,6 +249,7 @@ Chat sekarang memakai gateway TUI milik Hermes (`python -m tui_gateway.entry`) l
 146. **Settings → Workspace.** Path vault tampil dan bisa diganti atau dihapus; home, hermes, python dan versi sama dengan hasil preflight.
 147. **General.** Keep running in the tray: menutup jendela menyembunyikannya, ikon tray membuka lagi atau Quit; koneksi dan notifikasi tetap jalan. Start minimized: aplikasi dibuka di taskbar/tray. Launch at login (Windows/macOS, aplikasi terpasang): setelah login Windows aplikasi langsung terbuka di depan (atau terminimalkan bila Start minimized aktif).
 148. **Suara balasan.** Kirim pesan ke agent: saat balasan selesai terdengar nada pendek (default Chime). Settings → Notifications → Reply sound: Off membuatnya diam, When away hanya berbunyi bila agent itu tidak sedang tampil; pilih Chime/Pop/Blip dan volume (tombol Play memutarnya). Saat Do not disturb aktif tidak ada suara. Notifikasi OS untuk balasan tidak berbunyi dobel.
+149. **Kalender catatan (Dashboard, antara Server dan graph).** Kotak hijau per hari mengikuti jumlah catatan vault yang ditulis hari itu; hari ini ada di kolom paling kanan pada baris harinya. Klik satu hari: daftar catatannya muncul, klik catatan membuka dialog catatan. Tombol perbesar menampilkan setahun dan dari mana tanggalnya diambil (frontmatter `created`/`date`, tanggal di nama file, waktu file dibuat, atau waktu terakhir diubah bila filesystem VPS tidak menyimpan waktu dibuat). Catat apakah VPS menyimpan waktu dibuat (`stat -c %w file.md` bukan `-`).
 
 ## Melaporkan hasil
 

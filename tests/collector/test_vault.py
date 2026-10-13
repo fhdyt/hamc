@@ -94,6 +94,32 @@ def test_ghosts_attachments_and_self_links(tmp_path):
     assert a["attachments"] == ["file.pdf", "pic.PNG"]
 
 
+def test_the_day_a_note_was_written(tmp_path):
+    n = notes_of(tmp_path, {
+        "fm.md": "---\ndate: 2026-01-05\ncreated: '2025-12-31T10:00'\n---\n",
+        "only-date.md": "---\ndate: 2026-02-03 09:00\n---\n",
+        "daily/2026-10-12.md": "",
+        "2026-10-13-plan.md": "---\ndate: not a day\n---\n",
+        "bad-day.md": "---\ncreated: 2026-13-40\n---\n",
+        "plain.md": "",
+    })
+    got = {k: (v["dated"], v["datedFrom"]) for k, v in n.items()}
+    assert got == {
+        "fm.md": ("2025-12-31", "frontmatter"),
+        "only-date.md": ("2026-02-03", "frontmatter"),
+        "daily/2026-10-12.md": ("2026-10-12", "name"),
+        "2026-10-13-plan.md": ("2026-10-13", "name"),
+        "bad-day.md": (None, None),
+        "plain.md": (None, None),
+    }
+    born = n["plain.md"]["born"]
+    assert born is None or isinstance(born, int)
+
+
+def test_birth_time_is_none_for_a_missing_file(tmp_path):
+    assert c.birth_time(str(tmp_path / "nope.md")) is None
+
+
 def test_hidden_folders_and_other_files_are_skipped(tmp_path):
     n = notes_of(tmp_path, {"keep.md": "", ".obsidian/x.md": "", ".git/y.md": "", ".trash/z.md": "", "sub/.hidden/q.md": "", "note.txt": "", "Upper.MD": ""})
     assert sorted(n) == ["Upper.MD", "keep.md"]

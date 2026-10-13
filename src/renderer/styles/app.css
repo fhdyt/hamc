@@ -360,3 +360,28 @@ body {
 .bp-legend { position: absolute; z-index: 3; left: 12px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; font-size: 11px; color: #a9b2d3; pointer-events: none; max-width: calc(100% - 24px); }
 .bp-legend i { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 50%; vertical-align: -1px; }
 .d-legend { bottom: 8px; font-size: 10px; }
+/* Dashboard notes calendar (GitHub-style) */
+.hm-box { min-width: 0; }
+.hm { display: flex; flex-direction: column; gap: 6px; }
+.hm-grid { display: flex; gap: 3px; overflow: hidden; }
+.hm-labels, .hm-col { display: grid; grid-template-rows: 12px repeat(7, 10px); gap: 3px; }
+.hm-col { flex: none; width: 10px; grid-template-columns: 10px; }
+.hm-labels { width: 25px; flex: none; grid-template-rows: 12px repeat(7, 10px); }
+.hm-labels span { font-size: 9px; line-height: 10px; color: #8b95bd; }
+.hm-labels span:first-child { height: 12px; }
+.hm-month { width: 10px; height: 12px; font-size: 9px; line-height: 12px; color: #8b95bd; white-space: nowrap; overflow: visible; }
+.hm-cell { display: block; width: 10px; height: 10px; padding: 0; border: 0; border-radius: 2px; background: #2c2e3b; cursor: pointer; }
+.hm-cell.future { background: transparent; cursor: default; }
+.hm-cell.l1 { background: rgba(80, 250, 123, 0.28); }
+.hm-cell.l2 { background: rgba(80, 250, 123, 0.5); }
+.hm-cell.l3 { background: rgba(80, 250, 123, 0.75); }
+.hm-cell.l4 { background: #50fa7b; }
+button.hm-cell:hover { outline: 1px solid #f8f8f2; }
+button.hm-cell:focus-visible { outline: 2px solid #8be9fd; outline-offset: 1px; }
+button.hm-cell[aria-pressed='true'] { outline: 1px solid #bd93f9; outline-offset: 1px; }
+.hm-legend { display: flex; align-items: center; justify-content: flex-end; gap: 3px; font-size: 9px; color: #8b95bd; }
+.hm-legend .hm-cell { cursor: default; }
+.hm-day { display: flex; flex-direction: column; gap: 2px; max-height: 104px; overflow-y: auto; padding-top: 6px; border-top: 1px solid #44475a; }
+.hm-day h3 { margin: 0 0 2px; font-size: 11px; font-weight: 600; color: #bd93f9; }
+.hm-sum, .hm-src { margin: 0; font-size: 11px; color: #a9b2d3; }
+.hm-src { color: #8b95bd; }
