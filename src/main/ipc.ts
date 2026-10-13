@@ -7,6 +7,7 @@ import { SETTINGS_SCHEMA, isSettingKey } from '@shared/settings'
 import { LOG_FILES } from '@shared/logs'
 import { BOARD_RE, TASK_ID_RE } from '@shared/kanban'
 import { CRON_ACTIONS, INCIDENT_ID_RE, JOB_ID_RE, SCHEDULE_MAX } from '@shared/cron'
+import { CATEGORY_RE, SHA_RE, SKILL_ACTIONS, SKILL_NAME_RE, validHubId, validSkillPath } from '@shared/skills'
 import { EXPORT_MAX_BYTES } from './sessions/export'
 import { isTrustedSender, type AppTarget } from './security'
 import type { MissionSession } from './session'
@@ -134,6 +135,19 @@ const CronActionSchema = z.object({
   incidentId: z.string().regex(INCIDENT_ID_RE).optional()
 })
 const CronRunsSchema = z.object({ profile: ProfileName, jobId: JobId, limit: z.number().int().min(1).max(20) })
+const HubId = z.string().max(320).refine(validHubId)
+const SkillActionSchema = z.object({
+  action: z.enum(SKILL_ACTIONS),
+  profile: ProfileName,
+  name: z.string().regex(SKILL_NAME_RE).optional(),
+  id: HubId.optional(),
+  category: z.string().regex(CATEGORY_RE).optional()
+})
+const SkillsListSchema = z.object({ profiles: z.array(ProfileName).max(50) })
+const SkillReadSchema = z.object({ profile: ProfileName, path: z.string().max(400).refine(validSkillPath) })
+const SkillsLedgerSchema = z.object({ profile: ProfileName, limit: z.number().int().min(1).max(500) })
+const SkillsBlobsSchema = z.object({ profile: ProfileName, shas: z.array(z.string().regex(SHA_RE)).min(1).max(4) })
+const SkillInspectSchema = z.object({ profile: ProfileName, id: HubId })
 const CronOutputSchema = z.object({ profile: ProfileName, jobId: JobId, names: z.array(z.string().min(1).max(300)).min(1).max(2) })
 
 export function registerIpc(d: IpcDeps): void {
@@ -174,6 +188,16 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.cronAction, (a) => d.session.cronAction(CronActionSchema.parse(a)))
   handle(IPC.cronRuns, (a) => d.session.cronRuns(CronRunsSchema.parse(a)))
   handle(IPC.cronRunOutput, (a) => d.session.cronRunOutput(CronOutputSchema.parse(a)))
+  handle(IPC.skillsList, (a) => d.session.skillsList(SkillsListSchema.parse(a)))
+  handle(IPC.skillRead, (a) => d.session.skillRead(SkillReadSchema.parse(a)))
+  handle(IPC.skillsLedger, (a) => d.session.skillsLedger(SkillsLedgerSchema.parse(a)))
+  handle(IPC.skillsBlobs, (a) => d.session.skillsBlobs(SkillsBlobsSchema.parse(a)))
+  handle(IPC.skillsAction, (a) => d.session.skillAction(SkillActionSchema.parse(a)))
+  handle(IPC.skillsInspect, (a) => {
+    const { profile, id } = SkillInspectSchema.parse(a)
+    return d.session.skillInspect(profile, id)
+  })
+  handle(IPC.skillsCuratorStatus, (a) => d.session.curatorStatus(ProfileName.parse(a)))
   handle(IPC.feedMessage, (a) => d.session.feedMessage(FeedMessageArgs.parse(a)))
   handle(IPC.feedHistory, (a) => d.session.feedHistory(FeedHistoryArgs.parse(a)))
   handle(IPC.feedSession, (a) => d.session.feedSession(FeedSessionArgs.parse(a)))

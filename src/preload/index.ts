@@ -35,6 +35,15 @@ const api: MissionApi = {
     runs: (args) => ipcRenderer.invoke(IPC.cronRuns, args),
     output: (args) => ipcRenderer.invoke(IPC.cronRunOutput, args)
   },
+  skills: {
+    list: (args) => ipcRenderer.invoke(IPC.skillsList, args),
+    read: (args) => ipcRenderer.invoke(IPC.skillRead, args),
+    ledger: (args) => ipcRenderer.invoke(IPC.skillsLedger, args),
+    blobs: (args) => ipcRenderer.invoke(IPC.skillsBlobs, args),
+    action: (req) => ipcRenderer.invoke(IPC.skillsAction, req),
+    inspect: (profile, id) => ipcRenderer.invoke(IPC.skillsInspect, { profile, id }),
+    curatorStatus: (profile) => ipcRenderer.invoke(IPC.skillsCuratorStatus, profile)
+  },
   feed: {
     message: (profile, messageId, field, index) => ipcRenderer.invoke(IPC.feedMessage, { profile, messageId, field, index }),
     history: (before, limit) => ipcRenderer.invoke(IPC.feedHistory, { before, limit }),

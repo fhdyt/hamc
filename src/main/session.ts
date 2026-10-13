@@ -1,6 +1,6 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
-import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, LogsList, LogsRead, KanbanBoards, KanbanTasks, KanbanTaskDetail, VaultCheck, CronData, CronRuns, CronOutputFiles } from '@shared/events'
+import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, LogsList, LogsRead, KanbanBoards, KanbanTasks, KanbanTaskDetail, VaultCheck, CronData, CronRuns, CronOutputFiles, SkillsList, SkillText, SkillsLedger, SkillBlobs } from '@shared/events'
 import type { CostAlertState } from '@shared/events'
 import type { KanbanTaskArgs, KanbanTasksArgs } from '@shared/kanban'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from '@shared/logs'
@@ -27,6 +27,8 @@ import { QueryRunner } from './query'
 import { CollectorChannel } from './collector/channel'
 import { ModelResolver } from './collector/models'
 import { CronActionService } from './cron/actions'
+import { SkillActionService } from './skills/actions'
+import type { SkillActionRequest, SkillActionResult, SkillTextResult } from '@shared/skills'
 import type { CronActionRequest, CronActionResult } from '@shared/cron'
 import { CronStore } from './cron/store'
 import { CronWatcher, type CronAlert } from './cron/watcher'
@@ -116,6 +118,7 @@ export class MissionSession {
   private readonly gateways: GatewayService
   private readonly approvals: ApprovalsService
   private readonly cronActions: CronActionService
+  private readonly skillActions: SkillActionService
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -157,6 +160,12 @@ export class MissionSession {
       hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
       isConnected: () => d.manager.isConnected(),
       store: this.cronStore,
+      log: (m) => d.log?.(m)
+    })
+    this.skillActions = new SkillActionService({
+      conn: d.manager,
+      hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
+      isConnected: () => d.manager.isConnected(),
       log: (m) => d.log?.(m)
     })
     this.approvals = new ApprovalsService({
@@ -729,5 +738,33 @@ export class MissionSession {
 
   cronRunOutput(args: { profile: string; jobId: string; names: string[] }): Promise<QueryResult<CronOutputFiles>> {
     return this.queries.run('cron_output', args, CronOutputFiles)
+  }
+
+  skillsList(args: { profiles: string[] }): Promise<QueryResult<SkillsList>> {
+    return this.queries.run('skills_list', args, SkillsList)
+  }
+
+  skillRead(args: { profile: string; path: string }): Promise<QueryResult<SkillText>> {
+    return this.queries.run('skill_read', args, SkillText)
+  }
+
+  skillsLedger(args: { profile: string; limit: number }): Promise<QueryResult<SkillsLedger>> {
+    return this.queries.run('skills_ledger', args, SkillsLedger)
+  }
+
+  skillsBlobs(args: { profile: string; shas: string[] }): Promise<QueryResult<SkillBlobs>> {
+    return this.queries.run('skills_blobs', args, SkillBlobs)
+  }
+
+  skillAction(req: SkillActionRequest): Promise<SkillActionResult> {
+    return this.skillActions.run(req)
+  }
+
+  skillInspect(profile: string, id: string): Promise<SkillTextResult> {
+    return this.skillActions.inspect(profile, id)
+  }
+
+  curatorStatus(profile: string): Promise<SkillTextResult> {
+    return this.skillActions.curatorStatus(profile)
   }
 }

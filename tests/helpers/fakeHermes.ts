@@ -20,9 +20,11 @@ export interface FakeHermesState {
   sessionCalls: string[][]
   /** Every `hermes cron ...` call, as the arguments after `hermes`. */
   cronCalls: string[][]
+  /** Every `hermes curator ...` and `hermes skills ...` call, as the arguments after `hermes`. */
+  skillCalls: string[][]
 }
 
-export const newHermesState = (): FakeHermesState => ({ config: new Map(), env: new Map(), keyVia: [], restarts: [], stops: [], failOn: {}, sessionCalls: [], cronCalls: [] })
+export const newHermesState = (): FakeHermesState => ({ config: new Map(), env: new Map(), keyVia: [], restarts: [], stops: [], failOn: {}, sessionCalls: [], cronCalls: [], skillCalls: [] })
 
 export interface FakeHermesOptions {
   st: FakeHermesState

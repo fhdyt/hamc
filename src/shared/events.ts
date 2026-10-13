@@ -188,6 +188,71 @@ export const CronOutputFiles = z.object({
 })
 export type CronOutputFiles = z.infer<typeof CronOutputFiles>
 
+export const SkillOrigin = z.enum(['agent', 'hub', 'bundled'])
+export type SkillOrigin = z.infer<typeof SkillOrigin>
+
+/** One skill of one profile, from skills/ and .usage.json (M10a). */
+export const Skill = z.object({
+  profile: z.string(),
+  /** Folder relative to skills/ (`.archive/<name>` for an archived skill); the key for `skill_read`. */
+  path: z.string(),
+  category: z.string(),
+  dir: z.string(),
+  name: z.string(),
+  description: z.string(),
+  version: z.string().nullable(),
+  author: z.string().nullable(),
+  tags: z.array(z.string()),
+  platforms: z.array(z.string()),
+  requiresToolsets: z.array(z.string()),
+  /** Names only; values are never read. */
+  envNames: z.array(z.string()),
+  origin: SkillOrigin,
+  createdBy: z.string().nullable(),
+  state: z.enum(['active', 'stale', 'archived']),
+  pinned: z.boolean(),
+  useCount: z.number().int(),
+  viewCount: z.number().int(),
+  patchCount: z.number().int(),
+  createdAt: z.number().nullable(),
+  lastUsedAt: z.number().nullable(),
+  lastViewedAt: z.number().nullable(),
+  lastPatchedAt: z.number().nullable(),
+  archivedAt: z.number().nullable(),
+  size: z.number(),
+  mtime: z.number()
+})
+export type Skill = z.infer<typeof Skill>
+
+export const SkillsList = z.object({
+  skills: z.array(Skill),
+  profiles: z.array(z.object({ profile: z.string(), ok: z.boolean(), error: z.string().nullable(), total: z.number().int(), truncated: z.boolean() }))
+})
+export type SkillsList = z.infer<typeof SkillsList>
+
+export const SkillText = z.object({ path: z.string(), text: z.string(), truncated: z.boolean(), size: z.number(), mtime: z.number() })
+export type SkillText = z.infer<typeof SkillText>
+
+export const SkillLedgerEntry = z.object({
+  id: z.string(),
+  ts: z.number().nullable(),
+  actor: z.string(),
+  action: z.string(),
+  skill: z.string(),
+  note: z.string().nullable(),
+  sessionId: z.string().nullable(),
+  files: z.array(z.object({ path: z.string(), before: z.string().nullable(), after: z.string().nullable() }))
+})
+export type SkillLedgerEntry = z.infer<typeof SkillLedgerEntry>
+
+export const SkillsLedger = z.object({ profile: z.string(), entries: z.array(SkillLedgerEntry), exists: z.boolean(), truncated: z.boolean() })
+export type SkillsLedger = z.infer<typeof SkillsLedger>
+
+export const SkillBlobs = z.object({
+  blobs: z.array(z.union([z.object({ sha: z.string(), text: z.string(), truncated: z.boolean() }), z.object({ sha: z.string(), error: z.string() })]))
+})
+export type SkillBlobs = z.infer<typeof SkillBlobs>
+
 export const FeedKind = z.enum(['user', 'thinking', 'tool', 'result', 'reply'])
 export type FeedKind = z.infer<typeof FeedKind>
 

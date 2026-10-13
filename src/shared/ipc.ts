@@ -3,7 +3,8 @@ import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult,
 import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, SessionDetail, SessionsList, SessionTranscript, UploadsList, VaultCheck } from './events'
 import type { KanbanTaskArgs, KanbanTasksArgs } from './kanban'
 import type { CronActionRequest, CronActionResult } from './cron'
-import type { CostAlertState, CronOutputFiles, CronRuns, KanbanBoards, KanbanTaskDetail, KanbanTasks, LogsList, LogsRead, UsageSummary, UsageTools } from './events'
+import type { SkillActionRequest, SkillActionResult, SkillTextResult } from './skills'
+import type { CostAlertState, CronOutputFiles, CronRuns, SkillBlobs, SkillsLedger, SkillsList, SkillText, KanbanBoards, KanbanTaskDetail, KanbanTasks, LogsList, LogsRead, UsageSummary, UsageTools } from './events'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from './logs'
 import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
@@ -206,6 +207,18 @@ export interface MissionApi {
     runs(args: { profile: string; jobId: string; limit: number }): Promise<QueryResult<CronRuns>>
     /** One or two output files of a job, by the names `runs` listed. */
     output(args: { profile: string; jobId: string; names: string[] }): Promise<QueryResult<CronOutputFiles>>
+  }
+  skills: {
+    list(args: { profiles: string[] }): Promise<QueryResult<SkillsList>>
+    read(args: { profile: string; path: string }): Promise<QueryResult<SkillText>>
+    ledger(args: { profile: string; limit: number }): Promise<QueryResult<SkillsLedger>>
+    blobs(args: { profile: string; shas: string[] }): Promise<QueryResult<SkillBlobs>>
+    /** One write through `hermes curator|skills` after the user confirmed it. */
+    action(req: SkillActionRequest): Promise<SkillActionResult>
+    /** `hermes skills inspect <id>` (read-only). */
+    inspect(profile: string, id: string): Promise<SkillTextResult>
+    /** `hermes curator status` (read-only). */
+    curatorStatus(profile: string): Promise<SkillTextResult>
   }
   interactions: {
     detail(args: InteractionDetailArgs): Promise<QueryResult<InteractionDetail>>
