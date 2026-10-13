@@ -13,7 +13,9 @@ import { useFeed } from './stores/feed'
 import { useInteractions } from './stores/interactions'
 import { useMetrics } from './stores/metrics'
 import { useCostAlert } from './stores/costAlert'
+import { usePalette } from './stores/palette'
 import { useSessions } from './stores/sessions'
+import { useUnread } from './stores/unread'
 import { useUsage } from './stores/usage'
 import { useUi } from './stores/ui'
 
@@ -28,6 +30,8 @@ export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
     useChat.getState().reset()
     useSessions.getState().reset()
     useUsage.getState().reset()
+    usePalette.getState().reset()
+    useUnread.getState().reset()
     useCostAlert.getState().reset()
   }
   const res = await window.mc.connection.connect(req)
@@ -62,6 +66,8 @@ export async function forgetConnection(): Promise<void> {
   useInteractions.getState().reset()
   useSessions.getState().reset()
   useUsage.getState().reset()
+  usePalette.getState().reset()
+  useUnread.getState().reset()
   useCostAlert.getState().reset()
   useBrain.getState().reset()
   useChat.getState().reset()

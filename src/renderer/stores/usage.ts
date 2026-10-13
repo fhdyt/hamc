@@ -17,6 +17,8 @@ interface UsageState {
   receivedAt: number | null
   toolsReceivedAt: number | null
   pinnedDay: number | null
+  /** Set by the palette action "Show today's cost": the last day is pinned as soon as the days are known. */
+  pinToday: boolean
   toolSort: ToolSort
   selectedTool: string | null
   setTab(tab: 'cost' | 'tools'): void
@@ -27,6 +29,7 @@ interface UsageState {
   setToolsStatus(status: 'loading'): void
   setToolsError(message: string): void
   pinDay(day: number | null): void
+  requestPinToday(): void
   setSort(sort: ToolSort): void
   selectTool(name: string | null): void
   /** A new filter: the old numbers belong to another selection. */
@@ -46,6 +49,7 @@ const EMPTY = {
   receivedAt: null as number | null,
   toolsReceivedAt: null as number | null,
   pinnedDay: null as number | null,
+  pinToday: false,
   toolSort: 'calls' as ToolSort,
   selectedTool: null as string | null
 }
@@ -53,12 +57,14 @@ const EMPTY = {
 export const useUsage = create<UsageState>()((set) => ({
   ...EMPTY,
   setTab: (tab) => set({ tab }),
-  applySummary: (summary, dayStarts, now = Date.now()) => set({ summary, dayStarts, status: 'ok', error: null, receivedAt: now }),
+  applySummary: (summary, dayStarts, now = Date.now()) =>
+    set((s) => ({ summary, dayStarts, status: 'ok', error: null, receivedAt: now, ...(s.pinToday && dayStarts.length > 0 ? { pinnedDay: dayStarts.length - 1, pinToday: false } : {}) })),
   applyTools: (tools, now = Date.now()) => set({ tools, toolsStatus: 'ok', toolsError: null, toolsReceivedAt: now }),
   setStatus: (status) => set({ status }),
   setError: (error) => set({ status: 'error', error }),
   setToolsStatus: (toolsStatus) => set({ toolsStatus }),
   setToolsError: (toolsError) => set({ toolsStatus: 'error', toolsError }),
+  requestPinToday: () => set((s) => (s.dayStarts.length > 0 ? { pinnedDay: s.dayStarts.length - 1, pinToday: false } : { pinToday: true })),
   pinDay: (day) => set((s) => ({ pinnedDay: day === null || s.pinnedDay === day ? null : day })),
   setSort: (toolSort) => set({ toolSort }),
   selectTool: (selectedTool) => set({ selectedTool }),
