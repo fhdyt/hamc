@@ -10,6 +10,8 @@ import { KIND_COLOR, KIND_LABEL, clock } from '../../lib/feed'
 import { moneyLabel } from '../../lib/usage'
 import { useAgents } from '../../stores/agents'
 import { useCostAlert } from '../../stores/costAlert'
+import { useLogs } from '../../stores/logs'
+import { buildGatewayRows } from '../../lib/gatewayView'
 import { useCron } from '../../stores/cron'
 import { useFeed } from '../../stores/feed'
 import { useUi } from '../../stores/ui'
@@ -43,6 +45,15 @@ export function ActivityPanel({ style, profile }: { style?: CSSProperties; profi
   const names = useMemo(() => Object.fromEntries(agents.map((a) => [a.profile, a.displayName])), [agents])
   const rows = useMemo(() => items.filter((i) => i.kind !== 'result' && (!profile || i.profile === profile)).slice(0, MAX_ROWS), [items, profile])
   const alerts = useMemo(() => jobs.filter((j) => isFailure(j.lastStatus) && (!profile || j.profile === profile)), [jobs, profile])
+  const gatewayOn = useUi((s) => s.settings['alerts.gateway.enabled'])
+  const gatewayProblems = useMemo(
+    () => (gatewayOn ? buildGatewayRows(agents.filter((a) => !profile || a.profile === profile)).filter((r) => r.problem) : []),
+    [agents, profile, gatewayOn]
+  )
+  const openGateway = (): void => {
+    useLogs.getState().setTab('gateway')
+    navigate('logs')
+  }
 
   const tabBtn = (id: 'activity' | 'alerts', label: string, extra?: React.ReactNode) => (
     <button type="button" role="tab" aria-selected={tab === id} className="d-tab" onClick={() => showTab(id)}>
@@ -52,7 +63,7 @@ export function ActivityPanel({ style, profile }: { style?: CSSProperties; profi
   const head = (
     <div role="tablist" aria-label="Activity" className="d-tabs">
       {tabBtn('activity', 'activity')}
-      {tabBtn('alerts', 'alerts', alerts.length + (costOver ? 1 : 0) > 0 && <span style={{ color: '#FF5555' }}>{alerts.length + (costOver ? 1 : 0)}</span>)}
+      {tabBtn('alerts', 'alerts', alerts.length + gatewayProblems.length + (costOver ? 1 : 0) > 0 && <span style={{ color: '#FF5555' }}>{alerts.length + gatewayProblems.length + (costOver ? 1 : 0)}</span>)}
     </div>
   )
   const actions = (
@@ -69,10 +80,25 @@ export function ActivityPanel({ style, profile }: { style?: CSSProperties; profi
   let body
   if (tab === 'alerts') {
     body =
-      alerts.length === 0 && !costOver ? (
+      alerts.length === 0 && gatewayProblems.length === 0 && !costOver ? (
         <EmptyState title="No alerts" why={profile ? `Failed cron runs of ${names[profile] ?? profile} show up here.` : costRule ? 'Failed cron runs and cost alerts show up here.' : 'Failed cron runs show up here.'} />
       ) : (
         <div role="list" aria-label="Alerts" className="d-scroll">
+          {gatewayProblems.map((r) => {
+            const detail = r.platforms.filter((p) => p.problem).map((p) => `${p.name} ${p.label}`).join(', ')
+            const what = r.tone === 'bad' ? `gateway ${r.state}${r.exitReason ? ` (${r.exitReason})` : r.pid === 'gone' ? ' (process is gone)' : ''}` : detail
+            return (
+              <button key={`gw:${r.profile}`} type="button" role="listitem" className="dash-row" aria-label={`GATEWAY: ${r.name}, ${what}`} onClick={openGateway}>
+                <span className="dr-top">
+                  <span style={{ color: agentColor(r.profile), fontWeight: 600 }}>{agentLabel(r.profile, names)}</span>
+                  <span className="dr-kind" style={{ color: '#FF5555' }}>
+                    GATEWAY
+                  </span>
+                </span>
+                <span className="dr-text">{what}</span>
+              </button>
+            )
+          })}
           {costOver && cost && (
             <button
               type="button"

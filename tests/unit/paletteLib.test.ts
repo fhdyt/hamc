@@ -39,7 +39,7 @@ describe('buildItems', () => {
     expect(screens).toHaveLength(NAV.length)
     const sessions = screens.find((i) => i.target.kind === 'screen' && i.target.route === 'sessions')!
     expect(sessions.hint).toContain('Ctrl+4')
-    for (const route of ['kanban', 'skills', 'logs']) {
+    for (const route of ['kanban', 'skills']) {
       expect(screens.find((i) => i.target.kind === 'screen' && i.target.route === route)!.hint).toContain('Coming in a later release')
     }
   })
@@ -60,10 +60,10 @@ describe('buildItems', () => {
     expect(bare.label).toBe('Untitled session')
     expect(bare.hint).toContain('Scout')
   })
-  it('has note items and the four actions, with unique ids', () => {
+  it('has note items and the five actions, with unique ids', () => {
     const all = items()
     expect(all.find((i) => i.target.kind === 'note')).toMatchObject({ label: 'Daily note', hint: 'daily/2026-10-13.md' })
-    expect(all.filter((i) => i.group === 'action').map((i) => i.target.kind === 'action' && i.target.action).sort()).toEqual(['connection', 'cost-today', 'cron', 'settings'])
+    expect(all.filter((i) => i.group === 'action').map((i) => i.target.kind === 'action' && i.target.action).sort()).toEqual(['connection', 'cost-today', 'cron', 'errors-hour', 'settings'])
     expect(new Set(all.map((i) => i.id)).size).toBe(all.length)
   })
 })

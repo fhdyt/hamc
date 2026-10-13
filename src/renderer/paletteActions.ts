@@ -1,6 +1,7 @@
 import { describeQueryError } from './lib/queryError'
 import type { PaletteItem } from './lib/palette'
 import { isViewing } from './lib/unread'
+import { openLogsOnErrors } from './logsActions'
 import { openSession } from './sessionsActions'
 import { useAgentCfg } from './stores/agentCfg'
 import { useAgents } from './stores/agents'
@@ -71,6 +72,7 @@ export function runItem(item: PaletteItem): void {
     case 'action':
       if (t.action === 'settings') ui.openSettings('general')
       else if (t.action === 'connection') ui.openSettings('connection')
+      else if (t.action === 'errors-hour') openLogsOnErrors()
       else if (t.action === 'cron') {
         ui.navigate('dashboard')
         useCron.getState().openModal()

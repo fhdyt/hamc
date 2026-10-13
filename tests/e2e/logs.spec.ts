@@ -144,6 +144,69 @@ test('a platform that fails shows up on its card and in the count of the tab, an
   await expect(page.getByRole('tab', { name: /^Gateway/ }).getByLabel(/problem/)).toHaveCount(0)
 })
 
-// The Approvals tab, the badge, the alerts and the closing checks are added in later tasks.
+test('the Approvals tab shows the policy, the suggestions and what Hermes does not keep', async () => {
+  await page.getByRole('tab', { name: 'Approvals' }).click()
+  const policy = page.getByRole('table', { name: 'Policy of default' })
+  await expect(policy).toContainText('manual', { timeout: 15_000 })
+  await expect(policy.getByRole('row', { name: /^timeout/ })).toContainText('60')
+  await expect(policy.getByRole('row', { name: /^deny/ })).toContainText('rm -rf /')
+  await expect(page.getByRole('list', { name: 'Suggestions for default' })).toContainText('terminal: git status (approved 14 times)')
+  await expect(page.getByRole('button', { name: 'Copy command 1 of default' })).toBeVisible()
+  await expect(page.getByText(/Hermes keeps no log of approve and deny decisions/)).toBeVisible()
+  await expect(page.getByText(/never uses --yolo/)).toBeVisible()
+})
+
+test('the Logs item of the sidebar counts the errors of the last hour', async () => {
+  await expect(mainNav().getByRole('button', { name: /^Logs/ })).toHaveAttribute('aria-label', 'Logs, 2 errors in the last hour', { timeout: 30_000 })
+})
+
+test('the palette action opens the errors of the last hour', async () => {
+  await page.keyboard.press('Control+k')
+  const palette = page.getByRole('dialog', { name: 'Command palette' })
+  await palette.getByRole('combobox').fill('errors from the last hour')
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('tab', { name: 'Logs' })).toHaveAttribute('aria-selected', 'true')
+  await expect(filters().getByLabel('Log file')).toHaveValue('errors.log', { timeout: 15_000 })
+  await expect(filters().getByLabel('Time range')).toHaveValue('1h')
+  await expect(chip('ERROR')).toHaveAttribute('aria-pressed', 'true')
+  await expect(chip('CRITICAL')).toHaveAttribute('aria-pressed', 'true')
+  await expect(chip('INFO')).toHaveAttribute('aria-pressed', 'false')
+  await expect(rows().filter({ hasText: 'provider returned 402' })).toBeVisible()
+  await expect(rows().filter({ hasText: 'telegram polling failed' })).toBeVisible()
+  await expect(rows().filter({ hasText: 'an old failure' })).toHaveCount(0)
+})
+
+const activity = () => page.locator('section.card[aria-label="Activity"]')
+
+test('a gateway problem is a GATEWAY row in the Dashboard alerts, and the Settings switch hides it', async () => {
+  setGateway(fx.root, 'scout', 'running', 'telegram', 'fatal', 'auth')
+  await mainNav().getByRole('button', { name: /^Dashboard/ }).click()
+  await activity().getByRole('tab', { name: /^alerts/ }).click()
+  const row = activity().getByRole('listitem', { name: /^GATEWAY: Scout/ })
+  await expect(row).toBeVisible({ timeout: 30_000 })
+  await expect(row).toContainText('telegram fatal (auth)')
+  await row.click()
+  await expect(page.getByRole('tab', { name: /^Gateway/ })).toHaveAttribute('aria-selected', 'true')
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Settings' })
+  await dialog.getByRole('tab', { name: 'Alerts' }).click()
+  const sw = dialog.getByRole('switch', { name: /gateway stops or a platform fails/ })
+  await expect(sw).toHaveAttribute('aria-checked', 'true')
+  await sw.click()
+  await page.keyboard.press('Escape')
+  await mainNav().getByRole('button', { name: /^Dashboard/ }).click()
+  await activity().getByRole('tab', { name: /^alerts/ }).click()
+  await expect(activity().getByRole('listitem', { name: /^GATEWAY:/ })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('tab', { name: 'Alerts' }).click()
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('switch', { name: /gateway stops or a platform fails/ }).click()
+  await page.keyboard.press('Escape')
+  setGateway(fx.root, 'scout', 'running', 'telegram', 'connected')
+  await expect(activity().getByRole('listitem', { name: /^GATEWAY:/ })).toHaveCount(0, { timeout: 30_000 })
+})
+
+// The closing checks are added in the last task.
 void resizeWindow
 void treeBefore

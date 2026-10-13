@@ -3,6 +3,8 @@ import logoUrl from '../assets/logo-mark.png'
 import { saveSetting } from '../actions'
 import { Icon } from '../components/Icon'
 import { openPalette } from '../paletteActions'
+import { errorsTotal } from '../lib/gatewayView'
+import { useAgents } from '../stores/agents'
 import { totalUnread, useUnread } from '../stores/unread'
 import { useUi } from '../stores/ui'
 import { NAV } from './nav'
@@ -14,6 +16,7 @@ export function Sidebar() {
   const collapsed = useUi((s) => s.settings['ui.sidebarCollapsed'])
   const navigate = useUi((s) => s.navigate)
   const unread = useUnread((s) => totalUnread(s.counts))
+  const errors = useAgents((s) => errorsTotal(s.agents))
 
   return (
     <aside className={`mc-side ${collapsed ? 'is-rail' : ''}`} aria-label="Sidebar">
@@ -27,7 +30,7 @@ export function Sidebar() {
       </div>
       <nav aria-label="Main" className="mc-side-nav">
         {NAV.map((n) => {
-          const badge = n.id === 'chat' ? unread : 0
+          const badge = n.id === 'chat' ? unread : n.id === 'logs' ? errors : 0
           return (
           <Fragment key={n.id}>
             {n.sepBefore && <span className="sn-sep" aria-hidden="true" />}
@@ -36,13 +39,13 @@ export function Sidebar() {
               className={`sn ${route === n.id ? 'on' : ''}`}
               aria-current={route === n.id ? 'page' : undefined}
               title={`${n.label} · ${mod}+${n.key}`}
-              aria-label={badge > 0 ? `${n.label}, ${badge} unread ${badge === 1 ? 'reply' : 'replies'}` : undefined}
+              aria-label={badge > 0 ? (n.id === 'logs' ? `${n.label}, ${badge} error${badge === 1 ? '' : 's'} in the last hour` : `${n.label}, ${badge} unread ${badge === 1 ? 'reply' : 'replies'}`) : undefined}
               onClick={() => navigate(n.id)}
             >
               <Icon name={n.icon} size={15} />
               <span className="tl">{n.label}</span>
               {badge > 0 && (
-                <span className="bd" aria-hidden="true">
+                <span className={`bd${n.id === 'logs' ? ' warn' : ''}`} aria-hidden="true">
                   {badge > 9 ? '9+' : badge}
                 </span>
               )}

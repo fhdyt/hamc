@@ -14,7 +14,7 @@ export type PaletteTarget =
   | { kind: 'agent-settings'; profile: string; tab: AgentTab }
   | { kind: 'session'; profile: string; id: string }
   | { kind: 'note'; id: string }
-  | { kind: 'action'; action: 'settings' | 'connection' | 'cron' | 'cost-today' }
+  | { kind: 'action'; action: 'settings' | 'connection' | 'cron' | 'cost-today' | 'errors-hour' }
 
 export interface PaletteItem {
   id: string
@@ -26,18 +26,19 @@ export interface PaletteItem {
 }
 
 const GROUP_ORDER: Record<PaletteGroup, number> = { screen: 0, action: 1, agent: 2, session: 3, note: 4 }
-const NOT_BUILT: readonly Route[] = ['kanban', 'skills', 'logs']
+const NOT_BUILT: readonly Route[] = ['kanban', 'skills']
 const AGENT_TABS: { tab: AgentTab; label: string }[] = [
   { tab: 'model', label: 'Model' },
   { tab: 'soul', label: FILE_LABEL.soul },
   { tab: 'memory', label: 'Memory' },
   { tab: 'user', label: 'User profile' }
 ]
-const ACTIONS: { action: 'settings' | 'connection' | 'cron' | 'cost-today'; label: string; keywords: string }[] = [
+const ACTIONS: { action: 'settings' | 'connection' | 'cron' | 'cost-today' | 'errors-hour'; label: string; keywords: string }[] = [
   { action: 'settings', label: 'Open Settings', keywords: 'preferences options general' },
   { action: 'connection', label: 'Open connection settings', keywords: 'server host ssh vps' },
   { action: 'cron', label: 'Open Cron jobs', keywords: 'schedule scheduler jobs' },
-  { action: 'cost-today', label: "Show today's cost", keywords: 'usage spend money budget price' }
+  { action: 'cost-today', label: "Show today's cost", keywords: 'usage spend money budget price' },
+  { action: 'errors-hour', label: 'Show errors from the last hour', keywords: 'logs failures problems errors' }
 ]
 
 /** Lowercase with accents removed, so "Café" and "cafe" meet. */

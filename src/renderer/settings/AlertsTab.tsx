@@ -12,6 +12,7 @@ import { useUi } from '../stores/ui'
 export function AlertsTab() {
   const enabled = useUi((s) => s.settings['alerts.cost.enabled'])
   const usd = useUi((s) => s.settings['alerts.cost.usd'])
+  const gatewayOn = useUi((s) => s.settings['alerts.gateway.enabled'])
   const state = useCostAlert((s) => s.state)
   const now = useNow(30_000)
   const [text, setText] = useState(String(usd))
@@ -74,6 +75,11 @@ export function AlertsTab() {
             ? `Today so far: ${moneyLabel(state.total)} (checked ${formatAge(Math.max(0, (now - state.checkedAt) / 1000))})`
             : 'Not checked yet.'}
       </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="sw" role="switch" aria-checked={gatewayOn} aria-label="Alert when an agent's gateway stops or a platform fails" onClick={() => void saveSetting('alerts.gateway.enabled', !gatewayOn)} />
+        <span aria-hidden="true">Alert when an agent's gateway stops or a platform fails</span>
+      </div>
+      <p style={{ margin: 0, color: '#a9b2d3', fontSize: 12 }}>A desktop notification appears once per change when the window is not in front, and the Dashboard Alerts tab lists what is wrong until it recovers.</p>
       <p style={{ margin: 0, color: '#8b95bd', fontSize: 11 }}>More alert rules arrive in later releases.</p>
     </div>
   )
