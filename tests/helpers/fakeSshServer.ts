@@ -7,6 +7,7 @@ import { pythonExe, type FixtureDirs } from './fixture'
 import { attachSftp, type SftpOp } from './fakeSftp'
 import { newHermesState, runConfigCommands, runFetchScript, type FakeHermesState } from './fakeHermes'
 import { shSplit } from './shellSplit'
+import { newShellLog, runFakeShell, type FakeShellLog } from './fakeShell'
 
 export interface HostKeyPair {
   private: string
@@ -66,6 +67,8 @@ export interface FakeSsh {
   sftpLog: SftpOp[]
   /** The state of the fake `hermes config` / `status` / `gateway` commands. */
   hermes: FakeHermesState
+  /** Interactive shells (the Terminal panel): pty sizes, resizes and every chunk of input. */
+  shells: FakeShellLog
   dropConnections(): void
   close(): Promise<void>
 }
@@ -334,6 +337,7 @@ export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {
   const clients = new Set<Connection>()
   const execLog: string[][] = []
   const sftpLog: SftpOp[] = []
+  const shells = newShellLog()
 
   const server = new Server({ hostKeys: [hostKey.private] }, (client) => {
     clients.add(client)
@@ -346,6 +350,20 @@ export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {
     client.on('ready', () => {
       client.on('session', (accept) => {
         const sess = accept()
+        const size = { cols: 80, rows: 24 }
+        sess.on('pty', (acceptPty, _reject, info) => {
+          size.cols = info.cols
+          size.rows = info.rows
+          shells.ptys.push({ term: info.term, cols: info.cols, rows: info.rows })
+          acceptPty?.()
+        })
+        sess.on('window-change', (acceptWc, _reject, info) => {
+          size.cols = info.cols
+          size.rows = info.rows
+          shells.resizes.push({ cols: info.cols, rows: info.rows })
+          acceptWc?.()
+        })
+        sess.on('shell', (acceptShell) => runFakeShell(acceptShell(), shells, size))
         sess.on('sftp', (acceptSftp) => attachSftp(acceptSftp(), (remote) => toLocalPath(o, remote), sftpLog))
         sess.on('exec', (acceptExec, _reject, info) => {
           const stream = acceptExec()
@@ -373,6 +391,7 @@ export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {
         execLog,
         sftpLog,
         hermes: st,
+        shells,
         dropConnections: () => clients.forEach((c) => c.end()),
         close: () =>
           new Promise<void>((done) => {

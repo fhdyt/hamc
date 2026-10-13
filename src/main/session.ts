@@ -31,6 +31,8 @@ import { ModelResolver } from './collector/models'
 import { CronActionService } from './cron/actions'
 import { SkillActionService } from './skills/actions'
 import { MemorySnapshots } from './memory/snapshots'
+import { TerminalService } from './terminal/service'
+import type { TermOpenResult, TermSize } from '@shared/terminal'
 import type { MemoryVersion, MemoryVersionText } from '@shared/memory'
 import type { SkillActionRequest, SkillActionResult, SkillTextResult } from '@shared/skills'
 import type { CronActionRequest, CronActionResult } from '@shared/cron'
@@ -129,6 +131,7 @@ export class MissionSession {
   private readonly skillActions: SkillActionService
   private readonly memory: MemorySnapshots
   private readonly agentOps: AgentOpsService
+  private readonly terminal: TerminalService
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -179,6 +182,7 @@ export class MissionSession {
       isConnected: () => d.manager.isConnected(),
       log: (m) => d.log?.(m)
     })
+    this.terminal = new TerminalService({ conn: d.manager, send: d.send, log: (m) => d.log?.(m) })
     this.memory = new MemorySnapshots({
       store: d.store,
       connectionId: () => d.store.getConnection()?.id,
@@ -482,6 +486,7 @@ export class MissionSession {
     this.costAlert.stop()
     this.brain.detach()
     this.chat.dispose()
+    this.terminal.closeAll()
     this.scheduleRetry(0)
   }
 
@@ -520,6 +525,7 @@ export class MissionSession {
     this.stopCollector()
     this.brain.detach()
     this.chat.dispose()
+    this.terminal.closeAll()
     this.uploads.reset()
     this.agentModel.reset()
     this.models = null
@@ -546,6 +552,23 @@ export class MissionSession {
     this.feedCursors.clear()
     this.lastTarget = null
     this.d.store.forgetConnection()
+  }
+
+  /** The Terminal panel (F-TERM-1): an interactive shell; only the user's keys go into it. */
+  termOpen(size: TermSize): Promise<TermOpenResult> {
+    return this.terminal.open(size)
+  }
+
+  termWrite(id: string, data: string): boolean {
+    return this.terminal.write(id, data)
+  }
+
+  termResize(id: string, size: TermSize): void {
+    this.terminal.resize(id, size)
+  }
+
+  termClose(id: string): void {
+    this.terminal.close(id)
   }
 
   feedMessage(args: { profile: string; messageId: number; field: 'content' | 'reasoning' | 'tool_calls'; index?: number }): Promise<QueryResult<FeedMessageText>> {

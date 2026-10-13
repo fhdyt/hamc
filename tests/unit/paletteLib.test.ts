@@ -61,7 +61,7 @@ describe('buildItems', () => {
   it('has note items and the five actions, with unique ids', () => {
     const all = items()
     expect(all.find((i) => i.target.kind === 'note')).toMatchObject({ label: 'Daily note', hint: 'daily/2026-10-13.md' })
-    expect(all.filter((i) => i.group === 'action').map((i) => i.target.kind === 'action' && i.target.action).sort()).toEqual(['connection', 'cost-today', 'cron', 'errors-hour', 'settings'])
+    expect(all.filter((i) => i.group === 'action').map((i) => i.target.kind === 'action' && i.target.action).sort()).toEqual(['connection', 'cost-today', 'cron', 'errors-hour', 'settings', 'terminal'])
     expect(new Set(all.map((i) => i.id)).size).toBe(all.length)
   })
 })

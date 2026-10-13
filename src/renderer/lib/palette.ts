@@ -14,7 +14,7 @@ export type PaletteTarget =
   | { kind: 'agent-settings'; profile: string; tab: AgentTab }
   | { kind: 'session'; profile: string; id: string }
   | { kind: 'note'; id: string }
-  | { kind: 'action'; action: 'settings' | 'connection' | 'cron' | 'cost-today' | 'errors-hour' }
+  | { kind: 'action'; action: 'settings' | 'connection' | 'cron' | 'cost-today' | 'errors-hour' | 'terminal' }
 
 export interface PaletteItem {
   id: string
@@ -33,12 +33,13 @@ const AGENT_TABS: { tab: AgentTab; label: string }[] = [
   { tab: 'memory', label: 'Memory' },
   { tab: 'user', label: 'User profile' }
 ]
-const ACTIONS: { action: 'settings' | 'connection' | 'cron' | 'cost-today' | 'errors-hour'; label: string; keywords: string }[] = [
+const ACTIONS: { action: 'settings' | 'connection' | 'cron' | 'cost-today' | 'errors-hour' | 'terminal'; label: string; keywords: string }[] = [
   { action: 'settings', label: 'Open Settings', keywords: 'preferences options general' },
   { action: 'connection', label: 'Open connection settings', keywords: 'server host ssh vps' },
   { action: 'cron', label: 'Open Cron jobs', keywords: 'schedule scheduler jobs' },
   { action: 'cost-today', label: "Show today's cost", keywords: 'usage spend money budget price' },
-  { action: 'errors-hour', label: 'Show errors from the last hour', keywords: 'logs failures problems errors' }
+  { action: 'errors-hour', label: 'Show errors from the last hour', keywords: 'logs failures problems errors' },
+  { action: 'terminal', label: 'Open or close the terminal', keywords: 'shell ssh console bash command line' }
 ]
 
 /** Lowercase with accents removed, so "Café" and "cafe" meet. */

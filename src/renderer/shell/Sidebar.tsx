@@ -3,6 +3,7 @@ import logoUrl from '../assets/logo-mark.png'
 import { saveSetting } from '../actions'
 import { Icon } from '../components/Icon'
 import { openPalette } from '../paletteActions'
+import { toggleTerminal } from '../terminalToggle'
 import { errorsTotal } from '../lib/gatewayView'
 import { useAgents } from '../stores/agents'
 import { totalUnread, useUnread } from '../stores/unread'
@@ -17,6 +18,7 @@ export function Sidebar() {
   const navigate = useUi((s) => s.navigate)
   const unread = useUnread((s) => totalUnread(s.counts))
   const errors = useAgents((s) => errorsTotal(s.agents))
+  const termOpen = useUi((s) => s.settings['terminal.open'])
 
   return (
     <aside className={`mc-side ${collapsed ? 'is-rail' : ''}`} aria-label="Sidebar">
@@ -55,7 +57,7 @@ export function Sidebar() {
         })}
       </nav>
       <div className="mc-side-foot">
-        <button type="button" className="sn" aria-disabled="true" title="Terminal · coming in a later release" style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+        <button type="button" className={`sn ${termOpen ? 'on' : ''}`} aria-pressed={termOpen} title={`Terminal · ${mod}+\``} onClick={toggleTerminal}>
           <Icon name="terminal" size={15} />
           <span className="tl">Terminal</span>
         </button>

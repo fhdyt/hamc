@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { stepZoomLevel } from '../actions'
 import { togglePalette } from '../paletteActions'
+import { toggleTerminal } from '../terminalToggle'
 import { useUi } from '../stores/ui'
 import { routeForShortcut } from './nav'
 
@@ -20,6 +21,11 @@ export function useShortcuts(): void {
         return
       }
       if (route === 'connect' || route === 'launch') return
+      if (e.code === 'Backquote' || e.key === '`') {
+        e.preventDefault()
+        toggleTerminal()
+        return
+      }
       if ((e.key === 'k' || e.key === 'K') && !e.shiftKey) {
         e.preventDefault()
         togglePalette()

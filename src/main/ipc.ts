@@ -8,6 +8,7 @@ import { LOG_FILES } from '@shared/logs'
 import { BOARD_RE, TASK_ID_RE } from '@shared/kanban'
 import { CRON_ACTIONS, INCIDENT_ID_RE, JOB_ID_RE, SCHEDULE_MAX } from '@shared/cron'
 import { DESCRIPTION_MAX, MCP_NAME_RE, NEW_PROFILE_RE, PLATFORM_RE, TOOLSET_RE } from '@shared/agentOps'
+import { TERM_COLS, TERM_ID_RE, TERM_ROWS, TERM_WRITE_MAX } from '@shared/terminal'
 import { CATEGORY_RE, SHA_RE, SKILL_ACTIONS, SKILL_NAME_RE, validHubId, validSkillPath } from '@shared/skills'
 import { EXPORT_MAX_BYTES } from './sessions/export'
 import { isTrustedSender, type AppTarget } from './security'
@@ -149,6 +150,8 @@ const SkillReadSchema = z.object({ profile: ProfileName, path: z.string().max(40
 const SkillsLedgerSchema = z.object({ profile: ProfileName, limit: z.number().int().min(1).max(500) })
 const SkillsBlobsSchema = z.object({ profile: ProfileName, shas: z.array(z.string().regex(SHA_RE)).min(1).max(4) })
 const SkillInspectSchema = z.object({ profile: ProfileName, id: HubId })
+const TermSizeSchema = z.object({ cols: z.number().int().min(TERM_COLS.min).max(TERM_COLS.max), rows: z.number().int().min(TERM_ROWS.min).max(TERM_ROWS.max) })
+const TermId = z.string().regex(TERM_ID_RE)
 const CronOutputSchema = z.object({ profile: ProfileName, jobId: JobId, names: z.array(z.string().min(1).max(300)).min(1).max(2) })
 
 export function registerIpc(d: IpcDeps): void {
@@ -219,6 +222,16 @@ export function registerIpc(d: IpcDeps): void {
     )
   )
   handle(IPC.opsBackup, (a) => d.session.agentBackup(z.object({ profile: ProfileName, includeStateDb: z.boolean() }).parse(a), d.getWindow()))
+  handle(IPC.termOpen, (a) => d.session.termOpen(TermSizeSchema.parse(a)))
+  handle(IPC.termWrite, (a) => {
+    const { id, data } = z.object({ id: TermId, data: z.string().min(1).max(TERM_WRITE_MAX) }).parse(a)
+    return d.session.termWrite(id, data)
+  })
+  handle(IPC.termResize, (a) => {
+    const { id, size } = z.object({ id: TermId, size: TermSizeSchema }).parse(a)
+    d.session.termResize(id, size)
+  })
+  handle(IPC.termClose, (a) => d.session.termClose(TermId.parse(a)))
   handle(IPC.memoryVersions, (a) => {
     const { profile, file } = z.object({ profile: ProfileName, file: FileKind }).parse(a)
     return d.session.memoryVersions(profile, file)

@@ -11,6 +11,7 @@ import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs,
 import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
 import type { SettingsMap } from './settings'
+import type { TermData, TermExit, TermOpenResult, TermSize } from './terminal'
 
 export { IPC } from './channels'
 
@@ -222,6 +223,14 @@ export interface MissionApi {
     /** SFTP download of one profile into a zip the user saves locally (F-CFG-23). */
     backup(req: BackupRequest): Promise<BackupResult>
   }
+  terminal: {
+    /** Starts a login shell with a PTY on the current connection (F-TERM-1). */
+    open(size: TermSize): Promise<TermOpenResult>
+    /** What the user typed or pasted; false when that shell is gone. Never logged. */
+    write(id: string, data: string): Promise<boolean>
+    resize(id: string, size: TermSize): Promise<void>
+    close(id: string): Promise<void>
+  }
   memory: {
     /** Local versions of one memory file, newest first (F-MEMT-1). */
     versions(profile: string, file: AgentFileKind): Promise<MemoryVersion[]>
@@ -334,4 +343,6 @@ export interface MissionApi {
   onOpenLogs(cb: (tab: 'logs' | 'gateway' | 'approvals') => void): () => void
   /** A memory file got a new local version. */
   onMemory(cb: (e: { profile: string; file: AgentFileKind }) => void): Unsub
+  onTermData(cb: (e: TermData) => void): Unsub
+  onTermExit(cb: (e: TermExit) => void): Unsub
 }

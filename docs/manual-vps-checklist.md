@@ -211,14 +211,25 @@ Versi disimpan hanya di `app.db` lokal. Collector membaca `SOUL.md`, `memories/M
 
 ## Tambahan M10c: MCP, Toolsets, Fallback, Backup, New profile
 
-Format keluaran diambil dari kode sumber Hermes; tetap catat yang berbeda. Perintah interaktif (`mcp add|remove`, `fallback add|remove`) hanya disalin untuk terminal Anda.
+Format keluaran diambil dari kode sumber Hermes; tetap catat yang berbeda. Perintah interaktif (`mcp add|remove`, `fallback add|remove`) hanya diisi ke terminal (atau disalin); Anda sendiri yang menekan Enter.
 
 126. **MCP.** Settings → Agents → MCP menampilkan tabel yang sama dengan `hermes -p <p> mcp list` (nama, transport, tools, status). **Test** meminta konfirmasi dengan `$ hermes [-p <p>] mcp test <nama>` lalu menampilkan hasilnya. Tidak ada nilai token atau header yang tampil.
 127. **Toolsets.** Matriks memuat platform `cli`, `cron` dan platform gateway agent. Bandingkan dengan `hermes -p <p> tools list --platform <x>`. Ubah satu kotak: kotak berwarna oranye sampai **Apply…**, yang menampilkan daftar `hermes tools enable|disable … --platform …` dan hasil tiap perintah. Catat bila Hermes menolak toolset untuk platform tertentu.
-128. **Fallback.** Primary dan rantai fallback cocok dengan `hermes -p <p> fallback list`. Tombol Copy command menyalin `hermes [-p <p>] fallback add|remove` tanpa menjalankannya.
+128. **Fallback.** Primary dan rantai fallback cocok dengan `hermes -p <p> fallback list`. **Open in the terminal** menutup Settings dan menaruh `hermes [-p <p>] fallback add|remove` di prompt terminal tanpa menjalankannya; **Copy** menyalinnya.
 129. **Backup.** **Back up to a zip…** meminta lokasi berkas. Buka zip: ada `README.txt`, `SOUL.md`, `memories/`, `config.yaml` (nilai di bawah `env:`/`headers:` dan kunci rahasia kosong), `cron/jobs.json`, `skills/`; tidak pernah `.env`, `auth.json` atau `mcp-tokens/`. Centang state.db hanya bila perlu (besar). Tidak ada berkas baru di VPS.
 130. **New profile.** Nama tidak valid ditolak dengan alasannya; pratinjau menampilkan `$ hermes profile create <nama> '--description=…' --no-alias` (tanpa wrapper kecuali dicentang). Setelah Create, agent baru muncul di daftar dalam sekitar 10 detik dan di `hermes profile list`. Catat pesan Hermes bila nama sudah dipakai.
 131. **Zero-Change.** `app.log` memuat `agentops <aksi> <profile> exit <kode>` untuk mcp-test, tools, profile-create dan backup, tanpa isi.
+
+## Tambahan Terminal (F-TERM, F-R12-2)
+
+Terminal adalah shell SSH penuh di koneksi yang sama. Aplikasi tidak pernah mengetik ke dalamnya; ketikan dan keluarannya tidak dicatat.
+
+132. **Buka dan tutup.** Klik **Terminal** di sidebar (atau Ctrl+`): panel muncul di atas status bar, selebar jendela, dengan `user@host`, tab **shell 1** dan peringatan "Full shell on the server, not read-only". Prompt server tampil tanpa perintah apa pun dijalankan (`cat ~/.bash_history` tidak bertambah sebelum Anda mengetik). Ctrl+` menyembunyikannya; membuka lagi menampilkan layar dan shell yang sama. Esc menutup panel hanya bila fokus di luar shell dan tidak ada dialog terbuka.
+133. **Aplikasi TUI dan resize.** Jalankan `htop` dan `vim`: warna, tombol panah dan Esc (di dalam vim) bekerja. Seret pemisah di atas panel (140-520 px) atau fokuskan dan tekan panah atas/bawah: `stty size` mengikuti ukuran baru. Tinggi dan status terbuka tetap setelah aplikasi dibuka ulang.
+134. **Copy/paste dan pencarian.** Pilih teks lalu Ctrl+C (Cmd+C di macOS) menyalin; tanpa pilihan Ctrl+C tetap mengirim ^C. Ctrl+V atau Ctrl+Shift+V menempel. Tombol kaca pembesar mencari di scrollback (5.000 baris; Enter berikutnya, Shift+Enter sebelumnya).
+135. **Tab.** **+** membuka shell baru (maksimal 6); tiap tab punya shell sendiri; menutup tab mengakhiri shell-nya. Ketik `exit`: tab menampilkan "This shell has ended" dengan tombol **Start a new shell**.
+136. **Reconnect.** Putuskan jaringan sebentar (atau `sudo systemctl restart ssh` dari sesi lain): tab menulis "Connection lost"; setelah aplikasi tersambung lagi muncul "[Reconnected.]" dan shell baru.
+137. **Snippet dan "Open in the terminal".** Tombol snippet menaruh perintah (mis. `hermes gateway status`) di prompt tanpa Enter. Tambah dan hapus snippet; daftar tersimpan di `app.db`. Di Settings → Agents → MCP/Fallback, **Open in the terminal** menutup Settings dan mengisi perintahnya saja. `app.log` hanya memuat `terminal opened|closed`, tanpa ketikan.
 
 ## Melaporkan hasil
 

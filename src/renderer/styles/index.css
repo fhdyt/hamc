@@ -10,6 +10,8 @@
 @import './sessions.css';
 @import './usage.css';
 @import './palette.css';
+@import '@xterm/xterm/css/xterm.css';
+@import './terminal.css';
 @import './logs.css';
 @import './kanban.css';
 @import './cron.css';

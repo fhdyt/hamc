@@ -32,6 +32,10 @@ export const IPC = {
   opsToolsApply: 'mc:ops:tools-apply',
   opsProfileCreate: 'mc:ops:profile-create',
   opsBackup: 'mc:ops:backup',
+  termOpen: 'mc:term:open',
+  termWrite: 'mc:term:write',
+  termResize: 'mc:term:resize',
+  termClose: 'mc:term:close',
   feedMessage: 'mc:feed:message',
   feedHistory: 'mc:feed:history',
   feedSession: 'mc:feed:session',
@@ -89,5 +93,7 @@ export const IPC = {
   evCostAlert: 'mc:ev:cost-alert',
   evOpenUsage: 'mc:ev:open-usage',
   evOpenLogs: 'mc:ev:open-logs',
-  evMemory: 'mc:ev:memory'
+  evMemory: 'mc:ev:memory',
+  evTermData: 'mc:ev:term-data',
+  evTermExit: 'mc:ev:term-exit'
 } as const

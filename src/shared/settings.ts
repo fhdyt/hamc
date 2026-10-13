@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { InteractionKind } from './events'
+import { DEFAULT_SNIPPETS, SNIPPET_COMMAND_MAX, SNIPPET_LABEL_MAX, SNIPPET_MAX, TERM_MAX_H, TERM_MIN_H, type Snippet } from './terminal'
 import { DEFAULT_LOG_LEVELS, LOG_LEVELS, LOG_RANGES, type LogLevel, type LogRange } from './logs'
 
 export interface WindowBounds {
@@ -96,6 +97,10 @@ export interface SettingsMap {
   'logs.wrap': boolean
   /** The Kanban board the reader picked: `default` or a folder name under kanban/boards; empty until they pick one. */
   'kanban.board': string
+  /** The Terminal panel (F-R12-2): open or hidden, its height (0 until the user drags it) and saved snippets (F-TERM-7). */
+  'terminal.open': boolean
+  'terminal.height': number
+  'terminal.snippets': Snippet[]
   'window.bounds': WindowBounds | null
 }
 
@@ -127,6 +132,9 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'logs.range': '24h',
   'logs.wrap': false,
   'kanban.board': '',
+  'terminal.open': false,
+  'terminal.height': 0,
+  'terminal.snippets': DEFAULT_SNIPPETS,
   'window.bounds': null
 }
 
@@ -174,6 +182,11 @@ export const SETTINGS_SCHEMA = {
   'logs.range': z.enum(LOG_RANGES),
   'logs.wrap': z.boolean(),
   'kanban.board': z.string().regex(/^([A-Za-z0-9._-]{1,64})?$/),
+  'terminal.open': z.boolean(),
+  'terminal.height': z.number().refine((v) => v === 0 || (v >= TERM_MIN_H && v <= TERM_MAX_H)),
+  'terminal.snippets': z
+    .array(z.object({ id: z.string().regex(/^[A-Za-z0-9-]{1,40}$/), label: z.string().trim().min(1).max(SNIPPET_LABEL_MAX), command: z.string().trim().min(1).max(SNIPPET_COMMAND_MAX) }))
+    .max(SNIPPET_MAX),
   'window.bounds': z
     .object({ x: z.number().optional(), y: z.number().optional(), width: z.number(), height: z.number() })
     .nullable()

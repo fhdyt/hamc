@@ -1,0 +1,48 @@
+/* Terminal panel (F-R12-2): fixed above the status bar, full width, the same layer as the status bar. */
+.term-panel { position: fixed; left: 0; right: 0; bottom: 26px; z-index: 30; display: flex; flex-direction: column; border-top: 1px solid #6272a4; background: #191a21; box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.4); animation: mcTermUp 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; font-size: 11px; }
+.term-panel[hidden] { display: none; }
+@keyframes mcTermUp { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .term-panel { animation: none; } }
+.mc-nomotion .term-panel { animation: none; }
+.term-panel > .rz-h { margin: 0; height: 6px; }
+.term-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 4px 12px; min-width: 0; }
+.term-ico { color: #bd93f9; display: flex; }
+.term-title { color: #f8f8f2; font-weight: 600; }
+.term-who { color: #8b95bd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.term-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; margin-left: 8px; }
+.term-tab { display: inline-flex; align-items: center; border: 1px solid #343746; border-radius: 6px; background: #21222c; }
+.term-tab.on { border-color: #6272a4; background: #282a36; }
+.term-tab-btn { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 4px 0 8px; border: 0; background: transparent; color: #a9b2d3; font: inherit; cursor: pointer; white-space: nowrap; }
+.term-tab.on .term-tab-btn { color: #f8f8f2; }
+.term-tab-x { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 22px; padding: 0; border: 0; background: transparent; color: #8b95bd; cursor: pointer; border-radius: 0 6px 6px 0; }
+.term-tab-x:hover { color: #ff5555; background: #343746; }
+.term-dot { width: 6px; height: 6px; border-radius: 50%; background: #8b95bd; }
+.term-dot.live { background: #50fa7b; }
+.term-dot.starting { background: #f1fa8c; }
+.term-dot.down { background: #ff5555; }
+.term-warn { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: #ffb86c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.term-acts { display: flex; gap: 2px; flex: none; }
+.ib[disabled] { opacity: 0.45; cursor: not-allowed; }
+.term-bar { flex: none; display: flex; align-items: center; gap: 4px; padding: 4px 12px; border-top: 1px solid #343746; }
+.term-bar .fld { width: 260px; min-height: 24px; }
+.term-bar .fld[aria-invalid='true'] { border-color: #ff5555; }
+.term-miss { color: #ff5555; }
+.term-snips { flex: none; max-height: 45%; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 6px 12px 8px; border-top: 1px solid #343746; background: #1e1f29; }
+.term-snips-note { margin: 0; color: #8b95bd; }
+.term-snips-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.term-snips-list li { display: inline-flex; align-items: center; gap: 2px; border: 1px solid #343746; border-radius: 6px; background: #21222c; padding-right: 2px; }
+.term-snip { display: inline-flex; align-items: center; gap: 8px; padding: 3px 8px; border: 0; background: transparent; color: #f8f8f2; font: inherit; cursor: pointer; max-width: 360px; }
+.term-snip:hover { color: #50fa7b; }
+.term-snip code { color: #f1fa8c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.term-snip-l { white-space: nowrap; }
+.term-snips-empty { color: #8b95bd; border: 0 !important; background: none !important; }
+.term-snips-add { display: flex; gap: 4px; align-items: center; }
+.term-snips-add .fld:first-child { width: 140px; }
+.term-snips-add .fld:nth-child(2) { flex: 1; min-width: 0; }
+.term-views { position: relative; flex: 1; min-height: 0; border-top: 1px solid #343746; }
+.term-view { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.term-view[hidden] { display: none; }
+.term-xterm { flex: 1; min-height: 0; padding: 4px 0 2px 10px; }
+.term-xterm .xterm { height: 100%; }
+.term-note { position: absolute; left: 12px; bottom: 8px; display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid #44475a; border-radius: 6px; background: #21222c; color: #a9b2d3; }
+.term-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }

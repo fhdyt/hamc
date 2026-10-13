@@ -44,6 +44,12 @@ const api: MissionApi = {
     profileCreate: (req) => ipcRenderer.invoke(IPC.opsProfileCreate, req),
     backup: (req) => ipcRenderer.invoke(IPC.opsBackup, req)
   },
+  terminal: {
+    open: (size) => ipcRenderer.invoke(IPC.termOpen, size),
+    write: (id, data) => ipcRenderer.invoke(IPC.termWrite, { id, data }),
+    resize: (id, size) => ipcRenderer.invoke(IPC.termResize, { id, size }),
+    close: (id) => ipcRenderer.invoke(IPC.termClose, id)
+  },
   memory: {
     versions: (profile, file) => ipcRenderer.invoke(IPC.memoryVersions, { profile, file }),
     version: (id) => ipcRenderer.invoke(IPC.memoryVersion, id),
@@ -142,7 +148,9 @@ const api: MissionApi = {
   onCostAlert: (cb) => on(IPC.evCostAlert, cb),
   onOpenUsage: (cb) => on(IPC.evOpenUsage, cb),
   onOpenLogs: (cb) => on(IPC.evOpenLogs, cb),
-  onMemory: (cb) => on(IPC.evMemory, cb)
+  onMemory: (cb) => on(IPC.evMemory, cb),
+  onTermData: (cb) => on(IPC.evTermData, cb),
+  onTermExit: (cb) => on(IPC.evTermExit, cb)
 }
 
 contextBridge.exposeInMainWorld('mc', api)

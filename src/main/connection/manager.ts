@@ -170,6 +170,15 @@ export class ConnectionManager extends EventEmitter implements Execer {
     })
   }
 
+  /** An interactive login shell with a PTY (the Terminal panel, F-TERM-1). Nothing is typed into it here. */
+  openShell(size: { cols: number; rows: number }): Promise<ClientChannel> {
+    return new Promise((resolve, reject) => {
+      const c = this.client
+      if (!c) return reject(new Error('not connected'))
+      c.shell({ term: 'xterm-256color', cols: size.cols, rows: size.rows }, (err, stream) => (err ? reject(err) : resolve(stream)))
+    })
+  }
+
   /** An SFTP session on the current connection. The caller ends it. Only used for uploads the user asked for. */
   sftp(): Promise<SFTPWrapper> {
     return new Promise((resolve, reject) => {

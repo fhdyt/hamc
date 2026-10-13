@@ -7,26 +7,40 @@ import { cellState, parseFallback, parseMcpList, parseToolsList, toolPlatforms }
 import { useAgentOps, type OpsEntry } from '../../stores/agentOps'
 import { useAgents } from '../../stores/agents'
 import { useConn } from '../../stores/conn'
+import { useAgentCfg } from '../../stores/agentCfg'
+import { useUi } from '../../stores/ui'
+import { fillCommand } from '../../terminalActions'
 
-/** F-CFG-26: a command for the user's own terminal. The terminal panel is not built yet, so it is copied, never run. */
+/** F-CFG-26: "Open in the terminal" closes Settings and puts the command on the prompt; the user presses Enter. */
 export function TerminalCommand({ label, command }: { label: string; command: string }) {
   const [copied, setCopied] = useState(false)
+  const connected = useConn((s) => s.status.state === 'connected')
+  const open = (): void =>
+    useAgentCfg.getState().requestLeave('Opening the terminal closes Settings and drops every unsaved change in Agents.', () => {
+      useUi.getState().closeSettings()
+      fillCommand(command)
+    })
   return (
     <div className="ops-term">
       <span className="ops-term-label">{label}</span>
       <pre className="cc-cmd">$ {command}</pre>
-      <button
-        type="button"
-        className="cb sm"
-        onClick={() =>
-          void copyText(command).then((ok) => {
-            setCopied(ok)
-            window.setTimeout(() => setCopied(false), 1500)
-          })
-        }
-      >
-        <Icon name="copy" size={11} /> {copied ? 'Copied' : 'Copy command'}
-      </button>
+      <span className="ops-term-acts">
+        <button type="button" className="cb sm" disabled={!connected} title="Puts the command on the prompt; nothing runs until you press Enter" onClick={open}>
+          <Icon name="terminal" size={11} /> Open in the terminal
+        </button>
+        <button
+          type="button"
+          className="cb sm"
+          onClick={() =>
+            void copyText(command).then((ok) => {
+              setCopied(ok)
+              window.setTimeout(() => setCopied(false), 1500)
+            })
+          }
+        >
+          <Icon name="copy" size={11} /> {copied ? 'Copied' : 'Copy'}
+        </button>
+      </span>
     </div>
   )
 }

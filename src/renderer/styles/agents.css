@@ -69,6 +69,7 @@
 .ops-term { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border: 1px dashed #44475a; border-radius: 8px; }
 .ops-term-label { flex: 1 1 100%; color: #a9b2d3; font-size: 11px; }
 .ops-term .cc-cmd { flex: 1 1 260px; }
+.ops-term-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .ops-chain { margin: 0; padding-left: 22px; color: #f8f8f2; }
 .ops-fallback { display: flex; flex-direction: column; gap: 8px; }
 .ops-check { display: flex; align-items: center; gap: 8px; color: #a9b2d3; }
