@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { HHMM_RE, inQuietHours, type NotifyKinds } from '@shared/notify'
+import { HHMM_RE, REPLY_TONES, inQuietHours, type NotifyKinds, type ReplySoundMode } from '@shared/notify'
 import { saveSetting } from '../actions'
+import { Icon } from '../components/Icon'
+import { TONE_LABEL } from '../lib/sound'
+import { previewTone } from '../soundActions'
 import { useUi } from '../stores/ui'
 import { Row, Switch } from './parts'
 
@@ -41,8 +44,54 @@ export function NotificationsTab() {
       <Row label="Show message preview" hint="Off: a reply notification only names the agent">
         <Switch checked={s['notify.preview']} label="Show message preview" onChange={(v) => void saveSetting('notify.preview', v)} />
       </Row>
-      <Row label="Sound" hint="The system's notification sound">
-        <Switch checked={s['notify.sound']} label="Sound" onChange={(v) => void saveSetting('notify.sound', v)} />
+      <Row label="Reply sound" hint="A short sound when an agent's reply arrives. When away: only when that agent is not on screen. Never in the quiet hours.">
+        <span className="seg" role="group" aria-label="Reply sound">
+          {(['off', 'away', 'always'] as ReplySoundMode[]).map((m) => (
+            <button key={m} type="button" aria-pressed={s['notify.replySound'] === m} onClick={() => void saveSetting('notify.replySound', m)}>
+              {m === 'off' ? 'Off' : m === 'away' ? 'When away' : 'Always'}
+            </button>
+          ))}
+        </span>
+      </Row>
+      {s['notify.replySound'] !== 'off' && (
+        <div role="group" aria-label="Reply sound tone" style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 12, borderLeft: '2px solid #44475A', minHeight: 36, flexWrap: 'wrap' }}>
+          <span className="seg" role="group" aria-label="Tone">
+            {REPLY_TONES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={s['notify.replyTone'] === t}
+                onClick={() => {
+                  void saveSetting('notify.replyTone', t)
+                  previewTone(t, s['notify.volume'])
+                }}
+              >
+                {TONE_LABEL[t]}
+              </button>
+            ))}
+          </span>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#A9B2D3' }}>
+            Volume
+            <input
+              type="range"
+              aria-label="Reply sound volume"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round(s['notify.volume'] * 100)}
+              onChange={(e) => void saveSetting('notify.volume', Number(e.target.value) / 100)}
+              onPointerUp={() => previewTone(s['notify.replyTone'], s['notify.volume'])}
+              style={{ width: 120 }}
+            />
+            <span className="num" style={{ minWidth: 34 }}>{Math.round(s['notify.volume'] * 100)}%</span>
+          </label>
+          <button type="button" className="cb sm" onClick={() => previewTone(s['notify.replyTone'], s['notify.volume'])}>
+            <Icon name="play" size={11} /> Play
+          </button>
+        </div>
+      )}
+      <Row label="System sound" hint="The sound of the OS notifications (a reply uses the reply sound above instead)">
+        <Switch checked={s['notify.sound']} label="System sound" onChange={(v) => void saveSetting('notify.sound', v)} />
       </Row>
       <Row label="Do not disturb" hint={`No desktop notifications or sounds in these hours (this computer's clock); the bell still keeps them.${quietNow ? ' Quiet right now.' : ''}`}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>

@@ -14,6 +14,7 @@ import { useUi } from './stores/ui'
 import { useMemoryTimeline } from './stores/memoryTimeline'
 import { memoryChanged } from './memoryActions'
 import { notifyChatReply, openNoticeTarget } from './noticeActions'
+import { playReplySound } from './soundActions'
 import { useNotices } from './stores/notices'
 import { sortAgents } from './lib/roster'
 
@@ -34,7 +35,11 @@ export async function bootstrap(): Promise<void> {
   mc.onChat((ev) => {
     useChat.getState().applyChat(ev)
     // a reply that finished while the user was looking elsewhere gets a badge
-    if (shouldCount(ev) && countIfAway(ev.profile)) notifyChatReply(ev.profile, useChat.getState().rooms[ev.profile]?.turn?.text ?? '')
+    if (shouldCount(ev)) {
+      const away = countIfAway(ev.profile)
+      if (away) notifyChatReply(ev.profile, useChat.getState().rooms[ev.profile]?.turn?.text ?? '')
+      playReplySound(away)
+    }
   })
   // an agent that is answering a chat from this app shows as working, whatever state.db says yet
   useChat.subscribe((s) => {

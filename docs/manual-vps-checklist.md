@@ -248,6 +248,7 @@ Chat sekarang memakai gateway TUI milik Hermes (`python -m tui_gateway.entry`) l
 145. **Settings → Notifications.** Matikan satu jenis (mis. Agent replies): jenis itu tidak muncul lagi di lonceng maupun OS. Matikan Show message preview: notifikasi balasan hanya menyebut agent. Do not disturb pada rentang jam sekarang: tidak ada notifikasi OS, lonceng tetap mencatat. **Send a test notification** menampilkan satu notifikasi (atau alasan bila sistem tidak mendukungnya).
 146. **Settings → Workspace.** Path vault tampil dan bisa diganti atau dihapus; home, hermes, python dan versi sama dengan hasil preflight.
 147. **General.** Keep running in the tray: menutup jendela menyembunyikannya, ikon tray membuka lagi atau Quit; koneksi dan notifikasi tetap jalan. Start minimized: aplikasi dibuka di taskbar/tray. Launch at login (Windows/macOS): aplikasi berjalan tersembunyi setelah login.
+148. **Suara balasan.** Kirim pesan ke agent: saat balasan selesai terdengar nada pendek (default Chime). Settings → Notifications → Reply sound: Off membuatnya diam, When away hanya berbunyi bila agent itu tidak sedang tampil; pilih Chime/Pop/Blip dan volume (tombol Play memutarnya). Saat Do not disturb aktif tidak ada suara. Notifikasi OS untuk balasan tidak berbunyi dobel.
 
 ## Melaporkan hasil
 

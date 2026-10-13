@@ -44,6 +44,39 @@ test('chat goes through one Hermes gateway for every message and agent', async (
   expect(srv.hermes.gatewayCalls.filter((c) => c.method === 'session.create').map((c) => c.params['profile'])).toEqual(['scout', undefined])
 })
 
+test('a reply plays the reply sound, and Off keeps it quiet', async () => {
+  // count the oscillators the reply sound starts (WebAudio has no other trace in the page)
+  await page.evaluate(() => {
+    const w = window as unknown as { __tones: number }
+    w.__tones = 0
+    const orig = AudioContext.prototype.createOscillator
+    AudioContext.prototype.createOscillator = function (this: AudioContext) {
+      w.__tones++
+      return orig.call(this)
+    }
+  })
+  const tones = (): Promise<number> => page.evaluate(() => (window as unknown as { __tones: number }).__tones)
+  await say('one more')
+  await expect(conv().getByText(/\(turn 2\)/).first()).toBeVisible({ timeout: 20_000 })
+  await expect.poll(tones).toBeGreaterThan(0)
+  const before = await tones()
+  await page.getByRole('contentinfo', { name: 'Status bar' }).getByRole('button', { name: 'Settings' }).click()
+  const settings = page.getByRole('dialog', { name: 'Settings' })
+  await settings.getByRole('tab', { name: 'Notifications' }).click()
+  await settings.getByRole('group', { name: 'Reply sound' }).getByRole('button', { name: 'Off' }).click()
+  await expect(settings.getByRole('group', { name: 'Reply sound tone' })).toBeHidden()
+  await settings.getByRole('group', { name: 'Reply sound' }).getByRole('button', { name: 'Always' }).click()
+  await settings.getByRole('group', { name: 'Tone' }).getByRole('button', { name: 'Blip' }).click()
+  await expect.poll(tones).toBeGreaterThan(before) // picking a tone plays it
+  await settings.getByRole('group', { name: 'Reply sound' }).getByRole('button', { name: 'Off' }).click()
+  await page.keyboard.press('Escape')
+  const quiet = await tones()
+  await say('and a third')
+  await expect(conv().getByText(/\(turn 3\)/).first()).toBeVisible({ timeout: 20_000 })
+  await page.waitForTimeout(500)
+  expect(await tones()).toBe(quiet)
+})
+
 test('an approval from the gateway uses the approval card, with Allow for this session', async () => {
   await say('danger: clean the cache')
   const card = conv().getByRole('group', { name: /^Approval: Delete a folder/ })

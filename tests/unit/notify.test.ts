@@ -121,3 +121,31 @@ describe('notices store', () => {
     expect(useNotices.getState().list).toHaveLength(100)
   })
 })
+
+describe('reply sound', () => {
+  it('plays always, only when away, or never; never in the quiet hours', async () => {
+    const { replySoundPlays } = await import('@shared/notify')
+    expect(replySoundPlays('always', { away: false, quiet: false })).toBe(true)
+    expect(replySoundPlays('away', { away: false, quiet: false })).toBe(false)
+    expect(replySoundPlays('away', { away: true, quiet: false })).toBe(true)
+    expect(replySoundPlays('off', { away: true, quiet: false })).toBe(false)
+    expect(replySoundPlays('always', { away: true, quiet: true })).toBe(false)
+  })
+
+  it('keeps the OS notification of a reply silent while the app plays its own sound', () => {
+    expect(deliver('chat', { ...base, replySound: 'always' }, { inFront: false, minutes: at(10) })).toEqual({ record: true, desktop: true, sound: false })
+    expect(deliver('chat', { ...base, replySound: 'off' }, { inFront: false, minutes: at(10) })).toMatchObject({ sound: true })
+    expect(deliver('cron', { ...base, replySound: 'always' }, { inFront: false, minutes: at(10) })).toMatchObject({ sound: true })
+  })
+
+  it('has short, soft tones', async () => {
+    const { TONES, peakGain, toneLength } = await import('../../src/renderer/lib/sound')
+    for (const t of ['chime', 'pop', 'blip'] as const) {
+      expect(toneLength(t)).toBeLessThan(0.7)
+      for (const n of TONES[t]) {
+        expect(peakGain(n, 1)).toBeLessThanOrEqual(0.6)
+        expect(peakGain(n, 0)).toBe(0)
+      }
+    }
+  })
+})

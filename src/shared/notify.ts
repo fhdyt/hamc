@@ -40,6 +40,20 @@ export interface NotifySettings {
   preview: boolean
   sound: boolean
   quiet: QuietHours
+  /** The app's own sound for agent replies; when it plays, the OS notification of a reply stays silent. */
+  replySound?: ReplySoundMode
+}
+
+/** When the app plays its reply sound: never, only when that agent is not on screen, or for every reply. */
+export type ReplySoundMode = 'off' | 'away' | 'always'
+export const REPLY_SOUND_MODES: readonly ReplySoundMode[] = ['off', 'away', 'always']
+export type ReplyTone = 'chime' | 'pop' | 'blip'
+export const REPLY_TONES: readonly ReplyTone[] = ['chime', 'pop', 'blip']
+
+/** Whether a finished reply plays the app's sound: never in the quiet hours. */
+export function replySoundPlays(mode: ReplySoundMode, ctx: { away: boolean; quiet: boolean }): boolean {
+  if (mode === 'off' || ctx.quiet) return false
+  return mode === 'always' || ctx.away
 }
 
 export const NOTIFY_KINDS_DEFAULT: NotifyKinds = { chat: true, cron: true, gateway: true, cost: true }
@@ -79,7 +93,9 @@ export function deliver(kind: NoticeKind, s: NotifySettings, ctx: { inFront: boo
   if (!on) return { record: false, desktop: false, sound: false }
   const quiet = inQuietHours(s.quiet, ctx.minutes)
   const desktop = s.desktop && !quiet && (kind === 'test' || !ctx.inFront)
-  return { record: kind !== 'test', desktop, sound: desktop && s.sound }
+  // a reply already rings through the app's own sound, so the OS stays quiet for it
+  const appRings = kind === 'chat' && (s.replySound ?? 'off') !== 'off'
+  return { record: kind !== 'test', desktop, sound: desktop && s.sound && !appRings }
 }
 
 /** The body the OS shows: the text, or only who it is from when previews are off. */

@@ -167,6 +167,7 @@ if (!app.requestSingleInstanceLock()) {
         kinds: store.getSetting('notify.kinds'),
         preview: store.getSetting('notify.preview'),
         sound: store.getSetting('notify.sound'),
+        replySound: store.getSetting('notify.replySound'),
         quiet: store.getSetting('notify.quiet')
       }),
       inFront,

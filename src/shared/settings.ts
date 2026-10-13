@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { InteractionKind } from './events'
-import { HHMM_RE, NOTIFY_KINDS_DEFAULT, QUIET_DEFAULT, type NotifyKinds, type QuietHours } from './notify'
+import { HHMM_RE, NOTIFY_KINDS_DEFAULT, QUIET_DEFAULT, REPLY_SOUND_MODES, REPLY_TONES, type NotifyKinds, type QuietHours, type ReplySoundMode, type ReplyTone } from './notify'
 import { DEFAULT_SNIPPETS, SNIPPET_COMMAND_MAX, SNIPPET_LABEL_MAX, SNIPPET_MAX, TERM_MAX_H, TERM_MIN_H, type Snippet } from './terminal'
 import { DEFAULT_LOG_LEVELS, LOG_LEVELS, LOG_RANGES, type LogLevel, type LogRange } from './logs'
 
@@ -106,6 +106,10 @@ export interface SettingsMap {
   'notify.preview': boolean
   'notify.sound': boolean
   'notify.quiet': QuietHours
+  /** A short sound when an agent's reply arrives: off, only when that agent is not on screen, or always; its tone and volume. */
+  'notify.replySound': ReplySoundMode
+  'notify.replyTone': ReplyTone
+  'notify.volume': number
   /** General (F-SHELL-3): start with the computer (Windows, macOS), start minimized, keep running in the tray when closed. */
   'app.launchAtLogin': boolean
   'app.startMinimized': boolean
@@ -151,6 +155,9 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'notify.preview': true,
   'notify.sound': true,
   'notify.quiet': QUIET_DEFAULT,
+  'notify.replySound': 'always',
+  'notify.replyTone': 'chime',
+  'notify.volume': 0.6,
   'app.launchAtLogin': false,
   'app.startMinimized': false,
   'app.tray': false,
@@ -210,6 +217,9 @@ export const SETTINGS_SCHEMA = {
   'notify.preview': z.boolean(),
   'notify.sound': z.boolean(),
   'notify.quiet': z.object({ enabled: z.boolean(), from: z.string().regex(HHMM_RE), to: z.string().regex(HHMM_RE) }),
+  'notify.replySound': z.enum(REPLY_SOUND_MODES as [ReplySoundMode, ...ReplySoundMode[]]),
+  'notify.replyTone': z.enum(REPLY_TONES as [ReplyTone, ...ReplyTone[]]),
+  'notify.volume': z.number().min(0).max(1),
   'app.launchAtLogin': z.boolean(),
   'app.startMinimized': z.boolean(),
   'app.tray': z.boolean(),
