@@ -143,3 +143,70 @@ def test_read_errors(fx):
     assert read(fx, limit=True)["error"] == "bad_args"
     assert read(fx, file="tool_calls.log")["error"] == "not_found"
     assert read(fx, profile="ghost")["error"] == "not_found"
+
+
+# ---- gateway block and the error count in the agents event ------------------
+
+def agents(fx):
+    data, _errors = c.collect_agents(str(fx.home), fx.now)
+    return {a["profile"]: a for a in data["agents"]}
+
+
+def test_agents_carry_the_gateway_state_of_their_own_profile(fx):
+    a = agents(fx)
+    g = a["default"]["gateway"]
+    assert g["state"] == "running" and g["pidAlive"] is True and g["exitReason"] is None and g["restartRequested"] is False
+    assert {(p["name"], p["state"], p["errorCode"]) for p in g["platforms"]} == {("telegram", "connected", None), ("lightclawbot", "connected", None)}
+    assert g["updatedAgeS"] is not None and g["updatedAgeS"] < 5
+    assert a["scout"]["gateway"]["platforms"] == [{"name": "telegram", "state": "connected", "errorCode": None}]
+
+
+def test_a_stopped_gateway_and_a_failed_platform_are_visible(fx):
+    scout = fx.home / "profiles" / "scout"
+    mf.write_gateway_state(scout, mf.SCOUT_GATEWAY_PID, state="stopped", exit_reason="signal 15", updated_at=fx.now - 30,
+                           platforms={"telegram": {"state": "fatal", "error_code": "auth"}})
+    g = agents(fx)["scout"]["gateway"]
+    assert g["state"] == "stopped" and g["exitReason"] == "signal 15"
+    assert g["platforms"] == [{"name": "telegram", "state": "fatal", "errorCode": "auth"}]
+    assert 29 <= g["updatedAgeS"] <= 31
+
+
+def test_a_gone_process_is_reported(fx):
+    mf.write_gateway_state(fx.home / "profiles" / "scout", 99999)
+    assert agents(fx)["scout"]["gateway"]["pidAlive"] is False
+
+
+def test_a_profile_without_its_own_gateway_has_none_unless_the_home_gateway_serves_it(fx):
+    assert agents(fx)["atlas"]["gateway"] is None
+    mf.make_multiplex(fx)
+    a = agents(fx)
+    assert a["atlas"]["gateway"] is not None and [p["name"] for p in a["atlas"]["gateway"]["platforms"]] == ["telegram"]
+
+
+def test_unknown_gateway_fields_are_ignored(fx):
+    p = fx.home / "profiles" / "scout" / "gateway_state.json"
+    state = json.loads(p.read_text())
+    state["platforms"] = {"telegram": {"state": "connected", "weird": {"x": 1}}, "slack": "degraded"}
+    state["surprise"] = [1, 2, 3]
+    p.write_text(json.dumps(state))
+    g = agents(fx)["scout"]["gateway"]
+    assert {(x["name"], x["state"]) for x in g["platforms"]} == {("telegram", "connected"), ("slack", "degraded")}
+
+
+def test_errors_in_the_last_hour_are_counted_from_errors_log(fx):
+    mf.add_logs(fx)
+    a = agents(fx)
+    assert a["default"]["errors1h"] == 2  # the ERROR 30 minutes ago and the CRITICAL 5 minutes ago
+    assert a["scout"]["errors1h"] is None  # no errors.log
+
+
+def test_errors_log_without_timestamps_gives_no_count(fx):
+    mf.write_log(fx, "default", "errors.log", ["ERROR something", "no timestamp here"])
+    assert agents(fx)["default"]["errors1h"] is None
+
+
+def test_the_error_count_follows_the_file_when_it_changes(fx):
+    mf.add_logs(fx)
+    assert agents(fx)["default"]["errors1h"] == 2
+    mf.write_log(fx, "default", "errors.log", [f"{mf.stamp(fx.now - 10)} ERROR tools.terminal: another one"], mode="a")
+    assert agents(fx)["default"]["errors1h"] == 3

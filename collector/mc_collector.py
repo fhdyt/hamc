@@ -454,6 +454,99 @@ def gateway_alive(pdir):
     return True
 
 
+GW_PLATFORMS_MAX = 12
+ERR_TAIL_BYTES = 64 * 1024
+ERR_RECHECK_S = 60
+ERR_LINE_RE = re.compile(r"^\[?(\d{4})-(\d\d)-(\d\d)[T ](\d\d):(\d\d):(\d\d)\S*\s+\[?(DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL|FATAL)\b")
+_ERR_CACHE = {}
+
+
+def _opt_str(v):
+    if v is None or isinstance(v, (dict, list)):
+        return None
+    s = str(v).strip()
+    return s[:120] if s else None
+
+
+def gateway_platforms(state):
+    p = state.get("platforms") if isinstance(state, dict) else None
+    out = []
+    if isinstance(p, dict):
+        for name, v in p.items():
+            if isinstance(v, dict):
+                out.append({"name": str(name)[:64], "state": _opt_str(v.get("state")), "errorCode": _opt_str(v.get("error_code", v.get("errorCode")))})
+            else:
+                out.append({"name": str(name)[:64], "state": _opt_str(v), "errorCode": None})
+    elif isinstance(p, list):
+        for item in p:
+            if isinstance(item, str):
+                out.append({"name": item[:64], "state": None, "errorCode": None})
+            elif isinstance(item, dict) and item.get("name"):
+                out.append({"name": str(item["name"])[:64], "state": _opt_str(item.get("state")), "errorCode": _opt_str(item.get("error_code", item.get("errorCode")))})
+    return out[:GW_PLATFORMS_MAX]
+
+
+def gateway_info(state, pdir, now):
+    """What the Gateway tab shows, from one gateway_state.json (unknown fields are ignored)."""
+    if not isinstance(state, dict) or not state:
+        return None
+    pid = state.get("pid")
+    if not isinstance(pid, int) or isinstance(pid, bool):
+        pid = read_pid(os.path.join(pdir, "gateway.pid"))
+    hb = None
+    for key in HB_KEYS:
+        if key in state:
+            hb = to_epoch(state[key])
+            if hb is not None:
+                break
+    return {
+        "state": _opt_str(state.get("gateway_state")),
+        "pidAlive": pid_alive(pid) if pid else None,
+        "updatedAgeS": round(max(0.0, now - hb), 1) if hb is not None else None,
+        "exitReason": _opt_str(state.get("exit_reason")),
+        "restartRequested": bool(state.get("restart_requested")),
+        "platforms": gateway_platforms(state),
+    }
+
+
+def count_errors_1h(path, now):
+    """ERROR and CRITICAL lines of errors.log with a timestamp in the last hour; None when no line has a readable timestamp.
+    The tail is re-read only when the file changed or a minute has passed."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    sig = (st.st_size, st.st_mtime)
+    hit = _ERR_CACHE.get(path)
+    if hit and hit[0] == sig and now - hit[1] < ERR_RECHECK_S:
+        return hit[2]
+    try:
+        with open(path, "rb") as f:
+            start = max(0, st.st_size - ERR_TAIL_BYTES)
+            f.seek(start)
+            data = f.read()
+    except OSError:
+        return None
+    lines = data.decode("utf-8", "replace").split("\n")
+    if start > 0 and lines:
+        lines = lines[1:]
+    count, seen = 0, False
+    for line in lines:
+        m = ERR_LINE_RE.match(line)
+        if not m:
+            continue
+        try:
+            ts = time.mktime((int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5)), int(m.group(6)), 0, 0, -1))
+        except (ValueError, OverflowError):
+            continue
+        seen = True
+        if m.group(7) in ("ERROR", "CRITICAL", "FATAL") and now - 3600 <= ts <= now + 300:
+            count += 1
+    result = count if seen else None
+    _ERR_CACHE[path] = (sig, now, result)
+    return result
+
+
 def collect_agents(home, now):
     errors = []
     state = read_json(os.path.join(home, "gateway_state.json")) or {}
@@ -487,6 +580,8 @@ def collect_agents(home, now):
         else:
             status = "offline"
         pstate = state if name == "default" else (read_json(os.path.join(pdir, "gateway_state.json")) or state)
+        own_state = state if name == "default" else read_json(os.path.join(pdir, "gateway_state.json"))
+        gw_state = own_state if own_state else (state if primary else None)
         try:
             cfg_mtime = os.stat(os.path.join(pdir, "config.yaml")).st_mtime
         except OSError:
@@ -502,6 +597,8 @@ def collect_agents(home, now):
             "hasMemory": os.path.isfile(os.path.join(pdir, "memories", "MEMORY.md")),
             "hasUser": os.path.isfile(os.path.join(pdir, "memories", "USER.md")),
             "stats": collect_stats(os.path.join(pdir, "state.db"), now),
+            "gateway": gateway_info(gw_state, pdir if (own_state or name == "default") else home, now),
+            "errors1h": count_errors_1h(os.path.join(pdir, "logs", "errors.log"), now),
         })
     data = {
         "agents": agents,
