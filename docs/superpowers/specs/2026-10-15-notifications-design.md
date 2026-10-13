@@ -22,7 +22,7 @@ other apps when the window is not in front, and the Settings tabs that were stil
   (`openNoticeTarget`, `notifyChatReply`), `components/Notices.tsx` (`NoticeBell` popover: Esc and a click outside
   close it, opening marks all read, Clear; `Toasts` for 6 s, bottom right above the status bar and the terminal).
 - Settings: `notify.desktop`, `notify.kinds`, `notify.preview`, `notify.sound`, `notify.quiet`, `app.launchAtLogin`
-  (Windows/macOS; the login item passes `--hidden`), `app.startMinimized`, `app.tray`. `IpcDeps.onSetting` lets
+  (Windows/macOS, installed app only; the window opens in front at sign-in unless `app.startMinimized` is on), `app.startMinimized`, `app.tray`. `IpcDeps.onSetting` lets
   `index.ts` apply the tray and the login item at once.
 - Workspace: the vault path (chosen and checked with the existing `VaultSetup`, removable), the Hermes home, `hermes`,
   python and version from the preflight (read only), and the upload folder with a link to Uploads.

@@ -84,8 +84,10 @@ function updatesUnsupported(): string | null {
 }
 
 function applyLoginItem(on: boolean): void {
-  // Linux has no login items in Electron; the switch is hidden there
-  if (process.platform === 'win32' || process.platform === 'darwin') app.setLoginItemSettings({ openAtLogin: on, args: on ? ['--hidden'] : [] })
+  // Linux has no login items in Electron (the switch is hidden there); a development run would register electron.exe
+  if (!app.isPackaged || (process.platform !== 'win32' && process.platform !== 'darwin')) return
+  // the window opens in front at sign-in; "Start minimized" decides otherwise, as for any start
+  app.setLoginItemSettings({ openAtLogin: on, args: [] })
 }
 
 function buildMenu(): Menu {
@@ -112,8 +114,8 @@ function createWindow(store: SettingsStore): BrowserWindow {
   })
   hardenWebContents(w.webContents, target)
   w.setMenuBarVisibility(false)
-  // started minimized (a setting, or the login item's --hidden): the window waits in the taskbar or the tray
-  const hidden = store.getSetting('app.startMinimized') || process.argv.includes('--hidden')
+  // started minimized (a setting): the window waits in the taskbar or the tray
+  const hidden = store.getSetting('app.startMinimized')
   w.once('ready-to-show', () => {
     if (!hidden) w.show()
     else if (!store.getSetting('app.tray')) w.minimize()
@@ -234,6 +236,8 @@ if (!app.requestSingleInstanceLock()) {
       }
     })
     applyTray(store.getSetting('app.tray'))
+    // keeps the login item in step with the setting (an older version registered it with --hidden)
+    if (store.getSetting('app.launchAtLogin')) applyLoginItem(true)
     Menu.setApplicationMenu(buildMenu())
     win = createWindow(store)
     win.on('closed', () => (win = null))

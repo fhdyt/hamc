@@ -57,7 +57,7 @@ function General() {
         <Switch checked={s['ui.reduceMotion']} label="Reduce motion" onChange={(v) => void saveSetting('ui.reduceMotion', v)} />
       </Row>
       {platform !== 'linux' && (
-        <Row label="Launch at login" hint="Starts Mission Control in the background when you sign in to this computer">
+        <Row label="Launch at login" hint="Opens Mission Control when you sign in to this computer (in front, or minimized with the switch below); works in the installed app">
           <Switch checked={s['app.launchAtLogin']} label="Launch at login" onChange={(v) => void saveSetting('app.launchAtLogin', v)} />
         </Row>
       )}
