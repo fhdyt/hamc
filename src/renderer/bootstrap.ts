@@ -3,6 +3,7 @@ import { useAgents } from './stores/agents'
 import { useBrain } from './stores/brain'
 import { useChat } from './stores/chat'
 import { useConn } from './stores/conn'
+import { useCostAlert } from './stores/costAlert'
 import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
 import { useInteractions } from './stores/interactions'
@@ -42,6 +43,11 @@ export async function bootstrap(): Promise<void> {
   mc.onPreflight((preflight) => useConn.setState({ preflight }))
   mc.onCapabilities((capabilities) => useConn.setState({ capabilities }))
   mc.onModels((models) => useAgents.getState().setModels(models))
+  mc.onCostAlert((state) => useCostAlert.getState().apply(state))
+  mc.onOpenUsage(() => {
+    const route = useUi.getState().route
+    if (route !== 'connect' && route !== 'launch') useUi.getState().navigate('usage')
+  })
   mc.onOpenCron(({ profile, jobId }) => {
     const route = useUi.getState().route
     if (route !== 'connect' && route !== 'launch') {

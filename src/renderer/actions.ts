@@ -12,7 +12,9 @@ import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
 import { useInteractions } from './stores/interactions'
 import { useMetrics } from './stores/metrics'
+import { useCostAlert } from './stores/costAlert'
 import { useSessions } from './stores/sessions'
+import { useUsage } from './stores/usage'
 import { useUi } from './stores/ui'
 
 export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
@@ -25,6 +27,8 @@ export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
     useInteractions.getState().reset()
     useChat.getState().reset()
     useSessions.getState().reset()
+    useUsage.getState().reset()
+    useCostAlert.getState().reset()
   }
   const res = await window.mc.connection.connect(req)
   if (res.ok) {
@@ -57,6 +61,8 @@ export async function forgetConnection(): Promise<void> {
   useFeed.getState().reset()
   useInteractions.getState().reset()
   useSessions.getState().reset()
+  useUsage.getState().reset()
+  useCostAlert.getState().reset()
   useBrain.getState().reset()
   useChat.getState().reset()
   useConn.setState({
