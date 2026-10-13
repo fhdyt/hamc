@@ -183,7 +183,7 @@ def make_db(path: Path, messages=(), sessions=(), wal: bool = False) -> sqlite3.
     con.execute(
         "CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, parent_session_id TEXT, model TEXT, title TEXT, started_at REAL, ended_at REAL, "
         "message_count INTEGER, tool_call_count INTEGER, input_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER, "
-        "estimated_cost_usd REAL, actual_cost_usd REAL)"
+        "estimated_cost_usd REAL, actual_cost_usd REAL, cache_read_tokens INTEGER, end_reason TEXT, cost_status TEXT, pinned INTEGER DEFAULT 0)"
     )
     for ts, active in messages:
         con.execute("INSERT INTO messages (role, content, timestamp, active) VALUES ('user', 'x', ?, ?)", (ts, active))
@@ -202,6 +202,15 @@ def add_session(db: Path, sid: str, source: str = "telegram", started_at: float 
     )
     for k, v in cols.items():
         con.execute("UPDATE sessions SET %s = ? WHERE id = ?" % k, (v, sid))
+    con.commit()
+    con.close()
+
+
+def add_fts(db: Path) -> None:
+    """The message index Hermes keeps: an FTS5 table over messages.content, keyed by messages.id."""
+    con = sqlite3.connect(db)
+    con.execute("CREATE VIRTUAL TABLE messages_fts USING fts5(content, content='messages', content_rowid='id')")
+    con.execute("INSERT INTO messages_fts(rowid, content) SELECT id, content FROM messages WHERE content IS NOT NULL")
     con.commit()
     con.close()
 
@@ -378,7 +387,7 @@ def make_fixture(root: Path, now: float | None = None) -> Fixture:
 
     d = home / "state.db"
     add_session(d, "s-default-1", "telegram", now - 4000, message_count=4, tool_call_count=1, input_tokens=100, output_tokens=50,
-                reasoning_tokens=10, estimated_cost_usd=0.02)
+                reasoning_tokens=10, estimated_cost_usd=0.02, title="Morning briefing")
     add_session(d, "s-default-old", "cli", now - 3 * 86400, message_count=9, tool_call_count=9, input_tokens=900, output_tokens=900,
                 reasoning_tokens=900, estimated_cost_usd=9.0)
     add_message(d, "s-default-1", "user", "hello agent", now - 3900)
@@ -388,11 +397,13 @@ def make_fixture(root: Path, now: float | None = None) -> Fixture:
     add_message(d, "s-default-1", "assistant", "Here is what I found.", now - 3888)
     sd = scout / "state.db"
     add_session(sd, "s-scout-1", "cron", now - 20, message_count=2, tool_call_count=0, input_tokens=10, output_tokens=5,
-                reasoning_tokens=0, actual_cost_usd=0.5, estimated_cost_usd=0.4)
+                reasoning_tokens=0, actual_cost_usd=0.5, estimated_cost_usd=0.4, title="Digest run")
     add_session(sd, "s-scout-child", "subagent", now - 15, parent="s-scout-1")
     add_message(sd, "s-scout-1", "user", "run the digest", now - 12)
     add_message(sd, "s-scout-1", "assistant", "digest done", now - 11, reasoning="plan: summarise")
     add_message(sd, "s-scout-child", "assistant", "child work", now - 11)
+    add_fts(d)
+    add_fts(sd)
     make_vault(fx)
     return fx
 

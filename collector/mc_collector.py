@@ -1292,6 +1292,175 @@ def q_session(home, a):
     }
 
 
+# ---- sessions (M8a) --------------------------------------------------------
+
+SESSION_COLS = ["title", "source", "model", "started_at", "ended_at", "end_reason", "message_count", "tool_call_count",
+                "input_tokens", "output_tokens", "cache_read_tokens", "estimated_cost_usd", "actual_cost_usd", "cost_status",
+                "parent_session_id", "pinned"]
+SESSIONS_LIST_MAX = 100
+SESSIONS_SEARCH_MAX = 200
+SESSIONS_SOURCES_MAX = 30
+TRANSCRIPT_PAGE = 200
+
+
+def _dict_rows(cur):
+    names = [d[0] for d in cur.description]
+    return [dict(zip(names, r)) for r in cur.fetchall()]
+
+
+def _limit(a, default, high):
+    v = a.get("limit", default)
+    if not valid_int(v, 1):
+        raise QueryError("bad_args")
+    return min(v, high)
+
+
+def _filters(a):
+    profiles = a.get("profiles", [])
+    if not isinstance(profiles, list) or len(profiles) > 50 or not all(valid_profile(p) for p in profiles):
+        raise QueryError("bad_args")
+    source = a.get("source")
+    if source is not None and (not isinstance(source, str) or not source or len(source) > 64):
+        raise QueryError("bad_args")
+    since = a.get("sinceTs")
+    if since is not None and (isinstance(since, bool) or not isinstance(since, (int, float))):
+        raise QueryError("bad_args")
+    return profiles, source, since
+
+
+def _session_select(scols):
+    return ", ".join(["s.id AS id"] + [("s.%s AS %s" % (c, c)) if c in scols else ("NULL AS %s" % c) for c in SESSION_COLS])
+
+
+def _opt_int(v):
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    return int(v) if isinstance(v, float) else None
+
+
+def _opt_num(v):
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def _cost(r):
+    if r.get("cost_status") not in (None, "", "actual", "estimated"):
+        return None, None
+    actual, est = _opt_num(r.get("actual_cost_usd")), _opt_num(r.get("estimated_cost_usd"))
+    if actual is not None:
+        return actual, "actual"
+    if est is not None:
+        return est, "estimated"
+    return None, None
+
+
+def _status(r, has_children):
+    reason = _text(r.get("end_reason")) or ""
+    if r.get("ended_at") is None and not reason:
+        return "running"
+    low = reason.lower()
+    if "error" in low or "fail" in low or "crash" in low:
+        return "failed"
+    return "compressed" if has_children else "ended"
+
+
+def _session_row(profile, r, has_children, snippet=None):
+    cost, kind = _cost(r)
+    return {
+        "profile": profile, "id": r["id"], "title": _text(r.get("title"), 200), "source": _text(r.get("source"), 64),
+        "model": _text(r.get("model"), 128), "startedAt": to_epoch(r.get("started_at")), "endedAt": to_epoch(r.get("ended_at")),
+        "endReason": _text(r.get("end_reason"), 64), "messageCount": _opt_int(r.get("message_count")),
+        "toolCallCount": _opt_int(r.get("tool_call_count")), "inputTokens": _opt_int(r.get("input_tokens")),
+        "outputTokens": _opt_int(r.get("output_tokens")), "cacheReadTokens": _opt_int(r.get("cache_read_tokens")),
+        "cost": cost, "costKind": kind, "parentSessionId": _text(r.get("parent_session_id"), 128),
+        "hasChildren": has_children, "pinned": bool(r.get("pinned")), "status": _status(r, has_children), "snippet": snippet,
+    }
+
+
+def _children_of(con, scols, ids):
+    if not ids or "parent_session_id" not in scols:
+        return set()
+    marks = ",".join("?" * len(ids))
+    return {r[0] for r in con.execute("SELECT DISTINCT parent_session_id FROM sessions WHERE parent_session_id IN (%s)" % marks, ids)}
+
+
+def _sort_rows(rows):
+    rows.sort(key=lambda r: r["id"], reverse=True)
+    rows.sort(key=lambda r: (r["startedAt"] is None, -(r["startedAt"] or 0)))
+
+
+def _each_profile(home, wanted):
+    for name, pdir in list_profiles(home):
+        if wanted and name not in wanted:
+            continue
+        db = os.path.join(pdir, "state.db")
+        if os.path.isfile(db):
+            yield name, db
+
+
+def _has_sessions(scols):
+    return {"id", "started_at"} <= scols
+
+
+def _source_list(con, scols):
+    if "source" not in scols:
+        return []
+    return [r[0] for r in con.execute("SELECT DISTINCT source FROM sessions WHERE source IS NOT NULL ORDER BY source LIMIT ?", (SESSIONS_SOURCES_MAX,))]
+
+
+def q_sessions_list(home, a):
+    profiles, source, since = _filters(a)
+    limit = _limit(a, 50, SESSIONS_LIST_MAX)
+    before = a.get("before")
+    bts = None
+    if before is not None:
+        if not isinstance(before, dict) or not isinstance(before.get("id"), str) or not ID_RE.match(before["id"]):
+            raise QueryError("bad_args")
+        bts = before.get("ts")
+        if bts is not None and (isinstance(bts, bool) or not isinstance(bts, (int, float))):
+            raise QueryError("bad_args")
+    rows, errors, sources, readable = [], [], set(), 0
+    for name, db in _each_profile(home, profiles):
+        con = None
+        try:
+            con = open_ro(db)
+            scols = table_columns(con, "sessions")
+            if not _has_sessions(scols):
+                errors.append({"profile": name, "code": "unsupported_schema"})
+                continue
+            where, params = [], []
+            if since is not None:
+                where.append("s.started_at >= ?")
+                params.append(since)
+            if source is not None and "source" in scols:
+                where.append("s.source = ?")
+                params.append(source)
+            if before is not None:
+                if bts is None:
+                    where.append("(s.started_at IS NULL AND s.id < ?)")
+                    params.append(before["id"])
+                else:
+                    where.append("(s.started_at < ? OR (s.started_at = ? AND s.id < ?) OR s.started_at IS NULL)")
+                    params.extend([bts, bts, before["id"]])
+            sql = "SELECT %s FROM sessions s%s ORDER BY (s.started_at IS NULL), s.started_at DESC, s.id DESC LIMIT ?" % (
+                _session_select(scols), (" WHERE " + " AND ".join(where)) if where else "")
+            got = _dict_rows(con.execute(sql, params + [limit + 1]))
+            kids = _children_of(con, scols, [g["id"] for g in got])
+            rows.extend(_session_row(name, g, g["id"] in kids) for g in got)
+            sources.update(_source_list(con, scols))
+            readable += 1
+        except sqlite3.Error:
+            errors.append({"profile": name, "code": "db_unreadable"})
+        finally:
+            if con is not None:
+                con.close()
+    if errors and readable == 0:
+        raise QueryError(errors[0]["code"])
+    _sort_rows(rows)
+    return {"rows": rows[:limit], "sources": sorted(sources)[:SESSIONS_SOURCES_MAX], "errors": errors, "more": len(rows) > limit, "fallback": None}
+
+
 # ---- chat ----------------------------------------------------------------
 
 CHAT_SOURCE = "mission-control"
@@ -1868,6 +2037,7 @@ def run_query(home, cmd, raw):
         "message": q_message, "history": q_history, "session": q_session,
         "vault_check": q_vault_check, "browse": q_browse, "note": q_note,
         "chat_sessions": q_chat_sessions, "uploads_list": q_uploads_list, "interaction": q_interaction,
+        "sessions_list": q_sessions_list,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}
