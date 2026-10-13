@@ -5,6 +5,7 @@ import { ConnectRequestSchema, HostKeyChallengeSchema, type AppInfo } from '@sha
 import { CUSTOM_NAME_RE, CUSTOM_SLUG, EFFORT_RE, FILE_KINDS, MAX_FILE_BYTES, PRESETS, type AgentFileKind } from '@shared/agentCfg'
 import { SETTINGS_SCHEMA, isSettingKey } from '@shared/settings'
 import { LOG_FILES } from '@shared/logs'
+import { BOARD_RE, TASK_ID_RE } from '@shared/kanban'
 import { EXPORT_MAX_BYTES } from './sessions/export'
 import { isTrustedSender, type AppTarget } from './security'
 import type { MissionSession } from './session'
@@ -29,6 +30,10 @@ const InteractionArgs = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('room'), id: z.string().regex(/^room:[^\u0000]{1,80}$/) }),
   z.object({ kind: z.literal('delegate'), id: z.string().regex(/^sub:[A-Za-z0-9._-]{1,64}:[A-Za-z0-9._:-]{1,128}$/) })
 ])
+
+const KanbanBoardArg = z.string().regex(BOARD_RE)
+const KanbanTasksSchema = z.object({ board: KanbanBoardArg })
+const KanbanTaskSchema = z.object({ board: KanbanBoardArg, id: z.string().regex(TASK_ID_RE) })
 
 const SessionIdArg = z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/)
 const SessionFilter = {
@@ -170,6 +175,9 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.sessionsExport, (a) => d.session.sessionExport(ExportSchema.parse(a), d.getWindow()))
   handle(IPC.logsList, (a) => d.session.logsList(LogsListSchema.parse(a)))
   handle(IPC.logsRead, (a) => d.session.logsRead(LogsReadSchema.parse(a)))
+  handle(IPC.kanbanBoards, () => d.session.kanbanBoards())
+  handle(IPC.kanbanTasks, (a) => d.session.kanbanTasks(KanbanTasksSchema.parse(a)))
+  handle(IPC.kanbanTask, (a) => d.session.kanbanTask(KanbanTaskSchema.parse(a)))
   handle(IPC.gatewayAction, (a) => d.session.gatewayAction(GatewayActionSchema.parse(a)))
   handle(IPC.approvalsRead, (a) => d.session.approvalsRead(ProfileName.parse(a)))
   handle(IPC.alertsRecheck, () => d.session.alertsRecheck())

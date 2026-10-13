@@ -153,3 +153,15 @@ def test_task_errors(fx):
     assert detail(fx, "t_run1", "../x")["error"] == "bad_args"
     assert detail(fx, "t_run1", "ghost")["error"] == "not_found"
     assert q(fx, "kanban_task", {"board": "sim-kanban"})["error"] == "bad_args"
+
+
+def test_the_answer_for_a_task_with_huge_comments_stays_under_the_output_limit(fx):
+    mf.add_real_kanban(fx)
+    con = sqlite3.connect(fx.home / "kanban" / "boards" / "sim-kanban" / "kanban.db")
+    for i in range(200):
+        con.execute("INSERT INTO task_comments (task_id, author, body, created_at) VALUES ('t_todo1', 'x', ?, ?)", ("c" * 20000, i))
+    con.commit()
+    con.close()
+    out = c.run_query(str(fx.home), "kanban_task", json.dumps({"board": "sim-kanban", "id": "t_todo1"}))
+    assert len(json.dumps(out)) < 900_000
+    assert 0 < len(out["data"]["comments"]) < 200

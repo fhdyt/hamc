@@ -51,6 +51,11 @@ export function addInteractions(root: string): void {
   execFileSync(pythonExe, [script, 'add-interactions', root])
 }
 
+/** Adds the home kanban.db (empty) and the board `sim-kanban` with tasks in every column, in the schema of a real Hermes (pass the fixture root). */
+export function addRealKanban(root: string): void {
+  execFileSync(pythonExe, [script, 'add-real-kanban', root])
+}
+
 /** Adds sessions with models, providers and costs on four irregular days from `base` (epoch seconds; pass the fixture root). */
 export function addUsageData(root: string, base: number): void {
   execFileSync(pythonExe, [script, 'add-usage-data', root, String(base)])

@@ -2000,6 +2000,7 @@ KANBAN_BODY_MAX = 65536
 KANBAN_COMMENT_MAX = 16384
 KANBAN_PAYLOAD_MAX = 2000
 KANBAN_SUMMARY_MAX = 4096
+KANBAN_COMMENTS_BUDGET = 300000
 BOARD_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
@@ -2142,8 +2143,13 @@ def q_kanban_task(home, a):
         ccols = table_columns(con, "task_comments")
         if {"id", "task_id", "body"} <= ccols:
             sel = _kb_sel(ccols, [("id", "id"), ("author", "author"), ("body", "body"), ("created_at", "created_at")], "c")
-            comments = [{"id": _kb_int(x["id"]), "author": _text(x["author"], 64), "body": _text(x["body"], KANBAN_COMMENT_MAX) or "", "createdAt": to_epoch(x["created_at"])}
-                        for x in _dict_rows(con.execute("SELECT %s FROM task_comments c WHERE c.task_id = ? ORDER BY c.id LIMIT 200" % sel, (tid,)))]
+            budget = KANBAN_COMMENTS_BUDGET  # the whole answer must fit the 1 MB the app accepts
+            for x in _dict_rows(con.execute("SELECT %s FROM task_comments c WHERE c.task_id = ? ORDER BY c.id LIMIT 200" % sel, (tid,))):
+                body = _text(x["body"], KANBAN_COMMENT_MAX) or ""
+                if budget - len(body) < 0 and comments:
+                    break
+                budget -= len(body)
+                comments.append({"id": _kb_int(x["id"]), "author": _text(x["author"], 64), "body": body, "createdAt": to_epoch(x["created_at"])})
         rcols = table_columns(con, "task_runs")
         if {"id", "task_id"} <= rcols:
             sel = _kb_sel(rcols, [("id", "id"), ("profile", "profile"), ("step_key", "step_key"), ("status", "status"), ("started_at", "started_at"),

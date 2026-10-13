@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult, ModelReadResult, ModelSaveRequest, RestartResult, SaveModelResult, TestModelResult } from './agentCfg'
 import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, SessionDetail, SessionsList, SessionTranscript, UploadsList, VaultCheck } from './events'
-import type { CostAlertState, LogsList, LogsRead, UsageSummary, UsageTools } from './events'
+import type { KanbanTaskArgs, KanbanTasksArgs } from './kanban'
+import type { CostAlertState, KanbanBoards, KanbanTaskDetail, KanbanTasks, LogsList, LogsRead, UsageSummary, UsageTools } from './events'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from './logs'
 import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
@@ -226,6 +227,11 @@ export interface MissionApi {
   logs: {
     list(args: LogsListArgs): Promise<QueryResult<LogsList>>
     read(args: LogsReadArgs): Promise<QueryResult<LogsRead>>
+  }
+  kanban: {
+    boards(): Promise<QueryResult<KanbanBoards>>
+    tasks(args: KanbanTasksArgs): Promise<QueryResult<KanbanTasks>>
+    task(args: KanbanTaskArgs): Promise<QueryResult<KanbanTaskDetail>>
   }
   gateway: {
     action(req: { action: GatewayAction; profile: string }): Promise<GatewayActionResult>

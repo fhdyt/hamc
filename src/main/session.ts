@@ -1,7 +1,8 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
-import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, LogsList, LogsRead, VaultCheck } from '@shared/events'
+import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, LogsList, LogsRead, KanbanBoards, KanbanTasks, KanbanTaskDetail, VaultCheck } from '@shared/events'
 import type { CostAlertState } from '@shared/events'
+import type { KanbanTaskArgs, KanbanTasksArgs } from '@shared/kanban'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from '@shared/logs'
 import type { UsageSummaryArgs, UsageToolsArgs } from '@shared/usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from '@shared/sessions'
@@ -536,6 +537,18 @@ export class MissionSession {
 
   logsRead(args: LogsReadArgs): Promise<QueryResult<LogsRead>> {
     return this.queries.run('logs_read', args, LogsRead)
+  }
+
+  kanbanBoards(): Promise<QueryResult<KanbanBoards>> {
+    return this.queries.run('kanban_boards', {}, KanbanBoards)
+  }
+
+  kanbanTasks(args: KanbanTasksArgs): Promise<QueryResult<KanbanTasks>> {
+    return this.queries.run('kanban_tasks', args, KanbanTasks)
+  }
+
+  kanbanTask(args: KanbanTaskArgs): Promise<QueryResult<KanbanTaskDetail>> {
+    return this.queries.run('kanban_task', args, KanbanTaskDetail)
   }
 
   gatewayAction(req: { action: GatewayAction; profile: string }): Promise<GatewayActionResult> {
