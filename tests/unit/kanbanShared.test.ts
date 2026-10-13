@@ -47,7 +47,8 @@ describe('kanban constants', () => {
 
 describe('kanban setting', () => {
   it('has the board with a default and a name check', () => {
-    expect(SETTINGS_DEFAULTS['kanban.board']).toBe('default')
+    expect(SETTINGS_DEFAULTS['kanban.board']).toBe('')
+    expect(SETTINGS_SCHEMA['kanban.board'].safeParse('').success).toBe(true)
     expect(SETTINGS_SCHEMA['kanban.board'].safeParse('sim-kanban').success).toBe(true)
     expect(SETTINGS_SCHEMA['kanban.board'].safeParse('../x').success).toBe(false)
   })

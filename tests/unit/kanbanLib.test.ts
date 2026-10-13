@@ -135,6 +135,9 @@ describe('pickBoard', () => {
     expect(pickBoard([board('x', 0)], 'gone')).toBe('x')
     expect(pickBoard([], 'default')).toBeNull()
   })
+  it('treats a board nobody picked yet (empty) like a missing one', () => {
+    expect(pickBoard([board('default', 0), board('sim', 3)], '')).toBe('sim')
+  })
   it('skips unreadable boards when it has to choose', () => {
     expect(pickBoard([{ ...board('bad', 9), readable: false }, board('ok', 1)], 'gone')).toBe('ok')
   })

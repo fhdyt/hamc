@@ -11,6 +11,7 @@ import { useChat } from './stores/chat'
 import { useCron } from './stores/cron'
 import { useFeed } from './stores/feed'
 import { useInteractions } from './stores/interactions'
+import { useKanban } from './stores/kanban'
 import { useMetrics } from './stores/metrics'
 import { useCostAlert } from './stores/costAlert'
 import { useLogs } from './stores/logs'
@@ -33,6 +34,7 @@ export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
     useUsage.getState().reset()
     usePalette.getState().reset()
     useLogs.getState().reset()
+    useKanban.getState().reset()
     useUnread.getState().reset()
     useCostAlert.getState().reset()
   }
@@ -70,6 +72,7 @@ export async function forgetConnection(): Promise<void> {
   useUsage.getState().reset()
   usePalette.getState().reset()
   useLogs.getState().reset()
+  useKanban.getState().reset()
   useUnread.getState().reset()
   useCostAlert.getState().reset()
   useBrain.getState().reset()
