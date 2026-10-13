@@ -116,8 +116,7 @@ export type CronOutputResult =
 /** What the renderer may ask about one edge or node of the agent graph; the main process checks it again. */
 export type InteractionDetailArgs =
   | { kind: 'message'; from: string; to: string }
-  | { kind: 'kanban'; id: number }
-  | { kind: Exclude<InteractionKind, 'message' | 'kanban'>; id: string }
+  | { kind: Exclude<InteractionKind, 'message'>; id: string }
 
 export type QueryError =
   | 'bad_args'

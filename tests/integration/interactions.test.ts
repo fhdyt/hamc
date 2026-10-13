@@ -76,11 +76,11 @@ describe('agent interactions over the session', () => {
     expect(first.edges.find((e) => e.id === 'message:atlas>scout:')).toMatchObject({ count: 2, label: 'msg' })
     expect(first.sources.message).toEqual({ state: 'ok', unresolved: 1 })
 
-    const task = await session.interactionDetail({ kind: 'kanban', id: 42 })
+    const task = await session.interactionDetail({ kind: 'kanban', id: '42' })
     expect(task).toMatchObject({ ok: true, data: { title: 'Draft the weekly digest' } })
     const msg = await session.interactionDetail({ kind: 'message', from: 'atlas', to: 'scout' })
     expect(msg).toMatchObject({ ok: true, data: { sessionId: 's-bot', profile: 'scout' } })
-    expect(await session.interactionDetail({ kind: 'kanban', id: 999 })).toEqual({ ok: false, error: 'not_found' })
+    expect(await session.interactionDetail({ kind: 'kanban', id: '999' })).toEqual({ ok: false, error: 'not_found' })
     expect(await session.interactionDetail({ kind: 'delegate', id: 'sub:atlas:../x' })).toEqual({ ok: false, error: 'bad_args' })
   })
 

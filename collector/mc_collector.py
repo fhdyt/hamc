@@ -1211,11 +1211,12 @@ class InteractionState:
                 self._src("kanban", "ok")
                 ecols = table_columns(con, "task_events")
                 last_ev = {}
-                if {"task_id", "ts"} <= ecols:
-                    for tid, ts in con.execute("SELECT task_id, MAX(ts) FROM task_events GROUP BY task_id"):
+                tscol = _pick_col(ecols, ("created_at", "ts"))
+                if "task_id" in ecols and tscol:
+                    for tid, ts in con.execute("SELECT task_id, MAX(%s) FROM task_events GROUP BY task_id" % tscol):
                         last_ev[tid] = to_epoch(ts) or 0.0
                 sel = ", ".join(("%s AS %s" % (col[k], k)) if col[k] else ("NULL AS %s" % k) for k in TASK_COLS)
-                for r in con.execute("SELECT %s FROM tasks ORDER BY %s DESC LIMIT 500" % (sel, col["id"])):
+                for r in con.execute("SELECT %s FROM tasks ORDER BY %s DESC LIMIT 500" % (sel, col["created"] or col["id"])):
                     t = dict(zip(TASK_COLS, r))
                     created = to_epoch(t["created"]) or 0.0
                     ts = max(created, last_ev.get(t["id"], 0.0))
@@ -2221,7 +2222,7 @@ def q_interaction(home, a):
         return _inter_out(best[0], ts=best[2], source="%s/state.db - session \"Bot Chat\"" % to, sessionId=best[1], profile=to)
     ident = a.get("id")
     if kind == "kanban":
-        if not valid_int(ident):
+        if not (valid_int(ident) or (isinstance(ident, str) and ID_RE.match(ident))):
             raise QueryError("bad_args")
         for path in _kanban_paths(home):
             if not os.path.isfile(path):
@@ -2236,16 +2237,22 @@ def q_interaction(home, a):
                 if row is None:
                     continue
                 text, ts = "", None
+                ccols = table_columns(con, "task_comments")
+                if {"id", "task_id", "body"} <= ccols:
+                    cm = con.execute("SELECT body, %s FROM task_comments WHERE task_id = ? ORDER BY id DESC LIMIT 1" % ("created_at" if "created_at" in ccols else "NULL"), (ident,)).fetchone()
+                    if cm and cm[0]:
+                        text, ts = as_text(cm[0]), to_epoch(cm[1])
                 ecols = table_columns(con, "task_events")
-                bcol = _pick_col(ecols, ("body", "text", "comment", "message", "kind"))
-                if {"id", "task_id", "ts"} <= ecols and bcol:
-                    ev = con.execute("SELECT %s, ts FROM task_events WHERE task_id = ? ORDER BY id DESC LIMIT 1" % bcol, (ident,)).fetchone()
+                tscol = _pick_col(ecols, ("created_at", "ts"))
+                bcol = _pick_col(ecols, ("body", "text", "comment", "message", "payload", "kind"))
+                if not text and {"id", "task_id"} <= ecols and tscol and bcol:
+                    ev = con.execute("SELECT %s, %s FROM task_events WHERE task_id = ? ORDER BY id DESC LIMIT 1" % (bcol, tscol), (ident,)).fetchone()
                     if ev:
                         text, ts = as_text(ev[0]), to_epoch(ev[1])
             finally:
                 con.close()
             rel = os.path.relpath(path, home).replace(os.sep, "/")
-            return _inter_out(text, title=_text(row[0], 200), ts=ts, source="%s - task #%d" % (rel, ident))
+            return _inter_out(text, title=_text(row[0], 200), ts=ts, source="%s - task #%s" % (rel, ident))
         raise QueryError("not_found")
     if kind == "delegate":
         parts = ident.split(":", 2) if isinstance(ident, str) else []

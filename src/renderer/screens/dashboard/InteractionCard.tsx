@@ -20,8 +20,8 @@ export function detailArgs(edge: GEdge | null, node: GNode | null): InteractionD
   if (edge) {
     if (edge.kind === 'message') return { kind: 'message', from: edge.from, to: edge.to }
     if (edge.kind === 'kanban') {
-      const id = Number((edge.label ?? '').replace('#', ''))
-      return Number.isInteger(id) && id >= 0 ? { kind: 'kanban', id } : null
+      const id = (edge.label ?? '').replace(/^#/, '')
+      return /^[A-Za-z0-9._:-]{1,128}$/.test(id) ? { kind: 'kanban', id } : null
     }
     return { kind: edge.kind, id: edge.to }
   }

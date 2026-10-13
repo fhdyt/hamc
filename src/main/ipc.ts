@@ -25,7 +25,7 @@ const FeedSessionArgs = z.object({ profile: ProfileName, sessionId: z.string().r
 
 const InteractionArgs = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('message'), from: ProfileName, to: ProfileName }),
-  z.object({ kind: z.literal('kanban'), id: z.number().int().min(0) }),
+  z.object({ kind: z.literal('kanban'), id: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/) }),
   z.object({ kind: z.literal('room'), id: z.string().regex(/^room:[^\u0000]{1,80}$/) }),
   z.object({ kind: z.literal('delegate'), id: z.string().regex(/^sub:[A-Za-z0-9._-]{1,64}:[A-Za-z0-9._:-]{1,128}$/) })
 ])

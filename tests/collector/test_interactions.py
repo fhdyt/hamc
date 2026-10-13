@@ -172,3 +172,25 @@ def test_stream_emits_interactions_once_until_changed(tmp_path):
     events = [json.loads(line) for line in out.splitlines() if line.strip()]
     inter = [e for e in events if e["type"] == "interactions"]
     assert len(inter) == 1 and inter[0]["data"]["edges"]
+
+
+def test_kanban_edges_from_the_real_schema_use_text_ids_and_created_at_of_events(fx):
+    mf.add_real_kanban(fx)
+    _, data = poll(fx)
+    assert data["sources"]["kanban"]["state"] == "ok"
+    by = {x["label"]: x for x in data["edges"] if x["kind"] == "kanban"}
+    assert by["#t_done1"]["from"] == "atlas" and by["#t_done1"]["to"] == "scout" and by["#t_done1"]["status"] == "done"
+    assert by["#t_blk1"]["to"] == "default"
+    run = by["#t_run1"]
+    assert run["lastTs"] >= fx.now - 3500  # the newest event of the task, not just its creation
+
+
+def test_query_interaction_kanban_with_a_text_id_returns_the_latest_comment(fx):
+    mf.add_real_kanban(fx)
+    r = run(fx, {"kind": "kanban", "id": "t_run1"})
+    assert r["ok"] and r["data"]["title"] == "Draft the weekly digest" and r["data"]["text"] == "On it."
+    assert "sim-kanban/kanban.db" in r["data"]["source"] and "t_run1" in r["data"]["source"]
+    r = run(fx, {"kind": "kanban", "id": "t_todo1"})
+    assert r["ok"] and r["data"]["title"] == "Publish the digest"
+    assert run(fx, {"kind": "kanban", "id": "t_nope"})["error"] == "not_found"
+    assert run(fx, {"kind": "kanban", "id": "a b"})["error"] == "bad_args"
