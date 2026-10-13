@@ -46,3 +46,14 @@
 .term-xterm .xterm { height: 100%; }
 .term-note { position: absolute; left: 12px; bottom: 8px; display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid #44475a; border-radius: 6px; background: #21222c; color: #a9b2d3; }
 .term-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+/* local terminals and the shell menu */
+.term-warn.local { color: #8be9fd; }
+.term-tab-btn svg { flex: none; opacity: 0.8; }
+.term-tab.server .term-tab-btn svg { color: #ffb86c; }
+.term-tab.local .term-tab-btn svg { color: #8be9fd; }
+.term-new { position: relative; display: inline-flex; align-items: center; flex: none; }
+.term-new-more { width: 18px; min-width: 18px; padding: 0; }
+.term-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; display: flex; flex-direction: column; min-width: 220px; padding: 4px; border: 1px solid #6272a4; border-radius: 8px; background: #21222c; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+.term-menu button { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: #f8f8f2; font: inherit; text-align: left; cursor: pointer; white-space: nowrap; }
+.term-menu button:hover, .term-menu button:focus-visible { background: #44475a; outline: none; }
+.term-empty { gap: 8px; }

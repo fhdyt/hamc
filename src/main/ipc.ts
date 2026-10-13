@@ -264,7 +264,8 @@ export function registerIpc(d: IpcDeps): void {
     )
   )
   handle(IPC.opsBackup, (a) => d.session.agentBackup(z.object({ profile: ProfileName, includeStateDb: z.boolean() }).parse(a), d.getWindow()))
-  handle(IPC.termOpen, (a) => d.session.termOpen(TermSizeSchema.parse(a)))
+  handle(IPC.termOpen, (a) => d.session.termOpen(TermSizeSchema.extend({ kind: z.enum(['local', 'server']).default('server') }).parse(a)))
+  handle(IPC.termInfo, () => d.session.termInfo())
   handle(IPC.termWrite, (a) => {
     const { id, data } = z.object({ id: TermId, data: z.string().min(1).max(TERM_WRITE_MAX) }).parse(a)
     return d.session.termWrite(id, data)

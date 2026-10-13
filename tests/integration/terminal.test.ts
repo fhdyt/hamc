@@ -68,7 +68,7 @@ async function connected() {
 describe('terminal', () => {
   it('opens a PTY shell with the asked size and types nothing into it', async () => {
     const { session, out } = await connected()
-    const r = await session.termOpen({ cols: 100, rows: 30 })
+    const r = await session.termOpen({ cols: 100, rows: 30, kind: 'server' })
     expect(r.ok).toBe(true)
     if (!r.ok) return
     await waitFor(() => (out[r.id] ?? '').includes('tester@fake:~$ '))
@@ -79,7 +79,7 @@ describe('terminal', () => {
 
   it('carries keys in and output out, and resizes with window-change', async () => {
     const { session, out } = await connected()
-    const r = await session.termOpen({ cols: 80, rows: 24 })
+    const r = await session.termOpen({ cols: 80, rows: 24, kind: 'server' })
     if (!r.ok) throw new Error('open failed')
     await waitFor(() => (out[r.id] ?? '').includes('$ '))
     expect(session.termWrite(r.id, 'echo hello-term\r')).toBe(true)
@@ -95,11 +95,11 @@ describe('terminal', () => {
     const { session, out } = await connected()
     const ids: string[] = []
     for (let i = 0; i < 6; i++) {
-      const r = await session.termOpen({ cols: 80, rows: 24 })
+      const r = await session.termOpen({ cols: 80, rows: 24, kind: 'server' })
       if (!r.ok) throw new Error('open failed')
       ids.push(r.id)
     }
-    expect(await session.termOpen({ cols: 80, rows: 24 })).toEqual({ ok: false, error: 'too-many' })
+    expect(await session.termOpen({ cols: 80, rows: 24, kind: 'server' })).toEqual({ ok: false, error: 'too-many' })
     session.termWrite(ids[2]!, 'echo third\r')
     await waitFor(() => (out[ids[2]!] ?? '').includes('third\r\n'))
     expect(out[ids[0]!] ?? '').not.toContain('third')
@@ -107,7 +107,7 @@ describe('terminal', () => {
 
   it('reports exit when the user types exit, and never logs what was typed or printed', async () => {
     const { session, out, exits, logs } = await connected()
-    const r = await session.termOpen({ cols: 80, rows: 24 })
+    const r = await session.termOpen({ cols: 80, rows: 24, kind: 'server' })
     if (!r.ok) throw new Error('open failed')
     session.termWrite(r.id, 'echo secret-words\r')
     await waitFor(() => (out[r.id] ?? '').includes('secret-words\r\n'))
@@ -121,7 +121,7 @@ describe('terminal', () => {
 
   it('closes a tab on request', async () => {
     const { session, exits } = await connected()
-    const r = await session.termOpen({ cols: 80, rows: 24 })
+    const r = await session.termOpen({ cols: 80, rows: 24, kind: 'server' })
     if (!r.ok) throw new Error('open failed')
     session.termClose(r.id)
     await waitFor(() => exits.length === 1)
@@ -131,14 +131,14 @@ describe('terminal', () => {
 
   it('ends every shell as disconnected when the connection drops, and refuses to open while offline', async () => {
     const { session, exits } = await connected()
-    const a = await session.termOpen({ cols: 80, rows: 24 })
-    const b = await session.termOpen({ cols: 80, rows: 24 })
+    const a = await session.termOpen({ cols: 80, rows: 24, kind: 'server' })
+    const b = await session.termOpen({ cols: 80, rows: 24, kind: 'server' })
     if (!a.ok || !b.ok) throw new Error('open failed')
     srv.dropConnections()
     await waitFor(() => exits.length === 2)
     expect(exits.map((e) => e.reason)).toEqual(['disconnected', 'disconnected'])
     expect(exits.filter((e) => e.id === a.id)).toHaveLength(1)
     await session.disconnect()
-    expect(await session.termOpen({ cols: 80, rows: 24 })).toEqual({ ok: false, error: 'not-connected' })
+    expect(await session.termOpen({ cols: 80, rows: 24, kind: 'server' })).toEqual({ ok: false, error: 'not-connected' })
   })
 })

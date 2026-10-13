@@ -1,5 +1,7 @@
-/* The Terminal panel (PRD 6.9b F-TERM-1..7, F-R12-2, F-CFG-26). A full SSH shell on the same connection: the app never
-   types into it by itself, and what goes in or comes out is never logged. */
+/* The Terminal panel (PRD 6.9b F-TERM-1..7, F-R12-2, F-CFG-26). A tab is a shell on this computer (the system shell, as
+   in the VS Code terminal) or a shell on the server: the system `ssh` started in a local terminal, or the built-in SSH
+   shell on the app's own connection. The app never types into a shell by itself (not even the password), and what
+   goes in or comes out is never logged. */
 
 /** Shells open at the same time (F-TERM-6). */
 export const TERM_MAX_TABS = 6
@@ -19,14 +21,37 @@ export interface TermSize {
   rows: number
 }
 
-export type TermOpenResult = { ok: true; id: string } | { ok: false; error: 'not-connected' | 'too-many' | 'failed'; detail?: string }
+/** What a tab runs: the system shell of this computer, or a shell on the server. */
+export type TermKind = 'local' | 'server'
+/** How a server tab reaches the server: the system `ssh` in a local terminal, or the app's own SSH connection. */
+export type TermServerVia = 'system' | 'builtin'
+
+export interface TermOpenRequest extends TermSize {
+  kind: TermKind
+}
+
+/** `via` says what actually runs; `label` names it on the tab (`pwsh`, `zsh`, `ssh`…). */
+export type TermOpenResult =
+  | { ok: true; id: string; via: 'local' | 'system-ssh' | 'builtin'; label: string }
+  | { ok: false; error: 'not-connected' | 'too-many' | 'failed' | 'unavailable'; detail?: string }
+
+/** What the Settings → Terminal tab shows about this computer. */
+export interface TermInfo {
+  /** The shell a local tab starts, or null when local terminals cannot run here. */
+  localShell: string | null
+  /** The system ssh client, or null when there is none (server tabs then use the built-in SSH shell). */
+  ssh: string | null
+  /** Why local terminals cannot run (the native module did not load). */
+  problem: string | null
+}
 
 export interface TermData {
   id: string
   data: string
 }
 
-/** A shell ended: the user typed `exit` (`exited`), or the connection dropped or was closed (`disconnected`). */
+/** A shell ended: the user typed `exit` (`exited`), or the app's own connection dropped or was closed (`disconnected`,
+ *  only for built-in server shells). */
 export interface TermExit {
   id: string
   reason: 'exited' | 'disconnected'

@@ -14,7 +14,7 @@ import type { SettingsMap } from './settings'
 import type { Notice, NoticeTarget } from './notify'
 import type { UpdateState } from './update'
 import type { AgentLook, AgentLooks } from './looks'
-import type { TermData, TermExit, TermOpenResult, TermSize } from './terminal'
+import type { TermData, TermExit, TermOpenResult, TermSize, TermOpenRequest, TermInfo } from './terminal'
 
 export { IPC } from './channels'
 
@@ -244,8 +244,10 @@ export interface MissionApi {
     chat(profile: string, title: string, body: string): Promise<void>
   }
   terminal: {
-    /** Starts a login shell with a PTY on the current connection (F-TERM-1). */
-    open(size: TermSize): Promise<TermOpenResult>
+    /** Starts a shell: the system shell of this computer, or a shell on the server (system ssh or built-in). */
+    open(req: TermOpenRequest): Promise<TermOpenResult>
+    /** The local shell and ssh this computer has. */
+    info(): Promise<TermInfo>
     /** What the user typed or pasted; false when that shell is gone. Never logged. */
     write(id: string, data: string): Promise<boolean>
     resize(id: string, size: TermSize): Promise<void>

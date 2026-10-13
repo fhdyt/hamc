@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { TERM_MAX_H, TERM_MAX_TABS, TERM_MIN_H, initialHeight } from '@shared/terminal'
 import { saveSetting } from '../actions'
-import { addSnippet, escapeCloses, removeSnippet, snippetProblem, type TermTab } from '../lib/terminal'
+import { addSnippet, escapeCloses, removeSnippet, snippetProblem, tabName, tabPlace, type TermTab } from '../lib/terminal'
 import { useConn } from '../stores/conn'
 import { useTerminal } from '../stores/terminal'
 import { useUi } from '../stores/ui'
@@ -12,7 +12,8 @@ import { Resizer } from './Resizer'
 
 const mod = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) ? 'Cmd' : 'Ctrl'
 
-/** F-R12-2: the Terminal panel above the status bar, on every screen. Hidden, it stays mounted so its shells live on. */
+/** F-R12-2: the Terminal panel above the status bar, on every screen. Tabs are terminals of this computer (like the
+ *  VS Code terminal) or SSH shells on the server. Hidden, it stays mounted so its shells live on. */
 export function TerminalPanel() {
   const open = useUi((s) => s.settings['terminal.open'])
   const savedH = useUi((s) => s.settings['terminal.height'])
@@ -66,7 +67,10 @@ export function TerminalPanel() {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
-  const who = saved ? `${saved.username}@${saved.host}` : 'not connected'
+  const server = saved ? `${saved.username}@${saved.host}` : 'the server'
+  const current = tabs.find((t) => t.key === active)
+  const local = current?.kind === 'local'
+  const who = current ? tabPlace(current, server) : ''
 
   return (
     <section ref={panel} className="term-panel" aria-label="Terminal" hidden={!open} style={{ height }}>
@@ -93,13 +97,18 @@ export function TerminalPanel() {
           {tabs.map((t) => (
             <TabButton key={t.key} tab={t} on={t.key === active} />
           ))}
-          <button type="button" className="ib sm" aria-label="New shell" title={tabs.length >= TERM_MAX_TABS ? `At most ${TERM_MAX_TABS} shells` : 'New shell'} disabled={tabs.length >= TERM_MAX_TABS} onClick={() => newTab()}>
-            <Icon name="plus" size={13} />
-          </button>
         </div>
-        <span className="term-warn" title="Commands typed here run on the server as the SSH user, with that user's full rights. Mission Control never types into it and never logs what you type.">
-          <Icon name="alert" size={12} /> Full shell on the server, not read-only
-        </span>
+        <NewShellButtons count={tabs.length} />
+        {current &&
+          (local ? (
+            <span className="term-warn local" title="Commands typed here run on this computer as you. Mission Control never types into it and never logs what you type.">
+              <Icon name="terminal" size={12} /> Shell on this computer
+            </span>
+          ) : (
+            <span className="term-warn" title="Commands typed here run on the server as the SSH user, with that user's full rights. Mission Control never types into it (not even the password) and never logs what you type.">
+              <Icon name="alert" size={12} /> Full shell on the server, not read-only
+            </span>
+          ))}
         <span className="term-acts">
           <button type="button" className={`ib sm ${searchOpen ? 'on' : ''}`} aria-label="Search the terminal" aria-pressed={searchOpen} title="Search" onClick={() => set({ searchOpen: !searchOpen, snippetsOpen: false })}>
             <Icon name="search" size={13} />
@@ -123,9 +132,13 @@ export function TerminalPanel() {
         ))}
         {tabs.length === 0 && (
           <div className="term-empty">
-            <button type="button" className="cb sm" onClick={() => newTab()}>
-              <Icon name="plus" size={12} />
-              New shell
+            <button type="button" className="cb sm" onClick={() => newTab('local')}>
+              <Icon name="terminal" size={12} />
+              Terminal on this computer
+            </button>
+            <button type="button" className="cb sm" onClick={() => newTab('server')}>
+              <Icon name="server" size={12} />
+              SSH to the server
             </button>
           </div>
         )}
@@ -136,15 +149,75 @@ export function TerminalPanel() {
 
 function TabButton({ tab, on }: { tab: TermTab; on: boolean }) {
   const dot = tab.state === 'live' ? 'live' : tab.state === 'starting' ? 'starting' : 'down'
+  const place = tab.kind === 'local' ? 'this computer' : 'the server'
   return (
-    <span className={`term-tab ${on ? 'on' : ''}`}>
-      <button type="button" role="tab" aria-selected={on} className="term-tab-btn" onClick={() => selectTab(tab.key)} title={tab.state === 'live' ? 'Shell running' : tab.state === 'starting' ? 'Starting…' : 'Shell ended'}>
+    <span className={`term-tab ${on ? 'on' : ''} ${tab.kind}`}>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={on}
+        aria-label={`Shell ${tab.n}: ${tabName(tab)} on ${place}`}
+        className="term-tab-btn"
+        onClick={() => selectTab(tab.key)}
+        title={`${tab.state === 'live' ? 'Running' : tab.state === 'starting' ? 'Starting…' : 'Ended'} on ${place}`}
+      >
         <span className={`term-dot ${dot}`} aria-hidden="true" />
-        shell {tab.n}
+        <Icon name={tab.kind === 'local' ? 'terminal' : 'server'} size={11} />
+        {tabName(tab)}
       </button>
       <button type="button" className="term-tab-x" aria-label={`Close shell ${tab.n}`} title="Close this shell" onClick={() => closeTab(tab.key)}>
         <Icon name="x" size={11} />
       </button>
+    </span>
+  )
+}
+
+/** + opens the default kind (Settings → Terminal); the arrow next to it picks the other one. */
+function NewShellButtons({ count }: { count: number }) {
+  const [menu, setMenu] = useState(false)
+  const kind = useUi((s) => s.settings['terminal.newShell'])
+  const full = count >= TERM_MAX_TABS
+  const box = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!menu) return
+    const off = (e: MouseEvent): void => {
+      if (!box.current?.contains(e.target as Node)) setMenu(false)
+    }
+    window.addEventListener('mousedown', off)
+    return () => window.removeEventListener('mousedown', off)
+  }, [menu])
+  const pick = (k: 'local' | 'server'): void => {
+    setMenu(false)
+    newTab(k)
+  }
+  return (
+    <span className="term-new" ref={box}>
+      <button type="button" className="ib sm" aria-label="New shell" title={full ? `At most ${TERM_MAX_TABS} shells` : kind === 'local' ? 'New terminal on this computer' : 'New SSH shell on the server'} disabled={full} onClick={() => newTab()}>
+        <Icon name="plus" size={13} />
+      </button>
+      <button type="button" className="ib sm term-new-more" aria-label="Choose a shell" aria-haspopup="menu" aria-expanded={menu} title="Choose a shell" disabled={full} onClick={() => setMenu(!menu)}>
+        <Icon name="chev-down" size={11} />
+      </button>
+      {menu && (
+        <span
+          className="term-menu"
+          role="menu"
+          aria-label="New shell"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation()
+              setMenu(false)
+            }
+          }}
+        >
+          <button type="button" role="menuitem" autoFocus onClick={() => pick('local')}>
+            <Icon name="terminal" size={12} /> Terminal on this computer
+          </button>
+          <button type="button" role="menuitem" onClick={() => pick('server')}>
+            <Icon name="server" size={12} /> SSH to the server
+          </button>
+        </span>
+      )}
     </span>
   )
 }
@@ -160,7 +233,7 @@ function TabView({ tab, on, connected }: { tab: TermTab; on: boolean; connected:
       <div ref={ref} className="term-xterm" />
       {(ended || tab.state === 'disconnected' || tab.message) && (
         <div className="term-note" role="status">
-          {tab.message ?? (tab.state === 'disconnected' && !connected ? 'Not connected. A shell starts when Mission Control connects.' : 'This shell has ended.')}
+          {tab.message ?? (tab.state === 'disconnected' && !connected ? 'Not connected. An SSH shell starts when Mission Control connects.' : 'This shell has ended.')}
           {ended && (
             <button type="button" className="cb sm" onClick={() => restartTab(tab.key)}>
               Start a new shell
@@ -251,7 +324,7 @@ function Snippets() {
               title={s.command}
               onClick={() => {
                 set({ snippetsOpen: false })
-                fillCommand(s.command)
+                fillCommand(s.command, 'active')
               }}
             >
               <span className="term-snip-l">{s.label}</span>

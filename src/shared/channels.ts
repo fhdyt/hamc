@@ -41,6 +41,7 @@ export const IPC = {
   notifyTest: 'mc:notify:test',
   notifyChat: 'mc:notify:chat',
   termOpen: 'mc:term:open',
+  termInfo: 'mc:term:info',
   termWrite: 'mc:term:write',
   termResize: 'mc:term:resize',
   termClose: 'mc:term:close',

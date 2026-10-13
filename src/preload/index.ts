@@ -59,7 +59,8 @@ const api: MissionApi = {
     chat: (profile, title, body) => ipcRenderer.invoke(IPC.notifyChat, { profile, title, body })
   },
   terminal: {
-    open: (size) => ipcRenderer.invoke(IPC.termOpen, size),
+    open: (req) => ipcRenderer.invoke(IPC.termOpen, req),
+    info: () => ipcRenderer.invoke(IPC.termInfo),
     write: (id, data) => ipcRenderer.invoke(IPC.termWrite, { id, data }),
     resize: (id, size) => ipcRenderer.invoke(IPC.termResize, { id, size }),
     close: (id) => ipcRenderer.invoke(IPC.termClose, id)

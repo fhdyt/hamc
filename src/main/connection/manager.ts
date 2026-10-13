@@ -2,7 +2,8 @@ import { EventEmitter } from 'node:events'
 import { Client, type ClientChannel, type SFTPWrapper } from 'ssh2'
 import type { HostKeyChallenge } from '@shared/ipc'
 import { ConnectError, HostKeyError, classifyConnectError, friendlyMessage } from './errors'
-import { decideHostKey, type KnownKey } from './hostkey'
+import { algoOf, decideHostKey, type KnownKey } from './hostkey'
+import type { SshTarget } from '../terminal/localShell'
 import { buildCommand } from './quote'
 
 export interface ConnectParams {
@@ -34,6 +35,8 @@ export interface Execer {
 export class ConnectionManager extends EventEmitter implements Execer {
   private client: Client | null = null
   private closing = false
+  /** Where the current connection goes and the host key it was checked against (for the system ssh of a server tab). */
+  private target: { host: string; port: number; username: string; key: Buffer } | null = null
 
   constructor(
     private readonly hostKeys: HostKeyLookup,
@@ -46,18 +49,26 @@ export class ConnectionManager extends EventEmitter implements Execer {
     return this.client !== null
   }
 
+  /** The server of the last successful connection with the host key the user trusted, for the system ssh. */
+  sshTarget(): SshTarget | null {
+    const t = this.target
+    return t ? { host: t.host, port: t.port, username: t.username, algo: algoOf(t.key), key: t.key.toString('base64') } : null
+  }
+
   async connect(p: ConnectParams): Promise<{ fingerprint: string; algo: string }> {
     await this.disconnect()
     return new Promise((resolve, reject) => {
       const client = new Client()
       let challenge: HostKeyChallenge | null = null
       let seen = { fingerprint: '', algo: '' }
+      let seenKey: Buffer | null = null
       let settled = false
 
       client.on('ready', () => {
         settled = true
         this.closing = false
         this.client = client
+        this.target = seenKey ? { host: p.host, port: p.port, username: p.username, key: seenKey } : null
         resolve(seen)
       })
       client.on('error', (err: Error & { code?: string; level?: string }) => {
@@ -93,7 +104,10 @@ export class ConnectionManager extends EventEmitter implements Execer {
         hostVerifier: ((key: Buffer): boolean => {
           const d = decideHostKey(this.hostKeys.getKnownHost(p.host, p.port), key)
           seen = { fingerprint: d.fingerprint, algo: d.algo }
-          if (d.kind === 'trusted') return true
+          if (d.kind === 'trusted') {
+            seenKey = Buffer.from(key)
+            return true
+          }
           challenge = {
             host: p.host,
             port: p.port,
@@ -109,6 +123,8 @@ export class ConnectionManager extends EventEmitter implements Execer {
   }
 
   async disconnect(): Promise<void> {
+    // a dropped connection keeps the target (system ssh tabs do not depend on this connection); leaving does not
+    this.target = null
     const c = this.client
     if (!c) return
     this.closing = true

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { InteractionKind } from './events'
 import { HHMM_RE, NOTIFY_KINDS_DEFAULT, QUIET_DEFAULT, REPLY_SOUND_MODES, REPLY_TONES, type NotifyKinds, type QuietHours, type ReplySoundMode, type ReplyTone } from './notify'
-import { DEFAULT_SNIPPETS, SNIPPET_COMMAND_MAX, SNIPPET_LABEL_MAX, SNIPPET_MAX, TERM_MAX_H, TERM_MIN_H, type Snippet } from './terminal'
+import { DEFAULT_SNIPPETS, SNIPPET_COMMAND_MAX, SNIPPET_LABEL_MAX, SNIPPET_MAX, TERM_MAX_H, TERM_MIN_H, type Snippet, type TermKind, type TermServerVia } from './terminal'
 import { DEFAULT_LOG_LEVELS, LOG_LEVELS, LOG_RANGES, type LogLevel, type LogRange } from './logs'
 
 export interface WindowBounds {
@@ -121,6 +121,9 @@ export interface SettingsMap {
   'terminal.open': boolean
   'terminal.height': number
   'terminal.snippets': Snippet[]
+  /** What the + button of the Terminal panel opens. */
+  'terminal.newShell': TermKind
+  'terminal.serverVia': TermServerVia
   'window.bounds': WindowBounds | null
 }
 
@@ -169,6 +172,8 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'terminal.open': false,
   'terminal.height': 0,
   'terminal.snippets': DEFAULT_SNIPPETS,
+  'terminal.newShell': 'local',
+  'terminal.serverVia': 'system',
   'window.bounds': null
 }
 
@@ -232,6 +237,8 @@ export const SETTINGS_SCHEMA = {
   'app.autoUpdate': z.boolean(),
   'terminal.open': z.boolean(),
   'terminal.height': z.number().refine((v) => v === 0 || (v >= TERM_MIN_H && v <= TERM_MAX_H)),
+  'terminal.newShell': z.enum(['local', 'server']),
+  'terminal.serverVia': z.enum(['system', 'builtin']),
   'terminal.snippets': z
     .array(z.object({ id: z.string().regex(/^[A-Za-z0-9-]{1,40}$/), label: z.string().trim().min(1).max(SNIPPET_LABEL_MAX), command: z.string().trim().min(1).max(SNIPPET_COMMAND_MAX) }))
     .max(SNIPPET_MAX),

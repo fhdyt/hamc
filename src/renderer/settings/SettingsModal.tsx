@@ -15,6 +15,7 @@ import { DataTab } from './DataTab'
 import { UploadsTab } from './UploadsTab'
 import { NotificationsTab } from './NotificationsTab'
 import { WorkspaceTab } from './WorkspaceTab'
+import { TerminalTab } from './TerminalTab'
 import { Row, Switch } from './parts'
 
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -25,6 +26,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'agents', label: 'Agents' },
   { id: 'workspace', label: 'Workspace' },
   { id: 'chat', label: 'Chat' },
+  { id: 'terminal', label: 'Terminal' },
   { id: 'uploads', label: 'Uploads' },
   { id: 'data', label: 'Data' },
   { id: 'about', label: 'About' }
@@ -201,6 +203,7 @@ export function SettingsModal() {
           {tab === 'data' && <DataTab />}
           {tab === 'notifications' && <NotificationsTab />}
           {tab === 'workspace' && <WorkspaceTab />}
+          {tab === 'terminal' && <TerminalTab />}
         </div>
       </div>
     </Modal>

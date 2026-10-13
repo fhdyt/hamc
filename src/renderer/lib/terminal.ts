@@ -1,4 +1,4 @@
-import { SNIPPET_COMMAND_MAX, SNIPPET_LABEL_MAX, SNIPPET_MAX, TERM_WRITE_MAX, type Snippet } from '@shared/terminal'
+import { SNIPPET_COMMAND_MAX, SNIPPET_LABEL_MAX, SNIPPET_MAX, TERM_WRITE_MAX, type Snippet, type TermKind, type TermOpenResult } from '@shared/terminal'
 
 /* Pure helpers of the Terminal panel; the xterm instances live in terminalActions.ts. */
 
@@ -11,6 +11,39 @@ export interface TermTab {
   n: number
   state: TabState
   message: string | null
+  /** A shell on this computer or on the server. */
+  kind: TermKind
+  /** What runs, once the shell started: the local shell, the system ssh or the built-in SSH shell. */
+  via: Extract<TermOpenResult, { ok: true }>['via'] | null
+  /** The program's short name (`pwsh`, `zsh`, `ssh`). */
+  label: string | null
+}
+
+/** The name on a tab: the program and the tab number. */
+export const tabName = (t: Pick<TermTab, 'kind' | 'label' | 'n'>): string => `${t.label ?? (t.kind === 'local' ? 'local' : 'ssh')} ${t.n}`
+
+/** Where a tab's commands run, for the header and the tab's tooltip. */
+export function tabPlace(t: Pick<TermTab, 'kind' | 'via'>, server: string): string {
+  if (t.kind === 'local') return 'this computer'
+  return t.via === 'builtin' ? `${server} (built-in SSH)` : server
+}
+
+/** Strips colour and cursor sequences so the last printed line can be read. */
+export const plainTail = (text: string): string =>
+  text
+    .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1b[@-_]/g, '')
+    .replace(/\r/g, '')
+
+/**
+ * Whether the shell waits at a command prompt, so a command may be put on it (F-CFG-26). A password, passphrase or
+ * yes/no question never counts: a command must not land in an ssh password prompt.
+ */
+export function looksLikePrompt(tail: string): boolean {
+  const line = plainTail(tail).split('\n').pop() ?? ''
+  if (/password|passphrase|passcode|verification code|\(yes\/no|\[y\/n\]|\(y\/n\)/i.test(line)) return false
+  return /[$#>%❯]\s?$/.test(line)
 }
 
 /** The next free tab number, so closing tab 2 of 3 makes the new one "2" again. */

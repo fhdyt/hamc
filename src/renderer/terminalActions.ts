@@ -1,9 +1,10 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
-import { TERM_MAX_TABS, TERM_SCROLLBACK, fillText } from '@shared/terminal'
+import { TERM_MAX_TABS, TERM_SCROLLBACK, fillText, type TermKind } from '@shared/terminal'
 import { saveSetting } from './actions'
-import { afterClose, chunks, exitLine, nextTabNumber, routeKey } from './lib/terminal'
+import { afterClose, chunks, exitLine, looksLikePrompt, nextTabNumber, routeKey } from './lib/terminal'
+import { useUi } from './stores/ui'
 import { useConn } from './stores/conn'
 import { useTerminal } from './stores/terminal'
 import { terminalOpen } from './terminalToggle'
@@ -20,8 +21,10 @@ interface View {
   /** A command waiting for the shell's first prompt. */
   fill: string | null
   fillTimer: ReturnType<typeof setTimeout> | null
-  /** Output came in since the shell started (the prompt is there). */
+  /** Output came in since the shell started. */
   started: boolean
+  /** The end of the output, to tell a command prompt from a password prompt before a command is put on it. */
+  tail: string
 }
 
 const views = new Map<string, View>()
@@ -64,6 +67,7 @@ export function initTerminal(): void {
     const v = key ? views.get(key) : undefined
     if (!v) return
     v.term.write(data)
+    v.tail = (v.tail + data).slice(-400)
     if (!v.started) {
       v.started = true
       if (key) st().patchTab(key, { state: 'live' })
@@ -83,7 +87,7 @@ export function initTerminal(): void {
     const now = s.status.state
     if (now === 'connected' && was !== 'connected') {
       // F-TERM-6: tabs whose shell ended with the connection get a new shell
-      for (const t of st().tabs) if (t.state === 'disconnected') void startShell(t.key, true)
+      for (const t of st().tabs) if (t.state === 'disconnected' && t.kind === 'server') void startShell(t.key, true)
     }
     was = now
   })
@@ -123,7 +127,7 @@ function makeView(key: string): View {
     const shell = st().tabs.find((t) => t.key === key)?.shellId
     if (shell) void window.mc.terminal.resize(shell, { cols, rows })
   })
-  return { term, fit, search, el: null, fill: null, fillTimer: null, started: false }
+  return { term, fit, search, el: null, fill: null, fillTimer: null, started: false, tail: '' }
 }
 
 /** Gives a tab its element once React rendered it; xterm opens into it the first time. */
@@ -152,35 +156,40 @@ export function fitView(key: string | null = st().active): void {
 
 async function startShell(key: string, again: boolean): Promise<void> {
   const v = views.get(key)
-  if (!v) return
-  if (useConn.getState().status.state !== 'connected') {
-    st().patchTab(key, { state: 'disconnected', message: null })
-    return
-  }
+  const tab = st().tabs.find((t) => t.key === key)
+  if (!v || !tab) return
   st().patchTab(key, { state: 'starting', message: null })
   v.started = false
-  const r = await window.mc.terminal.open({ cols: Math.max(2, v.term.cols), rows: Math.max(1, v.term.rows) })
+  v.tail = ''
+  const r = await window.mc.terminal.open({ cols: Math.max(2, v.term.cols), rows: Math.max(1, v.term.rows), kind: tab.kind })
   if (!views.has(key)) {
     if (r.ok) void window.mc.terminal.close(r.id)
     return
   }
   if (!r.ok) {
-    const message = r.error === 'too-many' ? `At most ${TERM_MAX_TABS} shells can be open.` : r.error === 'not-connected' ? null : `The shell could not start${r.detail ? `: ${r.detail}` : '.'}`
+    const message =
+      r.error === 'too-many'
+        ? `At most ${TERM_MAX_TABS} shells can be open.`
+        : r.error === 'not-connected'
+          ? null
+          : r.error === 'unavailable'
+            ? `Terminals of this computer cannot run here${r.detail ? `: ${r.detail}` : '.'}`
+            : `The shell could not start${r.detail ? `: ${r.detail}` : '.'}`
     st().patchTab(key, { state: r.error === 'not-connected' ? 'disconnected' : 'error', message })
     return
   }
   byShell.set(r.id, key)
-  st().patchTab(key, { shellId: r.id })
+  st().patchTab(key, { shellId: r.id, via: r.via, label: r.label })
   if (again) v.term.write('\x1b[38;2;139;149;189m[Reconnected.]\x1b[0m\r\n')
 }
 
-/** Opens a new tab (and the panel). Answers the tab key, or null when the limit is reached. */
-export function newTab(): string | null {
+/** Opens a new tab (and the panel): a shell of this computer or of the server, by default what Settings → Terminal says. */
+export function newTab(kind: TermKind = useUi.getState().settings['terminal.newShell']): string | null {
   const s = st()
   if (s.tabs.length >= TERM_MAX_TABS) return null
   const key = `t${++seq}`
   views.set(key, makeView(key))
-  s.set({ tabs: [...s.tabs, { key, shellId: null, n: nextTabNumber(s.tabs), state: 'starting', message: null }], active: key })
+  s.set({ tabs: [...s.tabs, { key, shellId: null, n: nextTabNumber(s.tabs), state: 'starting', message: null, kind, via: null, label: null }], active: key })
   if (!terminalOpen()) void saveSetting('terminal.open', true)
   return key
 }
@@ -245,7 +254,8 @@ function armFill(key: string, v: View): void {
   v.fillTimer = setTimeout(() => {
     v.fillTimer = null
     const shell = st().tabs.find((t) => t.key === key)?.shellId
-    if (v.fill === null || !shell) return
+    // a login (the ssh password, a host question) comes first: the command waits for the shell prompt behind it
+    if (v.fill === null || !shell || !looksLikePrompt(v.tail)) return
     const text = v.fill
     v.fill = null
     void window.mc.terminal.write(shell, text)
@@ -254,19 +264,22 @@ function armFill(key: string, v: View): void {
 }
 
 /**
- * F-CFG-26: opens the panel and puts a command on the prompt of the active shell (a new tab when there is none or it
- * ended). It never adds a line end: the user reads it and presses Enter. False when it cannot be placed.
+ * F-CFG-26: opens the panel and puts a command on a shell prompt. Hermes commands (`where: 'server'`) go to a server tab:
+ * the active one, else another live one, else a new one; a snippet goes to the active tab. It never adds a line end:
+ * the user reads it and presses Enter. A login in progress (an ssh password) is never typed into: the command waits
+ * for the shell prompt. False when it cannot be placed.
  */
-export function fillCommand(command: string): boolean {
+export function fillCommand(command: string, where: 'server' | 'active' = 'server'): boolean {
   const text = fillText(command)
   if (text === null) return false
   if (!terminalOpen()) void saveSetting('terminal.open', true)
   const s = st()
-  let key = s.active
+  const alive = (t: { state: string }): boolean => t.state === 'live' || t.state === 'starting'
+  const fits = (t: { kind: TermKind; state: string }): boolean => alive(t) && (where === 'active' || t.kind === 'server')
+  let key: string | null = s.active
   const tab = s.tabs.find((t) => t.key === key)
-  if (!tab || tab.state === 'exited' || tab.state === 'error') {
-    const live = s.tabs.find((t) => t.state === 'live' || t.state === 'starting')
-    key = live?.key ?? newTab()
+  if (!tab || !fits(tab)) {
+    key = s.tabs.find(fits)?.key ?? newTab(where === 'server' ? 'server' : undefined)
     if (key) st().set({ active: key })
   }
   if (!key) return false
@@ -274,8 +287,10 @@ export function fillCommand(command: string): boolean {
   v.fill = text
   const current = st().tabs.find((t) => t.key === key)
   if (current?.shellId && v.started) {
-    v.fill = null
-    void window.mc.terminal.write(current.shellId, text)
+    if (looksLikePrompt(v.tail)) {
+      v.fill = null
+      void window.mc.terminal.write(current.shellId, text)
+    } else armFill(key, v)
   }
   requestAnimationFrame(() => {
     fitView(key)

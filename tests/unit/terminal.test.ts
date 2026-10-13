@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SNIPPETS, TERM_WRITE_MAX, clampHeight, fillText, initialHeight } from '@shared/terminal'
 import { SETTINGS_DEFAULTS, SETTINGS_SCHEMA } from '@shared/settings'
-import { addSnippet, afterClose, chunks, escapeCloses, exitLine, nextTabNumber, removeSnippet, routeKey, snippetProblem, type KeyInfo, type TermTab } from '../../src/renderer/lib/terminal'
+import { addSnippet, afterClose, chunks, escapeCloses, exitLine, looksLikePrompt, nextTabNumber, plainTail, removeSnippet, routeKey, snippetProblem, tabName, tabPlace, type KeyInfo, type TermTab } from '../../src/renderer/lib/terminal'
 
-const tab = (key: string, n: number): TermTab => ({ key, n, shellId: null, state: 'live', message: null })
+const tab = (key: string, n: number): TermTab => ({ key, n, shellId: null, state: 'live', message: null, kind: 'local', via: null, label: null })
 const key = (p: Partial<KeyInfo>): KeyInfo => ({ key: 'a', code: 'KeyA', ctrl: false, meta: false, shift: false, alt: false, hasSelection: false, mac: false, ...p })
 
 describe('fillText (F-CFG-26)', () => {
@@ -116,5 +116,34 @@ describe('keys inside the shell', () => {
     expect(routeKey(key({ key: '3', code: 'Digit3', ctrl: true }))).toBe('app')
     expect(routeKey(key({ key: '=', ctrl: true }))).toBe('app')
     expect(routeKey(key({ key: '`', code: 'Backquote', ctrl: true, alt: true }))).toBe('shell')
+  })
+})
+
+describe('local and server tabs', () => {
+  it('names a tab after its program and says where it runs', () => {
+    expect(tabName({ kind: 'local', label: 'pwsh', n: 2 })).toBe('pwsh 2')
+    expect(tabName({ kind: 'local', label: null, n: 1 })).toBe('local 1')
+    expect(tabName({ kind: 'server', label: null, n: 3 })).toBe('ssh 3')
+    expect(tabPlace({ kind: 'local', via: 'local' }, 'root@vps')).toBe('this computer')
+    expect(tabPlace({ kind: 'server', via: 'system-ssh' }, 'root@vps')).toBe('root@vps')
+    expect(tabPlace({ kind: 'server', via: 'builtin' }, 'root@vps')).toBe('root@vps (built-in SSH)')
+  })
+  it('puts a command only on a shell prompt, never on a password or host question (F-CFG-26)', () => {
+    expect(looksLikePrompt('Welcome\r\n\x1b[01;32mroot@vps\x1b[00m:~$ ')).toBe(true)
+    expect(looksLikePrompt('PS C:\\Users\\me> ')).toBe(true)
+    expect(looksLikePrompt('me@mac ~ % ')).toBe(true)
+    expect(looksLikePrompt('root@vps:~# ')).toBe(true)
+    expect(looksLikePrompt("root@1.2.3.4's password: ")).toBe(false)
+    expect(looksLikePrompt('Enter passphrase for key /home/me/.ssh/id_ed25519: ')).toBe(false)
+    expect(looksLikePrompt('Are you sure you want to continue connecting (yes/no/[fingerprint])? ')).toBe(false)
+    expect(looksLikePrompt('Last login: today\r\n')).toBe(false)
+    expect(looksLikePrompt('$ ls')).toBe(false)
+    expect(plainTail('\x1b]0;title\x07a\x1b[1mb\x1b[0m\r\n')).toBe('ab\n')
+  })
+  it('opens local tabs by default and keeps system ssh for server tabs', () => {
+    expect(SETTINGS_DEFAULTS['terminal.newShell']).toBe('local')
+    expect(SETTINGS_DEFAULTS['terminal.serverVia']).toBe('system')
+    expect(SETTINGS_SCHEMA['terminal.newShell'].safeParse('server').success).toBe(true)
+    expect(SETTINGS_SCHEMA['terminal.serverVia'].safeParse('telnet').success).toBe(false)
   })
 })

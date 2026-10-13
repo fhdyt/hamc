@@ -32,7 +32,8 @@ import { CronActionService } from './cron/actions'
 import { SkillActionService } from './skills/actions'
 import { MemorySnapshots } from './memory/snapshots'
 import { TerminalService } from './terminal/service'
-import type { TermOpenResult, TermSize } from '@shared/terminal'
+import type { TermInfo, TermOpenRequest, TermOpenResult, TermSize } from '@shared/terminal'
+import type { TerminalDeps } from './terminal/service'
 import type { MemoryVersion, MemoryVersionText } from '@shared/memory'
 import type { SkillActionRequest, SkillActionResult, SkillTextResult } from '@shared/skills'
 import type { CronActionRequest, CronActionResult } from '@shared/cron'
@@ -73,6 +74,8 @@ export interface SessionDeps {
   gatewayReadyMs?: number
   /** Extra collector arguments (tests shorten the memory interval). */
   collectorArgs?: string[]
+  /** Local terminals and the system ssh (the app passes them; most tests leave them out and get built-in shells only). */
+  terminalLocal?: TerminalDeps['local']
   /** The save dialog of exports and backups (tests answer it themselves). */
   saveDialog?: SaveDialog
   latencyIntervalMs?: number
@@ -184,7 +187,13 @@ export class MissionSession {
       isConnected: () => d.manager.isConnected(),
       log: (m) => d.log?.(m)
     })
-    this.terminal = new TerminalService({ conn: d.manager, send: d.send, log: (m) => d.log?.(m) })
+    this.terminal = new TerminalService({
+      conn: d.manager,
+      send: d.send,
+      log: (m) => d.log?.(m),
+      ...(d.terminalLocal ? { local: d.terminalLocal } : {}),
+      serverVia: () => d.store.getSetting('terminal.serverVia')
+    })
     this.memory = new MemorySnapshots({
       store: d.store,
       connectionId: () => d.store.getConnection()?.id,
@@ -560,8 +569,17 @@ export class MissionSession {
   }
 
   /** The Terminal panel (F-TERM-1): an interactive shell; only the user's keys go into it. */
-  termOpen(size: TermSize): Promise<TermOpenResult> {
-    return this.terminal.open(size)
+  termOpen(req: TermOpenRequest): Promise<TermOpenResult> {
+    return this.terminal.open(req)
+  }
+
+  termInfo(): TermInfo {
+    return this.terminal.info()
+  }
+
+  /** The app quits: local terminals end with it. */
+  termKillAll(): void {
+    this.terminal.killAll()
   }
 
   termWrite(id: string, data: string): boolean {

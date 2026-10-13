@@ -19,6 +19,7 @@ extraResources:
 npmRebuild: true
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
+  - '**/node_modules/@lydell/**'
 
 # Auto-update (F-APP-6): electron-updater reads latest.yml / latest-mac.yml / latest-linux.yml from the newest
 # published GitHub release of this repository (it must be public). The build writes those files; CI attaches them.
@@ -54,7 +55,7 @@ mac:
   # Native files that come out the same in the x64 and arm64 builds; the universal merge must be told they may stay as
   # they are: better-sqlite3's N-API prebuilds (one per architecture, both shipped) and ssh2's optional sshcrypto
   # addon (ssh2 falls back to its JavaScript crypto when the addon cannot load on one of the two).
-  x64ArchFiles: '{**/node_modules/better-sqlite3/prebuilds/**,**/node_modules/ssh2/lib/protocol/crypto/build/Release/*.node}'
+  x64ArchFiles: '{**/node_modules/better-sqlite3/prebuilds/**,**/node_modules/@lydell/**,**/node_modules/ssh2/lib/protocol/crypto/build/Release/*.node}'
   gatekeeperAssess: false
 linux:
   target:

@@ -26,10 +26,23 @@ const screen = (n = 1) => shell(n).locator('.xterm-rows')
 const sidebarTerminal = () => page.getByRole('complementary', { name: 'Sidebar' }).getByRole('button', { name: 'Terminal' })
 const typed = (): string => srv.shells.input.join('')
 
+const settings = () => page.getByRole('dialog', { name: 'Settings' })
+
+async function terminalSettings(newTabs: 'This computer' | 'Server (SSH)', via: 'System ssh' | 'Built-in'): Promise<void> {
+  await page.getByRole('contentinfo', { name: 'Status bar' }).getByRole('button', { name: 'Settings' }).click()
+  await settings().getByRole('tab', { name: 'Terminal', exact: true }).click()
+  await settings().getByRole('group', { name: 'New tabs open' }).getByRole('button', { name: newTabs }).click()
+  await settings().getByRole('group', { name: 'SSH to the server with' }).getByRole('button', { name: via }).click()
+  await page.keyboard.press('Escape')
+  await expect(settings()).toBeHidden()
+}
+
 test('the sidebar button opens a full shell that only gets what the user types', async () => {
   ;({ app, page } = await launchApp(tmp('mc-e2e-term-ud-')))
   await connectFresh(page, srv)
   await expect(panel()).toBeHidden()
+  // these tests drive the built-in SSH shell; local terminals and the system ssh come at the end
+  await terminalSettings('Server (SSH)', 'Built-in')
   await sidebarTerminal().click()
   await expect(panel()).toBeVisible()
   await expect(screen()).toContainText('tester@fake:~$', { timeout: 15_000 })
@@ -59,7 +72,7 @@ test('a second tab is its own shell, search finds text in the scrollback', async
   await expect(screen(2)).toContainText('tester@fake:~$', { timeout: 15_000 })
   expect(srv.shells.opened).toBe(2)
   await expect(screen(2)).not.toContainText('hello-e2e')
-  await panel().getByRole('tab', { name: /shell 1/ }).click()
+  await panel().getByRole('tab', { name: /^Shell 1:/ }).click()
   await panel().getByRole('button', { name: 'Search the terminal' }).click()
   await panel().getByLabel('Find in terminal').fill('hello-e2e')
   await expect(panel().getByText('No match')).toBeHidden()
@@ -127,3 +140,4 @@ test('a dropped connection ends the shell and a new one starts after the reconne
   expect(srv.shells.opened).toBe(opened + 1)
   await expect(screen()).toContainText('tester@fake:~$')
 })
+

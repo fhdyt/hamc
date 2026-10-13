@@ -1,4 +1,6 @@
 import { app, BrowserWindow, dialog, Menu, nativeImage, Notification, safeStorage, Tray, type MenuItemConstructorOptions } from 'electron'
+import { statSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { loadCollectorScript } from './collector/channel'
@@ -15,6 +17,7 @@ import { WEB_PREFERENCES, hardenWebContents, type AppTarget } from './security'
 import { MissionSession } from './session'
 import { SecretStore } from './store/secretStore'
 import { SettingsStore } from './store/settingsStore'
+import { ptyProblem, spawnPty } from './terminal/pty'
 
 if (process.env['MC_USER_DATA']) app.setPath('userData', process.env['MC_USER_DATA'])
 
@@ -201,6 +204,26 @@ if (!app.requestSingleInstanceLock()) {
         const r = await (win ? dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] }) : dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] }))
         return r.canceled ? [] : r.filePaths
       },
+      terminalLocal: {
+        spawn: spawnPty,
+        platform: process.platform,
+        env: process.env,
+        home: homedir(),
+        exists: (f) => {
+          try {
+            return statSync(f).isFile()
+          } catch {
+            return false
+          }
+        },
+        // the host key the user trusted in this app, for the system ssh of server tabs (~/.ssh is left alone)
+        writeKnownHosts: (text) => {
+          const file = join(app.getPath('userData'), 'ssh_known_hosts')
+          writeFileSync(file, text, { mode: 0o600 })
+          return file
+        },
+        problem: ptyProblem
+      },
       makeThumb: (path) => {
         try {
           const img = nativeImage.createFromPath(path)
@@ -243,6 +266,7 @@ if (!app.requestSingleInstanceLock()) {
     win.on('closed', () => (win = null))
     app.on('before-quit', () => {
       quitting = true
+      session.termKillAll()
       void session.disconnect()
     })
   }
