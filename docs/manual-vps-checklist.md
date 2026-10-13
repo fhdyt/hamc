@@ -209,6 +209,17 @@ Versi disimpan hanya di `app.db` lokal. Collector membaca `SOUL.md`, `memories/M
 124. **Diff dan Restore.** Diff MEMORY/USER per entri (`§`), SOUL per baris; "Show N unchanged" membuka entri yang sama. **Restore in the editor** membuka Settings → Agents di berkas itu dengan versi lama sebagai suntingan yang belum disimpan; tidak ada yang ditulis sebelum Save (dengan diff dan cek hash). **Copy this version** menyalin teksnya.
 125. **Retensi dan Clear.** Settings → Data → **Clear snapshots** (dua langkah) menghapus versi lokal koneksi ini; berkas di VPS tidak berubah. Selama langkah 121-125 tidak ada berkas baru di VPS.
 
+## Tambahan M10c: MCP, Toolsets, Fallback, Backup, New profile
+
+Format keluaran diambil dari kode sumber Hermes; tetap catat yang berbeda. Perintah interaktif (`mcp add|remove`, `fallback add|remove`) hanya disalin untuk terminal Anda.
+
+126. **MCP.** Settings → Agents → MCP menampilkan tabel yang sama dengan `hermes -p <p> mcp list` (nama, transport, tools, status). **Test** meminta konfirmasi dengan `$ hermes [-p <p>] mcp test <nama>` lalu menampilkan hasilnya. Tidak ada nilai token atau header yang tampil.
+127. **Toolsets.** Matriks memuat platform `cli`, `cron` dan platform gateway agent. Bandingkan dengan `hermes -p <p> tools list --platform <x>`. Ubah satu kotak: kotak berwarna oranye sampai **Apply…**, yang menampilkan daftar `hermes tools enable|disable … --platform …` dan hasil tiap perintah. Catat bila Hermes menolak toolset untuk platform tertentu.
+128. **Fallback.** Primary dan rantai fallback cocok dengan `hermes -p <p> fallback list`. Tombol Copy command menyalin `hermes [-p <p>] fallback add|remove` tanpa menjalankannya.
+129. **Backup.** **Back up to a zip…** meminta lokasi berkas. Buka zip: ada `README.txt`, `SOUL.md`, `memories/`, `config.yaml` (nilai di bawah `env:`/`headers:` dan kunci rahasia kosong), `cron/jobs.json`, `skills/`; tidak pernah `.env`, `auth.json` atau `mcp-tokens/`. Centang state.db hanya bila perlu (besar). Tidak ada berkas baru di VPS.
+130. **New profile.** Nama tidak valid ditolak dengan alasannya; pratinjau menampilkan `$ hermes profile create <nama> '--description=…' --no-alias` (tanpa wrapper kecuali dicentang). Setelah Create, agent baru muncul di daftar dalam sekitar 10 detik dan di `hermes profile list`. Catat pesan Hermes bila nama sudah dipakai.
+131. **Zero-Change.** `app.log` memuat `agentops <aksi> <profile> exit <kode>` untuk mcp-test, tools, profile-create dan backup, tanpa isi.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.
