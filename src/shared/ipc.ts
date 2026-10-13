@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult, ModelReadResult, ModelSaveRequest, RestartResult, SaveModelResult, TestModelResult } from './agentCfg'
 import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, SessionDetail, SessionsList, SessionTranscript, UploadsList, VaultCheck } from './events'
-import type { UsageSummary, UsageTools } from './events'
+import type { CostAlertState, UsageSummary, UsageTools } from './events'
 import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
 import type { SettingsMap } from './settings'
@@ -223,6 +223,10 @@ export interface MissionApi {
     summary(args: UsageSummaryArgs): Promise<QueryResult<UsageSummary>>
     tools(args: UsageToolsArgs): Promise<QueryResult<UsageTools>>
   }
+  alerts: {
+    /** Checks the daily cost now (after a settings change). */
+    recheck(): Promise<void>
+  }
   brain: {
     get(): Promise<{ vault: string | null }>
     setVault(path: string | null): Promise<void>
@@ -273,4 +277,6 @@ export interface MissionApi {
   onCapabilities(cb: (c: Capabilities) => void): Unsub
   onModels(cb: (m: AgentModels) => void): Unsub
   onOpenCron(cb: (t: OpenCronTarget) => void): Unsub
+  onCostAlert(cb: (s: CostAlertState) => void): () => void
+  onOpenUsage(cb: () => void): () => void
 }

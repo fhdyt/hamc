@@ -1,6 +1,7 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
 import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, VaultCheck } from '@shared/events'
+import type { CostAlertState } from '@shared/events'
 import type { UsageSummaryArgs, UsageToolsArgs } from '@shared/usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from '@shared/sessions'
 import type { BrowserWindow } from 'electron'
@@ -12,6 +13,7 @@ import { AgentFileService } from './agentcfg/files'
 import { ModelService } from './agentcfg/model'
 import { SessionActionService } from './sessions/actions'
 import { saveExport } from './sessions/export'
+import { CostAlertService } from './usage/costAlert'
 import { ChatService } from './chat/service'
 import { UploadService } from './uploads/service'
 import type { AgentFileKind, ModelSaveRequest } from '@shared/agentCfg'
@@ -42,6 +44,8 @@ export interface SessionDeps {
   log?: (msg: string) => void
   /** Called once per newly failed cron run (after the baseline). */
   notify?: (alert: CronAlert) => void
+  /** Called once per local day when the daily cost passes the alert threshold. */
+  notifyCost?: (state: CostAlertState) => void
   backoff?: (attempt: number) => number
   /** The native file picker for attachments; returns local paths. */
   pickFiles?: () => Promise<string[]>
@@ -99,6 +103,7 @@ export class MissionSession {
   private readonly agentFiles: AgentFileService
   private readonly agentModel: ModelService
   private readonly sessionActions: SessionActionService
+  private readonly costAlert: CostAlertService
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -128,6 +133,13 @@ export class MissionSession {
       hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
       isConnected: () => d.manager.isConnected(),
       log: (m) => d.log?.(m)
+    })
+    this.costAlert = new CostAlertService({
+      query: (a) => this.usageSummary(a),
+      settings: () => ({ enabled: this.d.store.getSetting('alerts.cost.enabled'), usd: this.d.store.getSetting('alerts.cost.usd') }),
+      isConnected: () => this.d.manager.isConnected() && this.hermes !== null,
+      send: (s) => this.d.send(IPC.evCostAlert, s),
+      notify: (s) => this.d.notifyCost?.(s)
     })
     this.chat = new ChatService({
       uploads: this.uploads,
@@ -320,6 +332,7 @@ export class MissionSession {
     }
     startup.done('collector', '0 files written')
     this.startBrain()
+    this.costAlert.start()
 
     this.everConnected = true
     this.startLatency()
@@ -401,6 +414,7 @@ export class MissionSession {
     if (!this.params) return
     this.stopLatency()
     this.stopCollector()
+    this.costAlert.stop()
     this.brain.detach()
     this.chat.dispose()
     this.scheduleRetry(0)
@@ -452,6 +466,7 @@ export class MissionSession {
     this.generation++
     this.params = null
     this.pending = null
+    this.costAlert.reset()
     await this.teardown()
     this.everConnected = false
     this.setStatus({ ...IDLE })
@@ -488,6 +503,10 @@ export class MissionSession {
 
   sessionsTranscript(args: TranscriptArgs): Promise<QueryResult<SessionTranscript>> {
     return this.queries.run('session_transcript', args, SessionTranscript)
+  }
+
+  alertsRecheck(): Promise<void> {
+    return this.costAlert.recheck()
   }
 
   usageSummary(args: UsageSummaryArgs): Promise<QueryResult<UsageSummary>> {

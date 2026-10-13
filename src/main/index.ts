@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { IPC } from '@shared/channels'
 import { loadCollectorScript } from './collector/channel'
 import { ConnectionManager } from './connection/manager'
+import type { CostAlertState } from '@shared/events'
 import type { CronAlert } from './cron/watcher'
 import { registerIpc } from './ipc'
 import { createLogger } from './log'
@@ -45,6 +46,25 @@ function showCronAlert(alert: CronAlert): void {
     if (win.isMinimized()) win.restore()
     win.focus()
     win.webContents.send(IPC.evOpenCron, { profile: alert.profile, jobId: alert.jobId })
+  })
+  n.show()
+}
+
+/** The daily cost passed the threshold; like a failed cron run it only rings when the window is not in front. */
+function showCostAlert(s: CostAlertState): void {
+  const w = win
+  const inFront = !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized() && w.isFocused()
+  if (inFront || !Notification.isSupported()) return
+  const n = new Notification({ title: `Daily cost over $${s.threshold.toFixed(2)}`, body: `$${(s.total ?? 0).toFixed(2)} so far today` })
+  liveNotifications.add(n)
+  n.on('close', () => liveNotifications.delete(n))
+  n.on('click', () => {
+    liveNotifications.delete(n)
+    if (!win || win.isDestroyed()) return
+    win.show()
+    if (win.isMinimized()) win.restore()
+    win.focus()
+    win.webContents.send(IPC.evOpenUsage, null)
   })
   n.show()
 }
@@ -134,6 +154,7 @@ if (!app.requestSingleInstanceLock()) {
       },
       log,
       notify: showCronAlert,
+      notifyCost: showCostAlert,
       pickFiles: async () => {
         const r = await (win ? dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] }) : dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] }))
         return r.canceled ? [] : r.filePaths

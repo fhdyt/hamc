@@ -52,6 +52,9 @@ const api: MissionApi = {
     summary: (args) => ipcRenderer.invoke(IPC.usageSummary, args),
     tools: (args) => ipcRenderer.invoke(IPC.usageTools, args)
   },
+  alerts: {
+    recheck: () => ipcRenderer.invoke(IPC.alertsRecheck)
+  },
   brain: {
     get: () => ipcRenderer.invoke(IPC.brainGet),
     setVault: (path) => ipcRenderer.invoke(IPC.brainSetVault, path),
@@ -95,7 +98,9 @@ const api: MissionApi = {
   onPreflight: (cb) => on(IPC.evPreflight, cb),
   onCapabilities: (cb) => on(IPC.evCapabilities, cb),
   onModels: (cb) => on(IPC.evModels, cb),
-  onOpenCron: (cb) => on(IPC.evOpenCron, cb)
+  onOpenCron: (cb) => on(IPC.evOpenCron, cb),
+  onCostAlert: (cb) => on(IPC.evCostAlert, cb),
+  onOpenUsage: (cb) => on(IPC.evOpenUsage, cb)
 }
 
 contextBridge.exposeInMainWorld('mc', api)

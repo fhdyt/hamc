@@ -158,6 +158,7 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.sessionsTranscript, (a) => d.session.sessionsTranscript(TranscriptSchema.parse(a)))
   handle(IPC.sessionsAction, (a) => d.session.sessionAction(SessionActionSchema.parse(a)))
   handle(IPC.sessionsExport, (a) => d.session.sessionExport(ExportSchema.parse(a), d.getWindow()))
+  handle(IPC.alertsRecheck, () => d.session.alertsRecheck())
   handle(IPC.usageSummary, (a) => d.session.usageSummary(UsageSummarySchema.parse(a)))
   handle(IPC.usageTools, (a) => d.session.usageTools(UsageToolsSchema.parse(a)))
   handle(IPC.interactionDetail, (a) => d.session.interactionDetail(InteractionArgs.parse(a)))

@@ -24,6 +24,7 @@ export const IPC = {
   sessionsExport: 'mc:sessions:export',
   usageSummary: 'mc:usage:summary',
   usageTools: 'mc:usage:tools',
+  alertsRecheck: 'mc:alerts:recheck',
   brainGet: 'mc:brain:get',
   brainSetVault: 'mc:brain:set-vault',
   brainValidate: 'mc:brain:validate',
@@ -58,5 +59,7 @@ export const IPC = {
   evPreflight: 'mc:ev:preflight',
   evCapabilities: 'mc:ev:capabilities',
   evModels: 'mc:ev:models',
-  evOpenCron: 'mc:ev:open-cron'
+  evOpenCron: 'mc:ev:open-cron',
+  evCostAlert: 'mc:ev:cost-alert',
+  evOpenUsage: 'mc:ev:open-usage'
 } as const
