@@ -111,6 +111,15 @@ jobs:
           sudo chmod 4755 dist/linux-unpacked/chrome-sandbox
           dbus-run-session -- bash -c 'echo -n "" | gnome-keyring-daemon --unlock --components=secrets >/dev/null; xvfb-run -a npm run test:e2e:packaged'
 
+      - name: Keep Playwright results of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ matrix.name }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - uses: actions/upload-artifact@v4
         with:
           name: installer-${{ matrix.name }}
