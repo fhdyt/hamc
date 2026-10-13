@@ -12,6 +12,7 @@ import { NoteModal } from './screens/brain/NoteModal'
 import { SessionModal } from './screens/feed/SessionModal'
 import { Launch } from './screens/Launch'
 import { Server } from './screens/Server'
+import { Sessions } from './screens/Sessions'
 import { SettingsModal } from './settings/SettingsModal'
 import { Shell } from './shell/Shell'
 import { useShortcuts } from './shell/useShortcuts'
@@ -35,7 +36,7 @@ export function App() {
 
   return (
     <Framed>
-      <Shell>{route === 'dashboard' ? <Dashboard /> : route === 'server' ? <Server /> : route === 'chat' ? <Chat /> : route === 'feed' ? <Feed /> : route === 'brain' ? <Brain /> : <ComingSoon route={route} />}</Shell>
+      <Shell>{route === 'dashboard' ? <Dashboard /> : route === 'server' ? <Server /> : route === 'chat' ? <Chat /> : route === 'feed' ? <Feed /> : route === 'brain' ? <Brain /> : route === 'sessions' ? <Sessions /> : <ComingSoon route={route} />}</Shell>
       <CronModal />
       <FeedModal />
       <SessionModal />
