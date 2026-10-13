@@ -199,6 +199,16 @@ Layar ini membaca `skills/`, `.usage.json`, `.bundled_manifest`, `.hub/lock.json
 119. **Changes.** Tab **Changes** menampilkan isi `.curator_ledger.jsonl` (waktu, aktor curator/agent/user, aksi, skill, catatan) dan, untuk satu agent, keluaran `hermes curator status`. **diff** membuka perubahan SKILL.md dari `~/.hermes/.curator_backups/blobs/`; bila blob sudah dibersihkan, tampil catatannya. Bandingkan dengan `hermes curator ledger`.
 120. **Zero-Change.** Selama langkah 115-119 tidak ada berkas baru di VPS selain yang dibuat Hermes oleh aksi yang dikonfirmasi. `app.log` memuat satu baris per aksi (`skills <aksi> <profile> exit <kode>`) tanpa nama skill atau isi.
 
+## Tambahan M10b: Memory timeline
+
+Versi disimpan hanya di `app.db` lokal. Collector membaca `SOUL.md`, `memories/MEMORY.md` dan `memories/USER.md` sekitar tiap 30 detik, dan hanya mengirim isi berkas yang hash-nya berubah.
+
+121. **Versi pertama.** Buka **Second brain → Memory timeline**, pilih agent dan MEMORY.md: muncul satu versi "first snapshot" dengan jumlah karakter terhadap batas 2.200 (USER 1.375, SOUL tanpa batas).
+122. **Perubahan oleh agent.** Minta agent mengingat sesuatu lewat chat ("ingat bahwa saya suka kopi"). Dalam sekitar 30 detik muncul versi baru berlabel `<agent> (agent)` dengan entri baru berwarna hijau. Catat bila labelnya "not attributed": artinya tidak ada hasil tool `memory` di `state.db` dalam ±2 menit dari waktu ubah berkas (catat `select role, tool_name, timestamp from messages order by id desc limit 5`).
+123. **While away dan you.** Tutup aplikasi, ubah `MEMORY.md` lewat terminal, buka lagi: muncul satu versi "while away". Simpan perubahan lewat Settings → Agents → Memory: versi baru berlabel "you". Ubah lewat terminal saat aplikasi terbuka: "not attributed".
+124. **Diff dan Restore.** Diff MEMORY/USER per entri (`§`), SOUL per baris; "Show N unchanged" membuka entri yang sama. **Restore in the editor** membuka Settings → Agents di berkas itu dengan versi lama sebagai suntingan yang belum disimpan; tidak ada yang ditulis sebelum Save (dengan diff dan cek hash). **Copy this version** menyalin teksnya.
+125. **Retensi dan Clear.** Settings → Data → **Clear snapshots** (dua langkah) menghapus versi lokal koneksi ini; berkas di VPS tidak berubah. Selama langkah 121-125 tidak ada berkas baru di VPS.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.
