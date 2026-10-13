@@ -188,6 +188,12 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.cronAction, (a) => d.session.cronAction(CronActionSchema.parse(a)))
   handle(IPC.cronRuns, (a) => d.session.cronRuns(CronRunsSchema.parse(a)))
   handle(IPC.cronRunOutput, (a) => d.session.cronRunOutput(CronOutputSchema.parse(a)))
+  handle(IPC.memoryVersions, (a) => {
+    const { profile, file } = z.object({ profile: ProfileName, file: FileKind }).parse(a)
+    return d.session.memoryVersions(profile, file)
+  })
+  handle(IPC.memoryVersion, (a) => d.session.memoryVersion(z.number().int().min(1).parse(a)))
+  handle(IPC.memoryClear, () => d.session.memoryClear())
   handle(IPC.skillsList, (a) => d.session.skillsList(SkillsListSchema.parse(a)))
   handle(IPC.skillRead, (a) => d.session.skillRead(SkillReadSchema.parse(a)))
   handle(IPC.skillsLedger, (a) => d.session.skillsLedger(SkillsLedgerSchema.parse(a)))

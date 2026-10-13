@@ -22,6 +22,9 @@ export const IPC = {
   skillsAction: 'mc:skills:action',
   skillsInspect: 'mc:skills:inspect',
   skillsCuratorStatus: 'mc:skills:curator-status',
+  memoryVersions: 'mc:memory:versions',
+  memoryVersion: 'mc:memory:version',
+  memoryClear: 'mc:memory:clear',
   feedMessage: 'mc:feed:message',
   feedHistory: 'mc:feed:history',
   feedSession: 'mc:feed:session',
@@ -78,5 +81,6 @@ export const IPC = {
   evOpenCron: 'mc:ev:open-cron',
   evCostAlert: 'mc:ev:cost-alert',
   evOpenUsage: 'mc:ev:open-usage',
-  evOpenLogs: 'mc:ev:open-logs'
+  evOpenLogs: 'mc:ev:open-logs',
+  evMemory: 'mc:ev:memory'
 } as const

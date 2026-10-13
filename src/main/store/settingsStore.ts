@@ -27,8 +27,37 @@ const MIGRATIONS: string[] = [
      profile TEXT NOT NULL,
      position INTEGER NOT NULL,
      PRIMARY KEY (connection_id, profile)
-   );`
+   );`,
+  `CREATE TABLE memory_snapshots (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     connection_id INTEGER NOT NULL,
+     profile TEXT NOT NULL,
+     file TEXT NOT NULL,
+     taken_at INTEGER NOT NULL,
+     hash TEXT NOT NULL,
+     content TEXT NOT NULL,
+     author TEXT NOT NULL,
+     session_id TEXT,
+     mtime REAL
+   );
+   CREATE INDEX idx_memory_snapshots_file ON memory_snapshots (connection_id, profile, file, id);`
 ]
+
+/** Retention of memory snapshots (PRD F-MEMT-2): 200 versions per file, 180 days; the newest version always stays. */
+export const SNAPSHOTS_PER_FILE = 200
+export const SNAPSHOT_MAX_AGE_MS = 180 * 86_400_000
+
+export interface MemorySnapshotRow {
+  id: number
+  profile: string
+  file: string
+  takenAt: number
+  hash: string
+  author: string
+  sessionId: string | null
+  mtime: number | null
+  chars: number
+}
 
 export interface UpsertConnection {
   name: string
@@ -162,6 +191,7 @@ export class SettingsStore {
       this.db.prepare('DELETE FROM settings WHERE key = ?').run(`pins.initialized.${r.id}`)
       this.db.prepare('DELETE FROM settings WHERE key = ?').run(`brain.vault.${r.id}`)
       this.db.prepare('DELETE FROM settings WHERE key LIKE ?').run(`chat.session.${r.id}.%`)
+      this.db.prepare('DELETE FROM memory_snapshots WHERE connection_id = ?').run(r.id)
       this.db.prepare('DELETE FROM known_hosts WHERE host = ? AND port = ?').run(r.host, r.port)
       this.db.prepare('DELETE FROM connections WHERE id = ?').run(r.id)
     })()
@@ -238,6 +268,49 @@ export class SettingsStore {
 
   pinsInitialized(connectionId: number): boolean {
     return this.db.prepare('SELECT value FROM settings WHERE key = ?').get(`pins.initialized.${connectionId}`) !== undefined
+  }
+
+  latestSnapshot(connectionId: number, profile: string, file: string): { hash: string } | undefined {
+    return this.db
+      .prepare('SELECT hash FROM memory_snapshots WHERE connection_id = ? AND profile = ? AND file = ? ORDER BY id DESC LIMIT 1')
+      .get(connectionId, profile, file) as { hash: string } | undefined
+  }
+
+  /** Stores one version and applies the retention to that file. */
+  addSnapshot(s: { connectionId: number; profile: string; file: string; takenAt: number; hash: string; content: string; author: string; sessionId: string | null; mtime: number | null }): number {
+    return this.db.transaction(() => {
+      const id = Number(
+        this.db
+          .prepare('INSERT INTO memory_snapshots (connection_id, profile, file, taken_at, hash, content, author, session_id, mtime) VALUES (?,?,?,?,?,?,?,?,?)')
+          .run(s.connectionId, s.profile, s.file, s.takenAt, s.hash, s.content, s.author, s.sessionId, s.mtime).lastInsertRowid
+      )
+      this.db
+        .prepare(
+          `DELETE FROM memory_snapshots WHERE connection_id = ? AND profile = ? AND file = ? AND id != ? AND (taken_at < ? OR id NOT IN
+             (SELECT id FROM memory_snapshots WHERE connection_id = ? AND profile = ? AND file = ? ORDER BY id DESC LIMIT ?))`
+        )
+        .run(s.connectionId, s.profile, s.file, id, s.takenAt - SNAPSHOT_MAX_AGE_MS, s.connectionId, s.profile, s.file, SNAPSHOTS_PER_FILE)
+      return id
+    })()
+  }
+
+  listSnapshots(connectionId: number, profile: string, file: string): MemorySnapshotRow[] {
+    return this.db
+      .prepare(
+        `SELECT id, profile, file, taken_at AS takenAt, hash, author, session_id AS sessionId, mtime, length(content) AS chars
+           FROM memory_snapshots WHERE connection_id = ? AND profile = ? AND file = ? ORDER BY id DESC LIMIT ?`
+      )
+      .all(connectionId, profile, file, SNAPSHOTS_PER_FILE) as MemorySnapshotRow[]
+  }
+
+  getSnapshot(connectionId: number, id: number): { id: number; profile: string; file: string; content: string } | undefined {
+    return this.db.prepare('SELECT id, profile, file, content FROM memory_snapshots WHERE connection_id = ? AND id = ?').get(connectionId, id) as
+      | { id: number; profile: string; file: string; content: string }
+      | undefined
+  }
+
+  clearSnapshots(connectionId: number): number {
+    return this.db.prepare('DELETE FROM memory_snapshots WHERE connection_id = ?').run(connectionId).changes
   }
 
   close(): void {

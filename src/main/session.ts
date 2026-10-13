@@ -28,6 +28,8 @@ import { CollectorChannel } from './collector/channel'
 import { ModelResolver } from './collector/models'
 import { CronActionService } from './cron/actions'
 import { SkillActionService } from './skills/actions'
+import { MemorySnapshots } from './memory/snapshots'
+import type { MemoryVersion, MemoryVersionText } from '@shared/memory'
 import type { SkillActionRequest, SkillActionResult, SkillTextResult } from '@shared/skills'
 import type { CronActionRequest, CronActionResult } from '@shared/cron'
 import { CronStore } from './cron/store'
@@ -63,6 +65,8 @@ export interface SessionDeps {
   makeThumb?: (path: string) => string | undefined
   /** How long a stopped chat turn may take to end on its own before its channel is closed (tests make it short). */
   chatStopGraceMs?: number
+  /** Extra collector arguments (tests shorten the memory interval). */
+  collectorArgs?: string[]
   latencyIntervalMs?: number
 }
 
@@ -119,6 +123,7 @@ export class MissionSession {
   private readonly approvals: ApprovalsService
   private readonly cronActions: CronActionService
   private readonly skillActions: SkillActionService
+  private readonly memory: MemorySnapshots
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -161,6 +166,11 @@ export class MissionSession {
       isConnected: () => d.manager.isConnected(),
       store: this.cronStore,
       log: (m) => d.log?.(m)
+    })
+    this.memory = new MemorySnapshots({
+      store: d.store,
+      connectionId: () => d.store.getConnection()?.id,
+      changed: (profile, file) => d.send(IPC.evMemory, { profile, file })
     })
     this.skillActions = new SkillActionService({
       conn: d.manager,
@@ -390,10 +400,13 @@ export class MissionSession {
       python: h.python,
       home: h.home,
       script: this.d.collectorScript,
-      extraArgs: cursors ? ['--cursors', cursors] : [],
+      extraArgs: [...(cursors ? ['--cursors', cursors] : []), ...(this.d.collectorArgs ?? [])],
       log: this.log
     })
+    this.memory.reset()
     ch.on('event', (ev: CollectorEvent) => {
+      // memory file contents stay in the main process: they become local versions, the renderer asks for them
+      if (ev.type === 'memory') return this.memory.ingest(ev.data)
       this.d.send(IPC.evEvent, ev)
       if (ev.type === 'agents') {
         void this.models?.update(ev.data.agents)
@@ -657,8 +670,23 @@ export class MissionSession {
     return this.agentFiles.read(profile, kind)
   }
 
-  agentWriteFile(profile: string, kind: AgentFileKind, text: string, baseHash: string | null): ReturnType<AgentFileService['write']> {
-    return this.agentFiles.write(profile, kind, text, baseHash)
+  async agentWriteFile(profile: string, kind: AgentFileKind, text: string, baseHash: string | null): ReturnType<AgentFileService['write']> {
+    this.memory.expectSave(profile, kind, text)
+    const res = await this.agentFiles.write(profile, kind, text, baseHash)
+    if (res.ok) this.memory.recordSave(profile, kind, res.file.text, res.file.mtime)
+    return res
+  }
+
+  memoryVersions(profile: string, file: AgentFileKind): MemoryVersion[] {
+    return this.memory.versions(profile, file)
+  }
+
+  memoryVersion(id: number): MemoryVersionText {
+    return this.memory.version(id)
+  }
+
+  memoryClear(): number {
+    return this.memory.clear()
   }
 
   agentReadModel(profile: string): ReturnType<ModelService['read']> {

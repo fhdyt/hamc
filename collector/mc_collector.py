@@ -2862,6 +2862,76 @@ def q_note(home, a):
     }
 
 
+# ---- memory files (M10b) ----------------------------------------------------
+
+MEMORY_FILES = (("soul", ("SOUL.md",)), ("memory", ("memories", "MEMORY.md")), ("user", ("memories", "USER.md")))
+MEMORY_MAX = 262144
+MEMORY_AGENT_WINDOW_S = 120
+
+
+def memory_tool_near(pdir, ts):
+    """(timestamp, session id) of the `memory` tool result closest to `ts` within two minutes, from the profile's
+    state.db; (None, None) when there is none or the database cannot tell."""
+    db = os.path.join(pdir, "state.db")
+    if not os.path.isfile(db):
+        return None, None
+    con = None
+    try:
+        con = open_ro(db)
+        cols = table_columns(con, "messages")
+        if not {"role", "timestamp", "tool_name", "session_id"} <= cols:
+            return None, None
+        row = con.execute(
+            "SELECT timestamp, session_id FROM messages WHERE role = 'tool' AND tool_name = 'memory' AND timestamp BETWEEN ? AND ?"
+            " ORDER BY abs(timestamp - ?) LIMIT 1", (ts - MEMORY_AGENT_WINDOW_S, ts + MEMORY_AGENT_WINDOW_S, ts)).fetchone()
+        return (to_epoch(row[0]), str(row[1])) if row else (None, None)
+    except sqlite3.Error:
+        return None, None
+    finally:
+        if con is not None:
+            con.close()
+
+
+class MemoryState:
+    """Watches SOUL.md, memories/MEMORY.md and memories/USER.md of every profile. A file is read only when its size or
+    mtime changed, and reported only when its content hash differs from the last one sent (the first poll reports
+    every file, as a baseline for the app's local snapshots)."""
+
+    def __init__(self):
+        self.stat = {}
+        self.sent = {}
+
+    def poll(self, home):
+        out = []
+        for name, pdir in list_profiles(home):
+            for kind, parts in MEMORY_FILES:
+                path = os.path.join(pdir, *parts)
+                key = (name, kind)
+                try:
+                    st = os.stat(path)
+                except OSError:
+                    self.stat.pop(key, None)
+                    continue
+                sig = (st.st_size, st.st_mtime_ns)
+                if self.stat.get(key) == sig:
+                    continue
+                try:
+                    with open(path, "rb") as f:
+                        data = f.read(MEMORY_MAX + 1)
+                except OSError:
+                    continue
+                self.stat[key] = sig
+                digest = hashlib.sha256(data[:MEMORY_MAX]).hexdigest()
+                if self.sent.get(key) == digest:
+                    continue
+                self.sent[key] = digest
+                agent_ts, session = memory_tool_near(pdir, st.st_mtime)
+                out.append({"profile": name, "file": kind, "hash": digest, "text": data[:MEMORY_MAX].decode("utf-8", "replace"),
+                            "truncated": len(data) > MEMORY_MAX, "size": st.st_size, "mtime": st.st_mtime,
+                            "agentTs": agent_ts, "agentSession": session})
+        return out
+
+
 # ---- cron control (M9b) -----------------------------------------------------
 
 CRON_RUNS_MAX = 20
@@ -3417,7 +3487,7 @@ def emit(kind, data, profile=None):
 
 
 def parse_args(argv):
-    args = {"home": None, "ticks": 0, "interval": 1.0, "agents_interval": 10.0, "cursors": {}, "history": FEED_HISTORY_ROWS, "query": None, "vault": None, "vault_interval": VAULT_POLL_S, "inter_interval": 2.0}
+    args = {"home": None, "ticks": 0, "interval": 1.0, "agents_interval": 10.0, "cursors": {}, "history": FEED_HISTORY_ROWS, "query": None, "vault": None, "vault_interval": VAULT_POLL_S, "inter_interval": 2.0, "memory_interval": 30.0}
     it = iter(argv)
     for a in it:
         if a == "--cursors":
@@ -3436,6 +3506,8 @@ def parse_args(argv):
             args["vault_interval"] = float(next(it))
         elif a == "--interactions-interval":
             args["inter_interval"] = float(next(it))
+        elif a == "--memory-interval":
+            args["memory_interval"] = float(next(it))
         elif a == "--ticks":
             args["ticks"] = int(next(it))
         elif a == "--interval":
@@ -3472,6 +3544,8 @@ def main(argv):
     last_cron = None
     inter = InteractionState()
     next_inter = clock()
+    memory = MemoryState()
+    next_memory = clock()
     last_inter = None
     done = 0
     while True:
@@ -3508,6 +3582,13 @@ def main(argv):
             except Exception as ex:  # noqa: BLE001
                 emit("error", {"code": "interactions_failed", "message": type(ex).__name__})
             next_inter = clock() + args["inter_interval"]
+        if now >= next_memory:
+            try:
+                for ev in memory.poll(args["home"]):
+                    emit("memory", ev, ev["profile"])
+            except Exception as ex:  # noqa: BLE001
+                emit("error", {"code": "memory_failed", "message": type(ex).__name__})
+            next_memory = clock() + args["memory_interval"]
         if now >= next_metrics:
             try:
                 emit("metrics", sampler.sample())
@@ -3535,7 +3616,7 @@ def main(argv):
             done += 1
             if args["ticks"] and done >= args["ticks"]:
                 return 0
-        time.sleep(max(0.0, min(next_metrics, next_agents, next_inter) - clock()))
+        time.sleep(max(0.0, min(next_metrics, next_agents, next_inter, next_memory) - clock()))
 
 
 if __name__ == "__main__":

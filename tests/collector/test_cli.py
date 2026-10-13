@@ -28,8 +28,8 @@ def test_streams_over_stdin_like_the_app_does(fx):
     kinds = [e["type"] for e in events]
     assert kinds[0] == "agents"
     assert kinds.count("metrics") == 3
-    assert set(kinds) <= {"agents", "metrics", "error", "cron", "feed", "interactions"}
-    assert all(e["profile"] is None and isinstance(e["ts"], float) for e in events)
+    assert set(kinds) <= {"agents", "metrics", "error", "cron", "feed", "interactions", "memory"}
+    assert all((e["profile"] is None) != (e["type"] == "memory") and isinstance(e["ts"], float) for e in events)
 
 
 def test_exits_quietly_when_the_reader_goes_away(fx):

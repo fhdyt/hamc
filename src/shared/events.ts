@@ -188,6 +188,21 @@ export const CronOutputFiles = z.object({
 })
 export type CronOutputFiles = z.infer<typeof CronOutputFiles>
 
+/** One changed memory file of one profile (M10b): sent by the collector when its content hash changes. */
+export const MemoryFileEvent = z.object({
+  profile: z.string(),
+  file: z.enum(['soul', 'memory', 'user']),
+  hash: z.string(),
+  text: z.string(),
+  truncated: z.boolean(),
+  size: z.number(),
+  mtime: z.number(),
+  /** Time of a `memory` tool result within two minutes of the change, from state.db. */
+  agentTs: z.number().nullable(),
+  agentSession: z.string().nullable()
+})
+export type MemoryFileEvent = z.infer<typeof MemoryFileEvent>
+
 export const SkillOrigin = z.enum(['agent', 'hub', 'bundled'])
 export type SkillOrigin = z.infer<typeof SkillOrigin>
 
@@ -619,6 +634,7 @@ export const CollectorEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('metrics'), ...envelope, data: MetricsData }),
   z.object({ type: z.literal('agents'), ...envelope, data: AgentsData }),
   z.object({ type: z.literal('cron'), ...envelope, data: CronData }),
+  z.object({ type: z.literal('memory'), ...envelope, data: MemoryFileEvent }),
   z.object({ type: z.literal('feed'), ...envelope, data: FeedData }),
   z.object({ type: z.literal('brain'), ...envelope, data: BrainData }),
   z.object({ type: z.literal('interactions'), ...envelope, data: InteractionsData }),

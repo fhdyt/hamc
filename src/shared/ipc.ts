@@ -4,6 +4,7 @@ import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessa
 import type { KanbanTaskArgs, KanbanTasksArgs } from './kanban'
 import type { CronActionRequest, CronActionResult } from './cron'
 import type { SkillActionRequest, SkillActionResult, SkillTextResult } from './skills'
+import type { MemoryVersion, MemoryVersionText } from './memory'
 import type { CostAlertState, CronOutputFiles, CronRuns, SkillBlobs, SkillsLedger, SkillsList, SkillText, KanbanBoards, KanbanTaskDetail, KanbanTasks, LogsList, LogsRead, UsageSummary, UsageTools } from './events'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from './logs'
 import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
@@ -208,6 +209,13 @@ export interface MissionApi {
     /** One or two output files of a job, by the names `runs` listed. */
     output(args: { profile: string; jobId: string; names: string[] }): Promise<QueryResult<CronOutputFiles>>
   }
+  memory: {
+    /** Local versions of one memory file, newest first (F-MEMT-1). */
+    versions(profile: string, file: AgentFileKind): Promise<MemoryVersion[]>
+    version(id: number): Promise<MemoryVersionText>
+    /** Deletes every local version of the current connection; answers how many. */
+    clear(): Promise<number>
+  }
   skills: {
     list(args: { profiles: string[] }): Promise<QueryResult<SkillsList>>
     read(args: { profile: string; path: string }): Promise<QueryResult<SkillText>>
@@ -311,4 +319,6 @@ export interface MissionApi {
   onCostAlert(cb: (s: CostAlertState) => void): () => void
   onOpenUsage(cb: () => void): () => void
   onOpenLogs(cb: (tab: 'logs' | 'gateway' | 'approvals') => void): () => void
+  /** A memory file got a new local version. */
+  onMemory(cb: (e: { profile: string; file: AgentFileKind }) => void): Unsub
 }

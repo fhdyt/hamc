@@ -35,6 +35,11 @@ const api: MissionApi = {
     runs: (args) => ipcRenderer.invoke(IPC.cronRuns, args),
     output: (args) => ipcRenderer.invoke(IPC.cronRunOutput, args)
   },
+  memory: {
+    versions: (profile, file) => ipcRenderer.invoke(IPC.memoryVersions, { profile, file }),
+    version: (id) => ipcRenderer.invoke(IPC.memoryVersion, id),
+    clear: () => ipcRenderer.invoke(IPC.memoryClear)
+  },
   skills: {
     list: (args) => ipcRenderer.invoke(IPC.skillsList, args),
     read: (args) => ipcRenderer.invoke(IPC.skillRead, args),
@@ -127,7 +132,8 @@ const api: MissionApi = {
   onOpenCron: (cb) => on(IPC.evOpenCron, cb),
   onCostAlert: (cb) => on(IPC.evCostAlert, cb),
   onOpenUsage: (cb) => on(IPC.evOpenUsage, cb),
-  onOpenLogs: (cb) => on(IPC.evOpenLogs, cb)
+  onOpenLogs: (cb) => on(IPC.evOpenLogs, cb),
+  onMemory: (cb) => on(IPC.evMemory, cb)
 }
 
 contextBridge.exposeInMainWorld('mc', api)
