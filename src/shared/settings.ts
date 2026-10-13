@@ -94,6 +94,8 @@ export interface SettingsMap {
   'logs.levels': LogLevel[]
   'logs.range': LogRange
   'logs.wrap': boolean
+  /** The Kanban board open in the Kanban screen: `default` or the folder name under kanban/boards. */
+  'kanban.board': string
   'window.bounds': WindowBounds | null
 }
 
@@ -124,6 +126,7 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'logs.levels': DEFAULT_LOG_LEVELS,
   'logs.range': '24h',
   'logs.wrap': false,
+  'kanban.board': 'default',
   'window.bounds': null
 }
 
@@ -170,6 +173,7 @@ export const SETTINGS_SCHEMA = {
   'logs.levels': z.array(z.enum(LOG_LEVELS)).max(6),
   'logs.range': z.enum(LOG_RANGES),
   'logs.wrap': z.boolean(),
+  'kanban.board': z.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
   'window.bounds': z
     .object({ x: z.number().optional(), y: z.number().optional(), width: z.number(), height: z.number() })
     .nullable()

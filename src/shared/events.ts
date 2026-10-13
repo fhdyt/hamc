@@ -313,6 +313,75 @@ export const LogsRead = z.object({
 })
 export type LogsRead = z.infer<typeof LogsRead>
 
+export const KanbanBoard = z.object({
+  /** `default` for the kanban.db in the Hermes home, else the folder name under kanban/boards. */
+  slug: z.string(),
+  path: z.string(),
+  tasks: z.number().int().nonnegative(),
+  archived: z.number().int().nonnegative(),
+  byStatus: z.record(z.string(), z.number().int().nonnegative()),
+  readable: z.boolean()
+})
+export type KanbanBoard = z.infer<typeof KanbanBoard>
+
+export const KanbanBoards = z.object({ boards: z.array(KanbanBoard), errors: z.array(z.object({ slug: z.string(), code: z.string() })) })
+export type KanbanBoards = z.infer<typeof KanbanBoards>
+
+export const KanbanTask = z.object({
+  id: z.string(),
+  title: z.string().nullable(),
+  assignee: z.string().nullable(),
+  createdBy: z.string().nullable(),
+  status: z.string(),
+  priority: z.number().int(),
+  createdAt: z.number().nullable(),
+  startedAt: z.number().nullable(),
+  completedAt: z.number().nullable(),
+  comments: z.number().int().nonnegative(),
+  parents: z.number().int().nonnegative(),
+  children: z.number().int().nonnegative(),
+  blockKind: z.string().nullable(),
+  failures: z.number().int().nonnegative(),
+  failed: z.boolean()
+})
+export type KanbanTask = z.infer<typeof KanbanTask>
+
+export const KanbanTasks = z.object({ board: z.string(), tasks: z.array(KanbanTask), archived: z.number().int().nonnegative(), truncated: z.boolean() })
+export type KanbanTasks = z.infer<typeof KanbanTasks>
+
+const TaskRef = z.object({ id: z.string(), title: z.string().nullable(), status: z.string() })
+
+export const KanbanTaskDetail = z.object({
+  task: KanbanTask.extend({
+    body: z.string().nullable(),
+    result: z.string().nullable(),
+    lastFailureError: z.string().nullable(),
+    skills: z.string().nullable(),
+    modelOverride: z.string().nullable(),
+    providerOverride: z.string().nullable(),
+    sessionId: z.string().nullable()
+  }),
+  comments: z.array(z.object({ id: z.number().int(), author: z.string().nullable(), body: z.string(), createdAt: z.number().nullable() })),
+  runs: z.array(
+    z.object({
+      id: z.number().int(),
+      profile: z.string().nullable(),
+      stepKey: z.string().nullable(),
+      status: z.string().nullable(),
+      startedAt: z.number().nullable(),
+      endedAt: z.number().nullable(),
+      outcome: z.string().nullable(),
+      summary: z.string().nullable(),
+      error: z.string().nullable()
+    })
+  ),
+  parents: z.array(TaskRef),
+  children: z.array(TaskRef),
+  events: z.array(z.object({ id: z.number().int(), runId: OptInt, kind: z.string().nullable(), payload: z.string().nullable(), createdAt: z.number().nullable() })),
+  attachments: z.array(z.object({ id: z.number().int(), filename: z.string().nullable(), size: OptInt, uploadedBy: z.string().nullable(), createdAt: z.number().nullable() }))
+})
+export type KanbanTaskDetail = z.infer<typeof KanbanTaskDetail>
+
 export const BrainNote = z.object({
   id: z.string(),
   title: z.string(),
