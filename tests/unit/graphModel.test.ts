@@ -145,7 +145,10 @@ describe('helpers', () => {
   it('sizes a neuron by its connections: soma and the room it keeps', () => {
     expect(somaRadius(0, 1)).toBeLessThan(somaRadius(4, 1))
     expect(somaRadius(4, 1)).toBeLessThan(somaRadius(100, 1))
-    expect(somaRadius(100000, 1)).toBe(20)
+    expect(somaRadius(100000, 1)).toBe(30)
+    expect(somaRadius(100000, 2)).toBe(60)
+    // a hub with 25 links is several times a leaf, as in Obsidian
+    expect(somaRadius(25, 1) / somaRadius(0, 1)).toBeGreaterThan(5)
     expect(somaRadius(4, 2)).toBeGreaterThan(somaRadius(4, 1))
     expect(collideRadius({ degree: 3 }, 1)).toBeGreaterThan(somaRadius(3, 1))
     expect(collideRadius({ degree: 30 }, 1)).toBeGreaterThan(collideRadius({ degree: 3 }, 1))

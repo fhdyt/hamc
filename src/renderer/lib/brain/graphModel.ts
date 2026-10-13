@@ -238,9 +238,16 @@ export function neighbours(g: Graph): number[][] {
   return out
 }
 
-/** Radius of a neuron's cell body (soma) in world units: grows with the square root of the connections. */
+/** Biggest soma, as a multiple of the scale (so the Node size slider still grows a hub). */
+export const SOMA_MAX = 30
+
+/**
+ * Radius of a neuron's cell body (soma) in world units. As in Obsidian, a note with many links is clearly bigger:
+ * the radius grows with the square root of the connections, a leaf stays small (2.6), 4 links give 7, 25 give 13.6,
+ * 100 give 24.6, and hubs stop at SOMA_MAX.
+ */
 export function somaRadius(degree: number, scale: number): number {
-  return Math.min(20, (2.4 + Math.sqrt(degree) * 1.7) * scale)
+  return Math.min(SOMA_MAX, 2.6 + Math.sqrt(Math.max(0, degree)) * 2.2) * scale
 }
 
 /** Space a node keeps to itself in the layout, so neighbouring glows do not pile up. */
