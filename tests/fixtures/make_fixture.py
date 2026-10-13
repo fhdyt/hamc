@@ -474,6 +474,71 @@ def make_synthetic_vault(root: Path, n: int, links_per_note: int = 4, seed: int 
     return n
 
 
+def iso(ts: float, off_min: int = 420) -> str:
+    """An aware ISO time like Hermes writes (hermes_time.now().isoformat())."""
+    tz = datetime.timezone(datetime.timedelta(minutes=off_min))
+    return datetime.datetime.fromtimestamp(ts, tz).isoformat()
+
+
+def make_cron_ledger(path: Path, with_incidents: bool = True) -> sqlite3.Connection:
+    """cron/executions.db with the schema of Hermes cron/executions.py and cron/incidents.py."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(path)
+    con.execute(
+        """CREATE TABLE IF NOT EXISTS executions (
+             id TEXT PRIMARY KEY, job_id TEXT NOT NULL, source TEXT NOT NULL, process_id TEXT NOT NULL,
+             pid INTEGER NOT NULL, process_started_at INTEGER,
+             status TEXT NOT NULL CHECK(status IN ('claimed','running','completed','failed','unknown')),
+             handoff_pending INTEGER NOT NULL DEFAULT 0, handoff_started_at REAL,
+             claimed_at TEXT NOT NULL, started_at TEXT, finished_at TEXT, error TEXT,
+             delivery_outcome TEXT, scheduled_instant TEXT, progress_at TEXT)"""
+    )
+    if with_incidents:
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS cron_incidents (
+                 id TEXT PRIMARY KEY, job_id TEXT NOT NULL, error_sig TEXT NOT NULL, state TEXT NOT NULL,
+                 failure_type TEXT NOT NULL DEFAULT 'unknown', first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL,
+                 acked_at TEXT, alerted_at TEXT, closed_at TEXT, error TEXT NOT NULL, output_file TEXT)"""
+        )
+    con.commit()
+    return con
+
+
+def add_execution(con, eid, job_id, status, claimed, started=None, finished=None, error=None, source="builtin",
+                  scheduled=True, delivery=None, progress=None) -> None:
+    con.execute(
+        "INSERT INTO executions (id, job_id, source, process_id, pid, status, claimed_at, started_at, finished_at, error,"
+        " delivery_outcome, scheduled_instant, progress_at) VALUES (?, ?, ?, 'p1', 4242, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (eid, job_id, source, status, iso(claimed), iso(started) if started else None, iso(finished) if finished else None,
+         error, delivery, iso(claimed) if scheduled else None, iso(progress) if progress else None),
+    )
+    con.commit()
+
+
+def add_incident(con, iid, job_id, state, first, last, error, failure_type="unknown", output_file=None, closed=None) -> None:
+    con.execute(
+        "INSERT INTO cron_incidents (id, job_id, error_sig, state, failure_type, first_seen_at, last_seen_at, closed_at, error, output_file)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (iid, job_id, iid.split("_")[-1], state, failure_type, iso(first), iso(last), iso(closed) if closed else None, error, output_file),
+    )
+    con.commit()
+
+
+def add_cron_ledger(home: Path, now: float) -> None:
+    """Runs of the default profile's job matching its two output files, plus an open and a resolved incident."""
+    con = make_cron_ledger(home / "cron" / "executions.db")
+    jid = "09358c101c91"
+    add_execution(con, "e1", jid, "unknown", now - 180000, now - 179990, now - 170000, error="owner process gone")
+    add_execution(con, "e2", jid, "completed", now - 90030, now - 90028, now - 89990, delivery="not_configured")
+    add_execution(con, "e3", jid, "failed", now - 3650, now - 3648, now - 3590, error="Agent run failed: provider timeout after 600s",
+                  delivery="delivered")
+    add_incident(con, "09358c_0a1b2c3d4e5f", jid, "alerted", now - 86400 * 3, now - 3590, "Agent run failed: provider timeout after 600s",
+                 failure_type="timeout", output_file=str(home / "cron" / "output" / jid / "2026-10-10_23-00-25.md"))
+    add_incident(con, "09358c_ffeeddccbbaa", jid, "resolved", now - 86400 * 9, now - 86400 * 8, "HTTP 429 rate limit",
+                 failure_type="rate_limit", closed=now - 86400 * 7)
+    con.close()
+
+
 def make_fixture(root: Path, now: float | None = None) -> Fixture:
     now = time.time() if now is None else now
     root = Path(root)
@@ -513,6 +578,7 @@ def make_fixture(root: Path, now: float | None = None) -> Fixture:
     add_cron_jobs(home, [real_job(last_status="error", last_error="x" * 95, failure_streak=10)])
     add_output(home, "09358c101c91", "2026-10-09_23-00-45.md", "older run\n", mtime=now - 90000)
     add_output(home, "09358c101c91", "2026-10-10_23-00-25.md", "latest run\nline two\n", mtime=now - 3600)
+    add_cron_ledger(home, now)
     add_cron_jobs(scout, [
         real_job(id="aaaaaaaaaaaa", name="never-ran", last_status=None, last_run_at=None, failure_streak=0,
                  repeat={"times": None, "completed": 0}),

@@ -710,18 +710,26 @@ def normalize_job(profile, raw):
         "repeat": {"times": times, "completed": completed},
         "prompt": _text(raw.get("prompt"), 4000) or "",
         "lastOutput": None,
+        "inflight": False,
+        "incident": None,
     }
 
 
-def find_last_output(pdir, job_id):
-    if not CRON_REL.fullmatch(job_id) or "/" in job_id:
-        return None
+def valid_job_id(job_id):
+    return isinstance(job_id, str) and JOB_ID_RE.match(job_id) is not None and job_id not in (".", "..")
+
+
+def output_files(pdir, job_id):
+    """Output files of a job: (rel, real path, mtime, size), newest first. `rel` is `<id>/<file>` or a legacy loose
+    `<id>_*` / `<id>.*` file; every real path must stay inside cron/output."""
+    if not valid_job_id(job_id):
+        return []
     base = os.path.join(pdir, "cron", "output")
     try:
         names = os.listdir(base)
+        real_base = os.path.realpath(base)
     except OSError:
-        return None
-    best = None
+        return []
     candidates = []
     for name in names:
         path = os.path.join(base, name)
@@ -733,19 +741,119 @@ def find_last_output(pdir, job_id):
             candidates += [(name + "/" + f, os.path.join(path, f)) for f in inner]
         elif name.startswith(job_id + "_") or name.startswith(job_id + "."):
             candidates.append((name, path))
+    out = []
     for rel, path in candidates:
-        if not CRON_REL.fullmatch(rel) or not os.path.isfile(path):
+        if not CRON_REL.fullmatch(rel):
             continue
         try:
-            mtime = os.stat(path).st_mtime
+            real = os.path.realpath(path)
+            if not real.startswith(real_base + os.sep) or not os.path.isfile(real):
+                continue
+            st = os.stat(real)
         except OSError:
             continue
-        if best is None or mtime > best["mtime"]:
-            best = {"rel": rel, "mtime": mtime}
-    return best
+        out.append((rel, real, st.st_mtime, st.st_size))
+    out.sort(key=lambda x: (-x[2], x[0]))
+    return out
 
 
-def collect_cron(home):
+def find_last_output(pdir, job_id):
+    files = output_files(pdir, job_id)
+    return {"rel": files[0][0], "mtime": files[0][2]} if files else None
+
+
+# ---- cron ledger (cron/executions.db, read-only; M9b) -----------------------
+
+JOB_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+INCIDENT_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+LEDGER_INFLIGHT_SILENCE_S = 7200
+_LEDGER_CACHE = {}
+EXEC_PAIRS = [("id", "id"), ("job_id", "job_id"), ("source", "source"), ("status", "status"), ("claimed_at", "claimed_at"),
+              ("started_at", "started_at"), ("finished_at", "finished_at"), ("error", "error"),
+              ("delivery_outcome", "delivery_outcome"), ("scheduled_instant", "scheduled_instant"), ("progress_at", "progress_at")]
+INCIDENT_PAIRS = [("id", "id"), ("job_id", "job_id"), ("state", "state"), ("failure_type", "failure_type"),
+                  ("first_seen_at", "first_seen_at"), ("last_seen_at", "last_seen_at"), ("acked_at", "acked_at"),
+                  ("closed_at", "closed_at"), ("error", "error"), ("output_file", "output_file")]
+
+
+def _ledger_path(pdir):
+    return os.path.join(pdir, "cron", "executions.db")
+
+
+def _sel(cols, pairs):
+    return ", ".join(c if c in cols else ("NULL AS %s" % a) for a, c in pairs)
+
+
+def _epoch(v):
+    return iso_to_epoch(v)[0]
+
+
+def _incident(r):
+    out = r.get("output_file")
+    return {
+        "id": str(r["id"]), "state": (_text(r.get("state"), 20) or "").lower() or "unknown",
+        "failureType": _text(r.get("failure_type"), 40) or "unknown",
+        "firstSeenTs": _epoch(r.get("first_seen_at")), "lastSeenTs": _epoch(r.get("last_seen_at")),
+        "ackedTs": _epoch(r.get("acked_at")), "closedTs": _epoch(r.get("closed_at")),
+        "error": _text(r.get("error"), 500) or "",
+        "output": os.path.basename(out)[:200] if isinstance(out, str) and out else None,
+    }
+
+
+def _ledger_key(path):
+    parts = []
+    for p in (path, path + "-wal"):
+        try:
+            st = os.stat(p)
+            parts.append((st.st_size, st.st_mtime_ns))
+        except OSError:
+            parts.append(None)
+    return tuple(parts)
+
+
+def _read_ledger(path, now):
+    inflight, incidents = set(), {}
+    con = open_ro(path)
+    try:
+        ecols = table_columns(con, "executions")
+        if {"job_id", "status"} <= ecols:
+            sel = _sel(ecols, [("job_id", "job_id"), ("claimed_at", "claimed_at"), ("progress_at", "progress_at")])
+            for job_id, claimed, progress in con.execute("SELECT %s FROM executions WHERE status IN ('claimed','running')" % sel):
+                last = _epoch(progress) or _epoch(claimed)
+                if last is None or now - last < LEDGER_INFLIGHT_SILENCE_S:
+                    inflight.add(str(job_id))
+        icols = table_columns(con, "cron_incidents")
+        if {"id", "job_id", "state"} <= icols:
+            order = " ORDER BY julianday(last_seen_at) DESC, id" if "last_seen_at" in icols else ""
+            sql = "SELECT %s FROM cron_incidents WHERE lower(state) IN ('detected','alerted')%s" % (_sel(icols, INCIDENT_PAIRS), order)
+            for r in _dict_rows(con.execute(sql)):
+                incidents.setdefault(str(r["job_id"]), _incident(r))
+    finally:
+        con.close()
+    return inflight, incidents
+
+
+def cron_ledger(pdir, now):
+    """{inflight: set of job ids with a claimed or running attempt, incidents: {job id: newest open incident}}. Read
+    again only when the database or its WAL changed; a missing or unreadable ledger gives empty parts."""
+    path = _ledger_path(pdir)
+    if not os.path.isfile(path):
+        _LEDGER_CACHE.pop(path, None)
+        return set(), {}
+    key = _ledger_key(path)
+    hit = _LEDGER_CACHE.get(path)
+    if hit is not None and hit[0] == key and not hit[1][0]:
+        return hit[1]
+    try:
+        value = _read_ledger(path, now)
+    except sqlite3.Error:
+        value = (set(), {})
+    _LEDGER_CACHE[path] = (key, value)
+    return value
+
+
+def collect_cron(home, now=None):
+    now = time.time() if now is None else now
     jobs, profiles = [], []
     for name, pdir in list_profiles(home):
         path = os.path.join(pdir, "cron", "jobs.json")
@@ -766,6 +874,7 @@ def collect_cron(home):
             profiles.append({"profile": name, "ok": False, "error": "unexpected_shape"})
             continue
         note = None
+        inflight, incidents = cron_ledger(pdir, now)
         if len(raw_jobs) > CRON_MAX_PER_PROFILE:
             note = "too many jobs (kept %d)" % CRON_MAX_PER_PROFILE
             raw_jobs = raw_jobs[:CRON_MAX_PER_PROFILE]
@@ -777,6 +886,8 @@ def collect_cron(home):
             if job is None:
                 continue
             job["lastOutput"] = find_last_output(pdir, job["id"])
+            job["inflight"] = job["id"] in inflight
+            job["incident"] = incidents.get(job["id"])
             jobs.append(job)
         profiles.append({"profile": name, "ok": True, "error": note})
     return {"jobs": jobs, "profiles": profiles}
@@ -2751,6 +2862,118 @@ def q_note(home, a):
     }
 
 
+# ---- cron control (M9b) -----------------------------------------------------
+
+CRON_RUNS_MAX = 20
+CRON_OUTPUTS_MAX = 30
+CRON_INCIDENTS_MAX = 10
+CRON_OUTPUT_BYTES = 65536
+
+
+def _cron_job_dir(home, a):
+    name, jid = a.get("profile"), a.get("jobId")
+    if not valid_profile(name) or not valid_job_id(jid):
+        raise QueryError("bad_args")
+    pdir = profile_dir(home, name)
+    if not pdir:
+        raise QueryError("not_found")
+    return pdir, jid
+
+
+def q_cron_jobs(home, a):
+    return collect_cron(home)
+
+
+def _run(r, has_instant):
+    instant = r.get("scheduled_instant")
+    status = (_text(r.get("status"), 20) or "").lower() or "unknown"
+    return {
+        "id": str(r["id"]), "status": status, "source": _text(r.get("source"), 40),
+        "trigger": ("scheduled" if instant else "manual") if has_instant else None,
+        "claimedTs": _epoch(r.get("claimed_at")), "startedTs": _epoch(r.get("started_at")), "finishedTs": _epoch(r.get("finished_at")),
+        "error": _text(r.get("error"), 500), "delivery": _text(r.get("delivery_outcome"), 40), "output": None,
+    }
+
+
+def _pair_outputs(runs, files, now):
+    """Gives each run the output file written while it ran (claim - 2 s to finish + 5 s), closest to its finish."""
+    used = set()
+    for run in runs:
+        start = run["claimedTs"] if run["claimedTs"] is not None else run["startedTs"]
+        if start is None:
+            continue
+        end = run["finishedTs"] if run["finishedTs"] is not None else now
+        best = None
+        for rel, _real, mtime, _size in files:
+            if rel in used or mtime < start - 2 or mtime > end + 5:
+                continue
+            if best is None or abs(mtime - end) < abs(best[1] - end):
+                best = (rel, mtime)
+        if best is not None:
+            used.add(best[0])
+            run["output"] = best[0]
+
+
+def q_cron_runs(home, a):
+    pdir, jid = _cron_job_dir(home, a)
+    limit = _limit(a, 6, CRON_RUNS_MAX)
+    files = output_files(pdir, jid)
+    path = _ledger_path(pdir)
+    ledger, runs, incidents = "absent", [], []
+    if os.path.isfile(path):
+        try:
+            con = open_ro(path)
+            try:
+                ecols = table_columns(con, "executions")
+                if {"id", "job_id", "status"} <= ecols:
+                    order = " ORDER BY julianday(claimed_at) DESC, claimed_at DESC, id DESC" if "claimed_at" in ecols else " ORDER BY rowid DESC"
+                    sql = "SELECT %s FROM executions WHERE job_id = ?%s LIMIT ?" % (_sel(ecols, EXEC_PAIRS), order)
+                    has_instant = "scheduled_instant" in ecols
+                    runs = [_run(r, has_instant) for r in _dict_rows(con.execute(sql, (jid, limit)))]
+                    ledger = "ok"
+                icols = table_columns(con, "cron_incidents")
+                if {"id", "job_id", "state"} <= icols:
+                    order = " ORDER BY julianday(last_seen_at) DESC, id" if "last_seen_at" in icols else ""
+                    sql = "SELECT %s FROM cron_incidents WHERE job_id = ?%s LIMIT ?" % (_sel(icols, INCIDENT_PAIRS), order)
+                    incidents = [_incident(r) for r in _dict_rows(con.execute(sql, (jid, CRON_INCIDENTS_MAX)))]
+            finally:
+                con.close()
+        except sqlite3.Error:
+            ledger, runs, incidents = "unreadable", [], []
+    if ledger == "ok":
+        _pair_outputs(runs, files, time.time())
+    else:
+        # No ledger: the output files are the only trace of the runs (newest first).
+        runs = [{"id": "file:" + rel, "status": "unknown", "source": None, "trigger": None, "claimedTs": None, "startedTs": None,
+                 "finishedTs": mtime, "error": None, "delivery": None, "output": rel} for rel, _r, mtime, _s in files[:limit]]
+    return {"ledger": ledger, "runs": runs, "incidents": incidents,
+            "outputs": [{"name": rel, "mtime": mtime, "size": size} for rel, _r, mtime, size in files[:CRON_OUTPUTS_MAX]]}
+
+
+def q_cron_output(home, a):
+    pdir, jid = _cron_job_dir(home, a)
+    names = a.get("names")
+    if not isinstance(names, list) or not 1 <= len(names) <= 2 or not all(isinstance(n, str) and len(n) <= 300 for n in names):
+        raise QueryError("bad_args")
+    known = {rel: (real, mtime, size) for rel, real, mtime, size in output_files(pdir, jid)}
+    files = []
+    for n in names:
+        hit = known.get(n)
+        if hit is None:
+            files.append({"name": n, "error": "not_found"})
+            continue
+        real, mtime, size = hit
+        try:
+            with open(real, "rb") as f:
+                data = f.read(CRON_OUTPUT_BYTES + 1)
+        except OSError:
+            files.append({"name": n, "error": "unreadable"})
+            continue
+        cut = len(data) > CRON_OUTPUT_BYTES
+        files.append({"name": n, "text": data[:CRON_OUTPUT_BYTES].decode("utf-8", "replace"), "truncated": cut, "mtime": mtime, "size": size})
+    return {"files": files}
+
+
 def run_query(home, cmd, raw):
     try:
         args = json.loads(raw)
@@ -2767,6 +2990,7 @@ def run_query(home, cmd, raw):
         "usage_summary": q_usage_summary, "usage_tools": q_usage_tools,
         "logs_list": q_logs_list, "logs_read": q_logs_read,
         "kanban_boards": q_kanban_boards, "kanban_tasks": q_kanban_tasks, "kanban_task": q_kanban_task,
+        "cron_jobs": q_cron_jobs, "cron_runs": q_cron_runs, "cron_output": q_cron_output,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}
