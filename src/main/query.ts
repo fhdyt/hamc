@@ -8,7 +8,7 @@ export const QUERY_MAX_OUTPUT = 1024 * 1024
 
 const KNOWN_ERRORS: ReadonlySet<string> = new Set<QueryError>(['bad_args', 'not_found', 'unsupported_schema', 'db_unreadable', 'unreadable', 'unknown_command'])
 
-export type QueryCommand = 'message' | 'history' | 'session' | 'vault_check' | 'browse' | 'note' | 'chat_sessions' | 'uploads_list' | 'interaction'
+export type QueryCommand = 'message' | 'history' | 'session' | 'vault_check' | 'browse' | 'note' | 'chat_sessions' | 'uploads_list' | 'interaction' | 'sessions_list' | 'sessions_search' | 'session_transcript'
 
 const short = (s: string, n = 160): string => s.replace(/\s+/g, ' ').trim().slice(-n)
 

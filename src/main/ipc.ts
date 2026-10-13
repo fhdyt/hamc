@@ -28,6 +28,20 @@ const InteractionArgs = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('delegate'), id: z.string().regex(/^sub:[A-Za-z0-9._-]{1,64}:[A-Za-z0-9._:-]{1,128}$/) })
 ])
 
+const SessionIdArg = z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/)
+const SessionFilter = {
+  profiles: z.array(ProfileName).max(50),
+  source: z.string().min(1).max(64).optional(),
+  sinceTs: z.number().finite().optional()
+}
+const SessionsListSchema = z.object({
+  ...SessionFilter,
+  before: z.object({ ts: z.number().finite().nullable(), id: SessionIdArg }).optional(),
+  limit: z.number().int().min(1).max(100)
+})
+const SessionsSearchSchema = z.object({ ...SessionFilter, q: z.string().trim().min(1).max(200), limit: z.number().int().min(1).max(200) })
+const TranscriptSchema = z.object({ profile: ProfileName, sessionId: SessionIdArg, afterId: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(200) })
+
 const VaultPath = z.string().min(1).max(4096).refine((s) => !s.includes('\u0000'))
 const BrowsePath = z.string().max(4096).refine((s) => !s.includes('\u0000'))
 const NoteId = z.string().min(1).max(4096).refine((s) => !s.includes('\u0000'))
@@ -116,6 +130,9 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.feedMessage, (a) => d.session.feedMessage(FeedMessageArgs.parse(a)))
   handle(IPC.feedHistory, (a) => d.session.feedHistory(FeedHistoryArgs.parse(a)))
   handle(IPC.feedSession, (a) => d.session.feedSession(FeedSessionArgs.parse(a)))
+  handle(IPC.sessionsList, (a) => d.session.sessionsList(SessionsListSchema.parse(a)))
+  handle(IPC.sessionsSearch, (a) => d.session.sessionsSearch(SessionsSearchSchema.parse(a)))
+  handle(IPC.sessionsTranscript, (a) => d.session.sessionsTranscript(TranscriptSchema.parse(a)))
   handle(IPC.interactionDetail, (a) => d.session.interactionDetail(InteractionArgs.parse(a)))
   handle(IPC.brainGet, () => d.session.brainGet())
   handle(IPC.brainSetVault, (a) => d.session.brainSetVault(a === null ? null : VaultPath.parse(a)))

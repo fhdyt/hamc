@@ -1,6 +1,7 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
-import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, VaultCheck } from '@shared/events'
+import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, VaultCheck } from '@shared/events'
+import type { SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from '@shared/sessions'
 import type {
   ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, CronOutputResult, HostKeyChallenge, InteractionDetailArgs, QueryResult, SavedConnection
 } from '@shared/ipc'
@@ -464,6 +465,18 @@ export class MissionSession {
 
   feedSession(args: { profile: string; sessionId: string }): Promise<QueryResult<SessionDetail>> {
     return this.queries.run('session', args, SessionDetail)
+  }
+
+  sessionsList(args: SessionsListArgs): Promise<QueryResult<SessionsList>> {
+    return this.queries.run('sessions_list', args, SessionsList)
+  }
+
+  sessionsSearch(args: SessionsSearchArgs): Promise<QueryResult<SessionsList>> {
+    return this.queries.run('sessions_search', args, SessionsList)
+  }
+
+  sessionsTranscript(args: TranscriptArgs): Promise<QueryResult<SessionTranscript>> {
+    return this.queries.run('session_transcript', args, SessionTranscript)
   }
 
   interactionDetail(args: InteractionDetailArgs): Promise<QueryResult<InteractionDetail>> {
