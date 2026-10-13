@@ -1,7 +1,7 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { join } from 'node:path'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
-import { addLogs, appendLog, buildFixture, snapshotTree, type FixtureDirs } from '../helpers/fixture'
+import { addLogs, appendLog, buildFixture, setGateway, snapshotTree, type FixtureDirs } from '../helpers/fixture'
 import { connectFresh, launchApp, resizeWindow, tmp } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
@@ -98,6 +98,52 @@ test('secrets are masked on screen and in the copied text', async () => {
   expect(copied).not.toContain('abcdef1234567890XYZ')
 })
 
-// The Gateway and Approvals tabs, the badge, the alerts and the closing checks are added in later tasks.
+const gwCard = (name: string) => page.getByRole('region', { name: `Gateway of ${name}` })
+
+test('the Gateway tab shows the state of every gateway and its platforms', async () => {
+  await page.getByRole('tab', { name: 'Gateway' }).click()
+  await expect(gwCard('default')).toContainText('running')
+  await expect(gwCard('default')).toContainText('telegram · connected')
+  await expect(gwCard('Scout')).toContainText('running')
+  await expect(gwCard('atlas')).toContainText('no gateway data')
+  await expect(gwCard('atlas').getByRole('button', { name: /Restart/ })).toBeDisabled()
+})
+
+test('Restart waits for a yes and then runs the command for that agent only', async () => {
+  await gwCard('Scout').getByRole('button', { name: /Restart gateway/ }).click()
+  const dlg = page.getByRole('dialog', { name: 'Restart gateway' })
+  await expect(dlg.getByText('$ hermes -p scout gateway restart')).toBeVisible()
+  await dlg.getByRole('button', { name: 'Cancel' }).click()
+  expect(srv.hermes.restarts).toEqual([])
+  await gwCard('Scout').getByRole('button', { name: /Restart gateway/ }).click()
+  await page.getByRole('dialog', { name: 'Restart gateway' }).getByRole('button', { name: 'Restart gateway' }).click()
+  await expect(page.getByText('Restarted the gateway of Scout.')).toBeVisible()
+  expect(srv.hermes.restarts).toEqual(['scout'])
+})
+
+test('Stop says what it does, runs the command and a failure stays in the dialog', async () => {
+  await gwCard('default').getByRole('button', { name: /Stop gateway/ }).click()
+  const dlg = page.getByRole('dialog', { name: 'Stop gateway' })
+  await expect(dlg.getByText('$ hermes gateway stop')).toBeVisible()
+  await expect(dlg.getByText(/stays offline until its gateway is started again/)).toBeVisible()
+  srv.hermes.failOn['gateway'] = 'no gateway is running'
+  await dlg.getByRole('button', { name: 'Stop gateway' }).click()
+  await expect(dlg.getByRole('alert')).toHaveText('no gateway is running')
+  delete srv.hermes.failOn['gateway']
+  await dlg.getByRole('button', { name: 'Stop gateway' }).click()
+  await expect(page.getByText('Stopped the gateway of default.')).toBeVisible()
+  expect(srv.hermes.stops).toEqual(['default'])
+})
+
+test('a platform that fails shows up on its card and in the count of the tab, and clears when it recovers', async () => {
+  setGateway(fx.root, 'scout', 'running', 'telegram', 'fatal', 'auth')
+  await expect(gwCard('Scout')).toContainText('telegram · fatal (auth)', { timeout: 30_000 })
+  await expect(page.getByRole('tab', { name: /^Gateway/ }).getByLabel('1 problem')).toBeVisible()
+  setGateway(fx.root, 'scout', 'running', 'telegram', 'connected')
+  await expect(gwCard('Scout')).toContainText('telegram · connected', { timeout: 30_000 })
+  await expect(page.getByRole('tab', { name: /^Gateway/ }).getByLabel(/problem/)).toHaveCount(0)
+})
+
+// The Approvals tab, the badge, the alerts and the closing checks are added in later tasks.
 void resizeWindow
 void treeBefore
