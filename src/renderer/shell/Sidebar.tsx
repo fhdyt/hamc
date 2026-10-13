@@ -3,6 +3,7 @@ import logoUrl from '../assets/logo-mark.png'
 import { saveSetting } from '../actions'
 import { Icon } from '../components/Icon'
 import { openPalette } from '../paletteActions'
+import { totalUnread, useUnread } from '../stores/unread'
 import { useUi } from '../stores/ui'
 import { NAV } from './nav'
 
@@ -12,6 +13,7 @@ export function Sidebar() {
   const route = useUi((s) => s.route)
   const collapsed = useUi((s) => s.settings['ui.sidebarCollapsed'])
   const navigate = useUi((s) => s.navigate)
+  const unread = useUnread((s) => totalUnread(s.counts))
 
   return (
     <aside className={`mc-side ${collapsed ? 'is-rail' : ''}`} aria-label="Sidebar">
@@ -24,7 +26,9 @@ export function Sidebar() {
         </span>
       </div>
       <nav aria-label="Main" className="mc-side-nav">
-        {NAV.map((n) => (
+        {NAV.map((n) => {
+          const badge = n.id === 'chat' ? unread : 0
+          return (
           <Fragment key={n.id}>
             {n.sepBefore && <span className="sn-sep" aria-hidden="true" />}
             <button
@@ -32,13 +36,20 @@ export function Sidebar() {
               className={`sn ${route === n.id ? 'on' : ''}`}
               aria-current={route === n.id ? 'page' : undefined}
               title={`${n.label} · ${mod}+${n.key}`}
+              aria-label={badge > 0 ? `${n.label}, ${badge} unread ${badge === 1 ? 'reply' : 'replies'}` : undefined}
               onClick={() => navigate(n.id)}
             >
               <Icon name={n.icon} size={15} />
               <span className="tl">{n.label}</span>
+              {badge > 0 && (
+                <span className="bd" aria-hidden="true">
+                  {badge > 9 ? '9+' : badge}
+                </span>
+              )}
             </button>
           </Fragment>
-        ))}
+          )
+        })}
       </nav>
       <div className="mc-side-foot">
         <button type="button" className="sn" aria-disabled="true" title="Terminal · coming in a later release" style={{ opacity: 0.5, cursor: 'not-allowed' }}>

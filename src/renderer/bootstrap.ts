@@ -1,4 +1,6 @@
 import { ensurePins, refreshVault } from './actions'
+import { shouldCount } from './lib/unread'
+import { countIfAway } from './paletteActions'
 import { useAgents } from './stores/agents'
 import { useBrain } from './stores/brain'
 import { useChat } from './stores/chat'
@@ -24,7 +26,11 @@ export async function bootstrap(): Promise<void> {
     else if (ev.type === 'error' && ev.data.code.startsWith('vault_')) useBrain.getState().setError(ev.data.message)
     else if (ev.type === 'error' && ['unsupported_schema', 'db_unreadable', 'feed_failed'].includes(ev.data.code)) useFeed.getState().setError(`${ev.data.message}${ev.data.profile ? ` (${ev.data.profile})` : ''}`)
   })
-  mc.onChat((ev) => useChat.getState().applyChat(ev))
+  mc.onChat((ev) => {
+    useChat.getState().applyChat(ev)
+    // a reply that finished while the user was looking elsewhere gets a badge
+    if (shouldCount(ev)) countIfAway(ev.profile)
+  })
   // an agent that is answering a chat from this app shows as working, whatever state.db says yet
   useChat.subscribe((s) => {
     const busy = Object.entries(s.rooms)
