@@ -1779,6 +1779,122 @@ def q_usage_tools(home, a):
     return {"tools": tools[:TOOLS_MAX], "scanned": scanned, "truncated": truncated, "errors": errors}
 
 
+# ---- logs (M9a) -------------------------------------------------------------
+
+LOG_FILES = ("agent.log", "errors.log", "gateway.log", "tool_calls.log")
+LOG_LIMIT_MAX = 2000
+LOG_CHUNK = 64 * 1024
+LOG_TAIL_BYTES_MAX = 1024 * 1024
+LOG_AFTER_MAX = 256 * 1024
+LOG_LINE_MAX = 4000
+
+
+def _log_file(home, name, fname):
+    """The real path of a log file of this profile, or None when it is missing or its real path leaves the logs folder."""
+    pdir = profile_dir(home, name)
+    if not pdir:
+        return None
+    d = os.path.join(pdir, "logs")
+    path = os.path.join(d, fname)
+    try:
+        real_dir, real = os.path.realpath(d), os.path.realpath(path)
+    except OSError:
+        return None
+    if not real.startswith(real_dir + os.sep) or not os.path.isfile(real):
+        return None
+    return real
+
+
+def q_logs_list(home, a):
+    profiles = a.get("profiles", [])
+    if not isinstance(profiles, list) or len(profiles) > 50 or not all(valid_profile(p) for p in profiles):
+        raise QueryError("bad_args")
+    files = []
+    for name, _pdir in list_profiles(home):
+        if profiles and name not in profiles:
+            continue
+        for fname in LOG_FILES:
+            real = _log_file(home, name, fname)
+            if real is None:
+                continue
+            try:
+                st = os.stat(real)
+            except OSError:
+                continue
+            files.append({"profile": name, "name": fname, "size": st.st_size, "mtime": st.st_mtime})
+    return {"files": files, "errors": []}
+
+
+def _whole_lines(data, base):
+    """(complete lines as bytes, offset just after the last newline). A trailing partial line is left for the next read."""
+    cut = data.rfind(b"\n")
+    if cut < 0:
+        return [], base
+    return data[:cut + 1].split(b"\n")[:-1], base + cut + 1
+
+
+def _tail(f, size, limit):
+    """The last `limit` whole lines: (lines, start offset of the first one, end offset)."""
+    pos, buf = size, b""
+    while pos > 0 and buf.count(b"\n") <= limit and len(buf) < LOG_TAIL_BYTES_MAX:
+        step = min(LOG_CHUNK, pos)
+        pos -= step
+        f.seek(pos)
+        buf = f.read(step) + buf
+    lines, end = _whole_lines(buf, pos)
+    start = pos
+    if pos > 0 and lines:
+        start += len(lines.pop(0)) + 1  # the first line may have begun before what was read
+    if len(lines) > limit:
+        drop = len(lines) - limit
+        start += sum(len(x) + 1 for x in lines[:drop])
+        lines = lines[drop:]
+    return lines, start, end
+
+
+def _decode(lines):
+    return [x.decode("utf-8", "replace").rstrip("\r")[:LOG_LINE_MAX] for x in lines]
+
+
+def q_logs_read(home, a):
+    name, fname = a.get("profile"), a.get("file")
+    if not valid_profile(name) or fname not in LOG_FILES:
+        raise QueryError("bad_args")
+    limit = _limit(a, 500, LOG_LIMIT_MAX)
+    after = a.get("after")
+    if after is not None and not valid_int(after, 0):
+        raise QueryError("bad_args")
+    real = _log_file(home, name, fname)
+    if real is None:
+        raise QueryError("not_found")
+    reset = skipped = False
+    with open(real, "rb") as f:
+        st = os.fstat(f.fileno())
+        size = st.st_size
+        if after is None or after > size:
+            reset = after is not None
+            lines, start, end = _tail(f, size, limit)
+        else:
+            start = after
+            if size - after > LOG_AFTER_MAX:
+                skipped = True
+                start = size - LOG_AFTER_MAX
+            f.seek(start)
+            data = f.read(size - start)
+            if skipped:
+                nl = data.find(b"\n")
+                data = data[nl + 1:] if nl >= 0 else b""
+                start = size - len(data)
+            lines, end = _whole_lines(data, start)
+            if len(lines) > limit:
+                skipped = True
+                drop = len(lines) - limit
+                start += sum(len(x) + 1 for x in lines[:drop])
+                lines = lines[drop:]
+    return {"lines": _decode(lines), "offset": end, "size": size, "mtime": st.st_mtime, "startOffset": start,
+            "more": start > 0 and (after is None or reset), "reset": reset, "skipped": skipped}
+
+
 # ---- chat ----------------------------------------------------------------
 
 CHAT_SOURCE = "mission-control"
@@ -2358,6 +2474,7 @@ def run_query(home, cmd, raw):
         "sessions_list": q_sessions_list, "sessions_search": q_sessions_search,
         "session_transcript": q_session_transcript,
         "usage_summary": q_usage_summary, "usage_tools": q_usage_tools,
+        "logs_list": q_logs_list, "logs_read": q_logs_read,
     }.get(cmd)
     if handler is None:
         return {"ok": False, "error": "unknown_command"}

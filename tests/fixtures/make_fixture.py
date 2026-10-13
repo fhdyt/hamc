@@ -246,6 +246,49 @@ def add_tool_data(fx, base: float) -> None:
     add_message(sd, "t2", "tool", "Traceback (most recent call last):\n  boom", base + 54, tool_name="terminal")
 
 
+def log_dir(fx, profile: str) -> Path:
+    return (fx.home if profile == "default" else fx.home / "profiles" / profile) / "logs"
+
+
+def write_log(fx, profile: str, name: str, lines, mode: str = "w", newline: bool = True) -> Path:
+    """Writes log lines the way Hermes appends them: one per line, ending with a newline."""
+    d = log_dir(fx, profile)
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / name
+    text = "\n".join(lines) + ("\n" if newline and lines else "")
+    with open(path, mode + "b") as f:
+        f.write(text.encode("utf-8"))
+    return path
+
+
+def stamp(ts: float) -> str:
+    """A log timestamp in the server's local time, like the Python logging default."""
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)) + ",123"
+
+
+def add_logs(fx) -> None:
+    """Log files with a few levels and components, newest line last."""
+    now = fx.now
+    write_log(fx, "default", "agent.log", [
+        f"{stamp(now - 600)} INFO agent.run: session started s-default-1",
+        f"{stamp(now - 500)} DEBUG agent.tools: loaded 12 tools",
+        f"{stamp(now - 400)} WARNING agent.run: slow provider answer (4.2s)",
+        f"{stamp(now - 300)} ERROR tools.terminal: command failed with exit code 2",
+        "    Traceback line that belongs to the error above",
+        f"{stamp(now - 200)} INFO agent.run: session ended",
+    ])
+    write_log(fx, "default", "errors.log", [
+        f"{stamp(now - 7200)} ERROR tools.terminal: an old failure",
+        f"{stamp(now - 1800)} ERROR gateway.run: telegram polling failed",
+        f"{stamp(now - 300)} CRITICAL agent.run: provider returned 402",
+        f"{stamp(now - 100)} WARNING agent.run: not an error",
+    ])
+    write_log(fx, "scout", "gateway.log", [
+        f"{stamp(now - 90)} INFO gateway.run: telegram connected",
+        f"{stamp(now - 60)} INFO gateway.cron: tick",
+    ])
+
+
 def add_message(db: Path, sid: str | None, role: str, content=None, ts: float = 0.0, tool_calls=None, tool_name=None,
                 reasoning=None, reasoning_content=None, active: int = 1) -> int:
     con = sqlite3.connect(db)
