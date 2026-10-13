@@ -19,6 +19,7 @@ import { usePalette } from './stores/palette'
 import { useSessions } from './stores/sessions'
 import { useUnread } from './stores/unread'
 import { useUsage } from './stores/usage'
+import { useSkills } from './stores/skills'
 import { useUi } from './stores/ui'
 
 export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
@@ -35,6 +36,7 @@ export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
     usePalette.getState().reset()
     useLogs.getState().reset()
     useKanban.getState().reset()
+    useSkills.getState().reset()
     useUnread.getState().reset()
     useCostAlert.getState().reset()
   }

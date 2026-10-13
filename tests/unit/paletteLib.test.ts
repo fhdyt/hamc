@@ -33,15 +33,13 @@ describe('normalize and scoreText', () => {
 })
 
 describe('buildItems', () => {
-  it('has one screen item per menu entry with its shortcut and a note for screens that are not built', () => {
+  it('has one screen item per menu entry with its shortcut, and every screen is built', () => {
     const all = items()
     const screens = all.filter((i) => i.group === 'screen')
     expect(screens).toHaveLength(NAV.length)
     const sessions = screens.find((i) => i.target.kind === 'screen' && i.target.route === 'sessions')!
     expect(sessions.hint).toContain('Ctrl+4')
-    for (const route of ['skills']) {
-      expect(screens.find((i) => i.target.kind === 'screen' && i.target.route === route)!.hint).toContain('Coming in a later release')
-    }
+    for (const s of screens) expect(s.hint).not.toContain('Coming in a later release')
   })
   it('has a chat item and four settings items per agent', () => {
     const all = items()
