@@ -72,6 +72,8 @@ export interface SettingsMap {
   'chat.maxUploadMb': number
   /** Chat through `hermes acp` when the server has it, so Hermes can ask before risky actions. */
   'chat.useAcp': boolean
+  /** Chat through Hermes's own TUI gateway, one process kept open over SSH, so a message does not start Hermes again. */
+  'chat.useGateway': boolean
   'dashboard.activityOpen': boolean
   'dashboard.serverOpen': boolean
   'dashboard.chatW': number
@@ -114,6 +116,7 @@ export const SETTINGS_DEFAULTS: SettingsMap = {
   'chat.uploadDir': '~/hermes-uploads',
   'chat.maxUploadMb': 50,
   'chat.useAcp': true,
+  'chat.useGateway': true,
   'dashboard.activityOpen': true,
   'dashboard.serverOpen': true,
   'dashboard.chatW': 320,
@@ -148,6 +151,7 @@ export const SETTINGS_SCHEMA = {
   'chat.uploadDir': z.string().min(1).max(300),
   'chat.maxUploadMb': z.number().int().min(1).max(2048),
   'chat.useAcp': z.boolean(),
+  'chat.useGateway': z.boolean(),
   'dashboard.activityOpen': z.boolean(),
   'dashboard.serverOpen': z.boolean(),
   'dashboard.chatW': z.number().min(260).max(640),

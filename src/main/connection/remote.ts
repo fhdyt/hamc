@@ -35,6 +35,15 @@ export const stateDbCmd = (python: string, home: string): string[] => [python, '
 export const pythonVersionCmd = (python: string): string[] => [python, '--version']
 /** `hermes acp --check` exits 0 only when the ACP adapter and its dependencies are there. */
 export const acpCheckCmd = (hermes: string): string[] => [hermes, 'acp', '--check']
+/** Finds Hermes's TUI gateway without importing it (`-P` keeps the working folder off sys.path). */
+export const GATEWAY_PROBE_PY = "import importlib.util as u, sys; sys.exit(0 if u.find_spec('tui_gateway.entry') and u.find_spec('hermes_bootstrap') else 1)"
+export const gatewayProbeCmd = (python: string): string[] => [python, '-P', '-c', GATEWAY_PROBE_PY]
+/**
+ * Hermes's own TUI gateway over stdio (the protocol `hermes serve` offers on /api/ws, without a port). One process
+ * serves every profile. HERMES_TUI_SESSION_TTL_S=0 turns off its startup sweep, which would otherwise end idle
+ * session rows of other front ends.
+ */
+export const gatewayCmd = (python: string, home: string): string[] => ['env', `HERMES_HOME=${home}`, 'HERMES_TUI_SESSION_TTL_S=0', python, '-P', '-m', 'tui_gateway.entry']
 export const acpCmd = (hermes: string, profile: string): string[] => (profile === 'default' ? [hermes, 'acp'] : [hermes, '-p', profile, 'acp'])
 export const probeCmd = (hermes: string, sub: string[]): string[] => [hermes, ...sub, '--help']
 export const modelCmd = (hermes: string, profile: string): string[] =>

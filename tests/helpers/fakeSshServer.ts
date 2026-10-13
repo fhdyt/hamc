@@ -52,6 +52,8 @@ export interface FakeSshOptions {
   backend?: string
   /** `hermes acp` is installed (`--check` passes and a fake ACP agent answers). Off by default. */
   acp?: boolean
+  /** Hermes's TUI gateway can be started (`python -P -m tui_gateway.entry`). Off by default. */
+  tuiGateway?: boolean
   /** What `hermes config set --help` prints. The default offers `--stdin`; pass a text without it to make the key travel as an argument. */
   configSetHelp?: string
   /** Providers that start with a credential (shown by `hermes status`). Default: openrouter. */
@@ -73,8 +75,8 @@ export interface FakeSsh {
   close(): Promise<void>
 }
 
-type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp' | 'configSetHelp' | 'credentials'>> &
-  Pick<FakeSshOptions, 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp' | 'configSetHelp' | 'credentials'> & { st: FakeHermesState }
+type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp' | 'tuiGateway' | 'configSetHelp' | 'credentials'>> &
+  Pick<FakeSshOptions, 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp' | 'tuiGateway' | 'configSetHelp' | 'credentials'> & { st: FakeHermesState }
 
 const MARKERS = ['config.yaml', '.env', 'SOUL.md', 'profile.yaml', 'state.db']
 
@@ -193,6 +195,41 @@ function runAcp(argv: string[], stream: ServerChannel, o: Resolved): void {
   stream.on('close', () => child.kill())
 }
 
+/** The TUI gateway: a JSON-RPC peer for every profile that stays open until the client ends stdin. */
+function runGateway(argv: string[], stream: ServerChannel, o: Resolved): void {
+  o.st.gatewayLaunches.push(argv)
+  const child = spawn(pythonExe, [resolve('tests/fixtures/fake_tui_gateway.py')], {
+    env: { ...process.env, MC_FAKE_HOME: o.fixture.home },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  child.stdin.on('error', () => {})
+  let buf = ''
+  stream.on('data', (d: Buffer) => {
+    buf += d.toString('utf8')
+    let i: number
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i)
+      buf = buf.slice(i + 1)
+      try {
+        const m = JSON.parse(line) as { method?: string; params?: Record<string, unknown> }
+        if (m.method) o.st.gatewayCalls.push({ method: m.method, params: m.params ?? {} })
+      } catch {
+        /* not JSON */
+      }
+    }
+    child.stdin.write(d)
+  })
+  stream.on('end', () => child.stdin.end())
+  child.stdout.pipe(stream, { end: false })
+  child.stderr.on('data', (d: Buffer) => stream.stderr.write(d))
+  child.on('close', (code) => {
+    if (!stream.writable) return
+    stream.exit(code ?? 0)
+    stream.end()
+  })
+  stream.on('close', () => child.kill())
+}
+
 function runChat(argv: string[], stream: ServerChannel, o: Resolved): void {
   const child = spawn(pythonExe, [resolve('tests/fixtures/fake_hermes.py'), ...argv.slice(1)], {
     env: { ...process.env, MC_FAKE_HOME: o.fixture.home },
@@ -291,6 +328,13 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
   }
   if (cmd === 'test' && rest[0] === '-d') return reply(stream, '', o.hasHome && rest[1] === o.remoteHome ? 0 : 1)
   if (cmd === 'head') return reply(stream, `#!${o.pythonPath}\n`)
+  if (cmd === 'env') {
+    const run = rest.slice(rest.findIndex((a) => !/^[A-Z_][A-Z0-9_]*=/.test(a)))
+    if (run[0] === o.pythonPath && run.includes('-m') && run.includes('tui_gateway.entry')) {
+      return o.tuiGateway ? runGateway(argv, stream, o) : reply(stream, '', 1, 'No module named tui_gateway\n')
+    }
+  }
+  if (cmd === o.pythonPath && rest[0] === '-P' && rest[1] === '-c' && (rest[2] ?? '').includes('tui_gateway')) return reply(stream, '', o.tuiGateway ? 0 : 1)
   if (cmd === o.hermesPath) {
     if (rest.includes('acp')) {
       if (rest.includes('--check')) return o.acp ? reply(stream, 'Hermes ACP check OK\n') : reply(stream, '', 1, 'ModuleNotFoundError: No module named acp\n')

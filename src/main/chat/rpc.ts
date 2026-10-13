@@ -85,6 +85,18 @@ export class JsonRpc {
     this.write({ jsonrpc: '2.0', method, params })
   }
 
+  /** Ends stdin so the peer can finish its work and exit by itself; the channel is closed after `graceMs` if it does not. */
+  end(graceMs = 2000): void {
+    if (this.done) return
+    try {
+      this.ch.end()
+    } catch {
+      /* already closed */
+    }
+    const t = setTimeout(() => this.close(), graceMs)
+    t.unref()
+  }
+
   close(): void {
     try {
       this.ch.close()

@@ -8,7 +8,7 @@ async function main(): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'mc-dev-'))
   const fxDir = join(dir, 'fx')
   const fx = buildFixture(fxDir)
-  const srv = await startFakeSsh({ fixture: fx, port: Number(process.env['FAKE_SSH_PORT'] ?? 2222) })
+  const srv = await startFakeSsh({ fixture: fx, port: Number(process.env['FAKE_SSH_PORT'] ?? 2222), tuiGateway: process.env['FAKE_TUI_GATEWAY'] !== '0' })
   console.log(`fake Hermes VPS ready
   host     127.0.0.1
   port     ${srv.port}

@@ -3,8 +3,9 @@ import type { ClientChannel } from 'ssh2'
 import type { ChatEvent, ChatSendResult } from '@shared/ipc'
 import { LineSplitter } from '../collector/lines'
 import type { Execer } from '../connection/manager'
-import { acpCheckCmd, backendCmd, chatHelpCmd, chatPlainCmd, chatQuietFileCmd, chatStreamCmd, runSafe } from '../connection/remote'
+import { acpCheckCmd, backendCmd, chatHelpCmd, chatPlainCmd, chatQuietFileCmd, chatStreamCmd, gatewayProbeCmd, runSafe } from '../connection/remote'
 import { AcpHub, type AcpTurn } from './acp'
+import { TuiGateway, type GatewayTurn } from './gateway'
 import { ASSUMED_FLAGS, canStream, parseChatHelp, type ChatFlags } from './flags'
 import { ChatLineParser } from './parser'
 
@@ -31,6 +32,12 @@ export interface ChatDeps {
   uploads?: UploadPort
   /** The setting `chat.useAcp`. */
   useAcp?: () => boolean
+  /** The setting `chat.useGateway`. */
+  useGateway?: () => boolean
+  /** Python and Hermes home of the connection, for the TUI gateway. */
+  gatewayTarget?: () => { python: string; home: string } | null
+  /** How long the gateway may take to say it is ready (tests make it short). */
+  gatewayReadyMs?: number
   /** The working folder given to `hermes acp`. */
   acpCwd?: () => string
   log?: (msg: string) => void
@@ -53,6 +60,7 @@ interface Active {
   /** Ends the process or channel of the turn. */
   close(): void
   acp?: AcpTurn
+  gateway?: GatewayTurn
 }
 
 /**
@@ -89,6 +97,12 @@ export class ChatService {
   /** `hermes acp --check` passed on this server (null = not asked yet). */
   private acpOk: boolean | null = null
   private hub: AcpHub | null = null
+  /** Hermes's TUI gateway can run on this server (null = not asked yet). */
+  private gwOk: boolean | null = null
+  private gw: TuiGateway | null = null
+  private gwStarting: Promise<TuiGateway | null> | null = null
+  /** How often the gateway died on this connection; after two it is not started again. */
+  private gwDeaths = 0
 
   constructor(private readonly d: ChatDeps) {}
 
@@ -96,6 +110,81 @@ export class ChatService {
   reset(): void {
     this.flagsCache = null
     this.acpOk = null
+    this.gwOk = null
+    this.gwDeaths = 0
+  }
+
+  /**
+   * The persistent TUI gateway of this connection, started by the first message (an explicit Send) and kept until
+   * the connection ends. Null when it cannot run here, so the caller falls back to ACP or the one-shot chat.
+   */
+  private async gateway(): Promise<TuiGateway | null> {
+    if (this.d.useGateway && !this.d.useGateway()) return null
+    const target = this.d.gatewayTarget?.()
+    if (!target || this.gwOk === false || this.gwDeaths >= 2) return null
+    if (this.gw?.alive) return this.gw
+    if (this.gwStarting) return this.gwStarting
+    this.gwStarting = (async () => {
+      if (this.gwOk === null) {
+        const r = await runSafe(this.d.conn, gatewayProbeCmd(target.python), 20_000)
+        this.gwOk = r.code === 0
+        if (!this.gwOk) {
+          this.d.log?.('chat: the Hermes TUI gateway is not available, trying ACP or one-shot chat')
+          return null
+        }
+      }
+      const gw = new TuiGateway({ conn: this.d.conn, python: target.python, home: target.home, ...(this.d.log ? { log: this.d.log } : {}), ...(this.d.stopGraceMs !== undefined ? { stopGraceMs: this.d.stopGraceMs } : {}), ...(this.d.gatewayReadyMs !== undefined ? { readyTimeoutMs: this.d.gatewayReadyMs } : {}) })
+      gw.onExit = () => {
+        if (this.gw === gw) {
+          this.gw = null
+          this.gwDeaths++
+          this.d.log?.(`chat: the Hermes gateway stopped (${this.gwDeaths})`)
+        }
+      }
+      try {
+        await gw.start()
+      } catch (e) {
+        this.gwOk = false
+        gw.onExit = () => {}
+        gw.dispose()
+        this.d.log?.(`chat: the Hermes gateway did not start (${e instanceof Error ? e.message : String(e)}), trying ACP or one-shot chat`)
+        return null
+      }
+      this.gw = gw
+      return gw
+    })()
+    try {
+      return await this.gwStarting
+    } finally {
+      this.gwStarting = null
+    }
+  }
+
+  /** One message through the TUI gateway. Null when the gateway cannot take it, so the caller falls back. */
+  private async sendGateway(profile: string, message: string): Promise<ChatSendResult | null> {
+    const gw = await this.gateway()
+    if (!gw || gw.refuses(profile)) return null
+    const turn = randomUUID()
+    const emit = (e: { kind: ChatEvent['kind'] } & Record<string, unknown>): void => this.d.emit({ turn, profile, ...e } as ChatEvent)
+    let handle: GatewayTurn
+    try {
+      handle = await gw.turn(turn, profile, message, this.d.getSession(profile), emit, (id) => {
+        if (this.d.getSession(profile) !== id) {
+          this.d.setSession(profile, id)
+          emit({ kind: 'session', sessionId: id })
+        }
+      })
+    } catch (e) {
+      this.d.log?.(`chat: the gateway could not open a session for ${profile} (${e instanceof Error ? e.message : String(e)})`)
+      if (gw.refuses(profile)) return null
+      return { ok: false, error: 'failed-to-start', detail: e instanceof Error ? e.message : String(e) }
+    }
+    const act: Active = { turn, stopped: false, timer: null, interrupt: () => handle.cancel(), close: () => handle.kill(), gateway: handle }
+    this.active.set(profile, act)
+    void handle.done.then(() => {
+      if (this.active.get(profile) === act) this.active.delete(profile)
+    })
+    return { ok: true, turn }
   }
 
   private async acpReady(hermes: string): Promise<boolean> {
@@ -142,7 +231,7 @@ export class ChatService {
 
   /** Answers an approval request of a running turn (ACP). */
   approve(turn: string, approval: string, option: string | null): boolean {
-    for (const act of this.active.values()) if (act.turn === turn) return act.acp?.approve(approval, option) ?? false
+    for (const act of this.active.values()) if (act.turn === turn) return (act.gateway ?? act.acp)?.approve(approval, option) ?? false
     return false
   }
 
@@ -194,6 +283,8 @@ export class ChatService {
         if (!up.ok) return { ok: false, error: up.error === 'attachment-missing' ? 'attachment-missing' : 'upload-failed', detail: up.error }
         message = `${attachmentBlock(up.files)}${text ? `\n\n${text}` : ''}`
       }
+      const viaGateway = await this.sendGateway(profile, message)
+      if (viaGateway) return viaGateway
       if (await this.acpReady(hermes)) {
         const viaAcp = await this.sendAcp(hermes, profile, message)
         if (viaAcp) return viaAcp
@@ -334,6 +425,8 @@ export class ChatService {
       if (act.turn !== turn || act.stopped) continue
       act.stopped = true
       act.interrupt()
+      // the gateway ends a stopped turn by itself (and must stay up for the other agents)
+      if (act.gateway) continue
       act.timer = setTimeout(() => act.close(), this.d.stopGraceMs ?? 3000)
       act.timer.unref()
     }
@@ -348,6 +441,8 @@ export class ChatService {
     this.active.clear()
     this.hub?.dispose()
     this.hub = null
+    this.gw?.dispose()
+    this.gw = null
     this.starting.clear()
     this.reset()
   }

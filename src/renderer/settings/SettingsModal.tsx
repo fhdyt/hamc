@@ -81,9 +81,13 @@ function General() {
 
 function ChatSettings() {
   const on = useUi((st) => st.settings['chat.useAcp'])
+  const fast = useUi((st) => st.settings['chat.useGateway'])
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <Row label="Ask before risky actions" hint="Chats through hermes acp when the server has it. Hermes then asks you in the chat before it runs something its policy does not allow by itself, like Telegram does. Without it, such actions are refused.">
+      <Row label="Keep Hermes running between messages" hint="Talks to Hermes's own TUI gateway over this SSH connection: one process for every agent, started by your first message and ended when you disconnect. Replies start sooner and stream as they are written. No port is opened and nothing is installed. Off: every message starts Hermes again.">
+        <Switch checked={fast} label="Keep Hermes running between messages" onChange={(v) => void saveSetting('chat.useGateway', v)} />
+      </Row>
+      <Row label="Ask before risky actions" hint="When the gateway above is off or missing, chats through hermes acp if the server has it. Hermes then asks you in the chat before it runs something its policy does not allow by itself, like Telegram does. Without it, such actions are refused.">
         <Switch checked={on} label="Ask before risky actions" onChange={(v) => void saveSetting('chat.useAcp', v)} />
       </Row>
       <div style={{ color: '#8B95BD', fontSize: 11 }}>Mission Control never turns approvals off and never adds --yolo. Your answer is only for the action Hermes asks about.</div>

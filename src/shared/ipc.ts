@@ -135,7 +135,7 @@ export type QueryResult<T> = { ok: true; data: T } | { ok: false; error: QueryEr
 
 /** One thing that happens during a chat turn, as the main process sees it on the server. */
 export type ChatEvent = { turn: string; profile: string } & (
-  | { kind: 'start'; mode: 'stream-json' | 'plain' | 'acp'; note?: string }
+  | { kind: 'start'; mode: 'stream-json' | 'plain' | 'acp' | 'gateway'; note?: string }
   | { kind: 'session'; sessionId: string }
   | { kind: 'text'; text: string }
   | { kind: 'tool'; id: string; name: string; state: 'running' | 'ok' | 'error'; ms?: number }

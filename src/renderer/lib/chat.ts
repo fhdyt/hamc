@@ -22,7 +22,7 @@ export interface ApprovalCard {
 /** One turn of a chat as the main process reports it while it runs. */
 export interface Turn {
   id: string
-  mode: 'stream-json' | 'plain' | 'acp'
+  mode: 'stream-json' | 'plain' | 'acp' | 'gateway'
   note?: string
   text: string
   tools: ToolChip[]

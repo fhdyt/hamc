@@ -69,6 +69,8 @@ export interface SessionDeps {
   makeThumb?: (path: string) => string | undefined
   /** How long a stopped chat turn may take to end on its own before its channel is closed (tests make it short). */
   chatStopGraceMs?: number
+  /** How long the chat gateway may take to get ready (tests make it short). */
+  gatewayReadyMs?: number
   /** Extra collector arguments (tests shorten the memory interval). */
   collectorArgs?: string[]
   /** The save dialog of exports and backups (tests answer it themselves). */
@@ -220,6 +222,9 @@ export class MissionSession {
       },
       emit: (e) => d.send(IPC.evChat, e),
       useAcp: () => d.store.getSetting('chat.useAcp'),
+      useGateway: () => d.store.getSetting('chat.useGateway'),
+      gatewayTarget: () => (this.hermes ? { python: this.hermes.python, home: this.hermes.home } : null),
+      ...(d.gatewayReadyMs !== undefined ? { gatewayReadyMs: d.gatewayReadyMs } : {}),
       // the working folder of ACP sessions: the folder that holds ~/.hermes, normally the home of the server user
       acpCwd: () => {
         const parts = (this.hermes?.home ?? '').split('/').filter(Boolean)

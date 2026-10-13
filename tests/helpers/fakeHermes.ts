@@ -24,9 +24,13 @@ export interface FakeHermesState {
   skillCalls: string[][]
   /** Every `hermes mcp|tools|fallback|profile ...` call, as the arguments after `hermes`. */
   opsCalls: string[][]
+  /** Every launch of the TUI gateway, as the full command line (`env VAR=… python -P -m tui_gateway.entry`). */
+  gatewayLaunches: string[][]
+  /** Every JSON-RPC request the app sent to the gateway. */
+  gatewayCalls: { method: string; params: Record<string, unknown> }[]
 }
 
-export const newHermesState = (): FakeHermesState => ({ config: new Map(), env: new Map(), keyVia: [], restarts: [], stops: [], failOn: {}, sessionCalls: [], cronCalls: [], skillCalls: [], opsCalls: [] })
+export const newHermesState = (): FakeHermesState => ({ config: new Map(), env: new Map(), keyVia: [], restarts: [], stops: [], failOn: {}, sessionCalls: [], cronCalls: [], skillCalls: [], opsCalls: [], gatewayLaunches: [], gatewayCalls: [] })
 
 export interface FakeHermesOptions {
   st: FakeHermesState

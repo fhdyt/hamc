@@ -231,6 +231,16 @@ Terminal adalah shell SSH penuh di koneksi yang sama. Aplikasi tidak pernah meng
 136. **Reconnect.** Putuskan jaringan sebentar (atau `sudo systemctl restart ssh` dari sesi lain): tab menulis "Connection lost"; setelah aplikasi tersambung lagi muncul "[Reconnected.]" dan shell baru.
 137. **Snippet dan "Open in the terminal".** Tombol snippet menaruh perintah (mis. `hermes gateway status`) di prompt tanpa Enter. Tambah dan hapus snippet; daftar tersimpan di `app.db`. Di Settings → Agents → MCP/Fallback, **Open in the terminal** menutup Settings dan mengisi perintahnya saja. `app.log` hanya memuat `terminal opened|closed`, tanpa ketikan.
 
+## Tambahan Chat lewat TUI gateway
+
+Chat sekarang memakai gateway TUI milik Hermes (`python -m tui_gateway.entry`) lewat satu channel SSH, tanpa port. Bandingkan dengan pengukuran 13 Okt 2026 (jalur lama 12,2-13,0 s untuk "Balas hanya: OK").
+
+138. **Mulai.** Setelah connect, `ps aux | grep tui_gateway` di VPS kosong. Kirim "Balas hanya: OK": proses `python -P -m tui_gateway.entry` muncul (satu saja). Catat waktu dari Send sampai balasan untuk pesan pertama dan untuk tiga pesan berikutnya (yang berikutnya seharusnya jauh lebih cepat). `app.log` memuat `gateway: ready` dan `gateway: turn ended (...) status=complete`.
+139. **Beberapa agent.** Kirim pesan ke dua agent lain: tetap satu proses gateway. Di `state.db` masing-masing profil, sesi baru punya `source = 'mission-control'`. Bila agent menjawab sebagai agent lain, catat isi `app.log` (aplikasi menolak profil yang dibuka Hermes dengan nama lain).
+140. **Approval dan Stop.** Minta agent menjalankan perintah berisiko: kartu approval muncul dengan Allow once / Allow for this session / Always allow / Deny; Cancel berarti Deny. Selama turn panjang, Stop menghentikannya (tanpa menutup gateway) dan pesan berikutnya tetap cepat.
+141. **Resume.** Disconnect lalu connect lagi, kirim pesan: percakapan lanjut di sesi yang sama (gateway baru, `session.resume`). New chat memulai sesi baru.
+142. **Zero-Change dan fallback.** Tidak ada port baru (`ss -ltnp`), tidak ada berkas baru selain catatan Hermes sendiri (`logs/tui_gateway_crash.log`, `desktop/interrupted_turns.json`, baris `gateway_heartbeats` yang hilang saat keluar). Setelah disconnect proses gateway hilang dalam beberapa detik. Matikan **Keep Hermes running between messages** di Settings → Chat: pesan kembali lewat ACP atau one-shot.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.
