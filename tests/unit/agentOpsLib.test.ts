@@ -20,6 +20,11 @@ describe('agentOps parsers', () => {
   })
 
   it('reads toolset rows with their keys', () => {
+    // a mark garbled by a console encoding (UTF-8 ✓ read as cp1252) still parses by the word
+    expect(parseToolsList('  \u00e2\u0153\u201c enabled  web  Web search\r\n  ? disabled  browser  Browser\r')).toEqual([
+      { key: 'web', label: 'Web search', enabled: true },
+      { key: 'browser', label: 'Browser', enabled: false }
+    ])
     expect(parseToolsList('Built-in toolsets (cli):\n  ✓ enabled  web  Web search\n  ✗ disabled  browser  Browser\n\nPlugin toolsets (cli):\n  ✓ enabled  my_plugin  Mine')).toEqual([
       { key: 'web', label: 'Web search', enabled: true },
       { key: 'browser', label: 'Browser', enabled: false },

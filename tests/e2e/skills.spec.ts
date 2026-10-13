@@ -74,7 +74,7 @@ test('Pin asks first; Archive moves the skill to the archive and Restore brings 
   expect(srv.hermes.skillCalls).toEqual([])
   await detail().getByRole('button', { name: 'Pin' }).click()
   await detail().getByRole('button', { name: 'Pin skill' }).click()
-  await expect(detail().getByRole('status')).toContainText("Pinned 'arxiv-digest'.", { timeout: 15_000 })
+  await expect(detail().getByRole('status').filter({ hasText: 'Pinned' })).toContainText("Pinned 'arxiv-digest'.", { timeout: 15_000 })
   await expect(detail().getByRole('button', { name: 'Unpin' })).toBeVisible()
 
   await detail().getByRole('button', { name: 'Archive' }).click()

@@ -18,6 +18,11 @@ DEFAULTS = {"cli": ["web", "terminal", "memory"], "telegram": ["web", "memory"],
 PLATFORMS = {"cli", "telegram", "discord", "slack", "whatsapp", "signal", "email", "matrix", "webhook", "api_server", "cron", "lightclawbot"}
 
 
+# like Hermes on a Linux server: UTF-8 whatever the console of the machine running the tests uses
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", newline="\n")
+
+
 def out(s=""):
     sys.stdout.write(s + "\n")
 

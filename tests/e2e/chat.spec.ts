@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
 import { buildFixture, type FixtureDirs } from '../helpers/fixture'
-import { connectFresh, launchApp, tmp } from './helpers'
+import { connectFresh, launchApp, resizeWindow, tmp } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -89,6 +89,8 @@ test('Clear chat starts empty and History brings an earlier conversation back', 
 })
 
 test('the Chat screen has an Activity panel with only this agent, and it follows the agent you pick', async () => {
+  // the panel shows from 1100 px; CI screens can be smaller than the default window
+  await resizeWindow(app, 1280, 800)
   const panel = page.getByRole('complementary', { name: 'Activity of Scout' })
   await expect(panel).toBeVisible()
   const rows = panel.getByRole('list', { name: 'Latest activity' }).getByRole('listitem')

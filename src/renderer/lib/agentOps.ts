@@ -45,8 +45,9 @@ export interface ToolRow {
 export function parseToolsList(text: string): ToolRow[] {
   const out: ToolRow[] = []
   for (const line of text.split('\n')) {
-    const m = /^\s*(✓\s*enabled|✗\s*disabled)\s+([a-z0-9][a-z0-9_-]*)\s*(.*)$/.exec(line)
-    if (m) out.push({ key: m[2]!, label: m[3]!.trim() || m[2]!, enabled: m[1]!.includes('enabled') })
+    // the mark before the word may be ✓/✗, another glyph, or garbled by a terminal encoding: the word decides
+    const m = /^\s*(?:\S{1,3}\s+)?(enabled|disabled)\s+([a-z0-9][a-z0-9_-]*)\s*(.*?)\s*$/.exec(line)
+    if (m) out.push({ key: m[2]!, label: m[3]!.trim() || m[2]!, enabled: m[1] === 'enabled' })
   }
   return out
 }
