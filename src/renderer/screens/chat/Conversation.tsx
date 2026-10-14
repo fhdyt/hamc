@@ -133,6 +133,7 @@ function Reply({ c, name }: { c: Extract<Conv, { kind: 'reply' }>; name: string 
           {full.message}
         </span>
       )}
+      {c.stats && <div className="cv-meta">{c.stats}</div>}
     </div>
   )
 }

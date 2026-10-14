@@ -156,6 +156,13 @@ describe('buildConversation', () => {
     expect(buildConversation(quick, null, stopped).map((c) => c.kind)).toEqual(['user', 'reply', 'user', 'stream'])
   })
 
+  it('keeps the run stats on the saved reply that replaces the streamed one', () => {
+    const done: Turn = { ...newTurn('t', 'stream-json', (T0 + 5) * 1000), ended: true, text: 'All done', result: { exitCode: 0, durationMs: 1500, inputTokens: 120, outputTokens: 45 } }
+    const conv = buildConversation([item(1, 'reply', 'old'), item(7, 'reply', 'All done')], null, done)
+    expect(conv.map((c) => (c.kind === 'reply' ? c.stats ?? null : c.kind))).toEqual([null, '1.5s · 120 in · 45 out'])
+    expect(buildConversation([item(7, 'reply', 'All done')], null, { ...done, result: { exitCode: 0 } })[0]).not.toHaveProperty('stats')
+  })
+
   it('keeps an empty ended turn out of the way unless something happened', () => {
     const quiet: Turn = { ...newTurn('t', 'stream-json', T0 * 1000), ended: true }
     expect(buildConversation([], null, quiet)).toEqual([])

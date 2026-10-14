@@ -52,7 +52,7 @@ export type Conv =
   | { kind: 'user'; id: string; ts: number; text: string; attachments: AttachmentRef[]; pending?: boolean; thumbs?: { name: string; thumb?: string }[] }
   | { kind: 'thinking'; id: string; ts: number; text: string; truncated: boolean }
   | { kind: 'tool'; id: string; ts: number; name: string; call: string; result?: string; resultTruncated?: boolean }
-  | { kind: 'reply'; id: string; ts: number; text: string; truncated: boolean; messageId: number; profile: string }
+  | { kind: 'reply'; id: string; ts: number; text: string; truncated: boolean; messageId: number; profile: string; stats?: string }
   | { kind: 'stream'; id: string; ts: number; turn: Turn; showChips: boolean }
 
 export const newTurn = (id: string, mode: Turn['mode'], at: number, note?: string): Turn => ({ id, mode, ...(note ? { note } : {}), text: '', tools: [], approvals: [], ended: false, stopped: false, startedAt: at })
@@ -155,11 +155,24 @@ export function buildConversation(items: readonly FeedItem[], pending: PendingUs
     const savedReply = turn.ended && mine.some((c) => c.kind === 'reply' && c.ts >= startedS - 2)
     const dbTools = mine.some((c) => c.kind === 'tool' && c.ts >= startedS - 2)
     const hasContent = turn.text !== '' || turn.tools.length > 0 || !turn.ended || turn.error !== undefined || turn.notice !== undefined || turn.stopped || turn.approvals.length > 0
+    // the saved reply takes over the run stats of the streamed one (Hermes saves the reply before it reports them)
+    if (savedReply && !turn.stopped) {
+      const stats = turnStats(turn)
+      const last = [...mine].reverse().find((c) => c.kind === 'reply' && c.ts >= startedS - 2)
+      if (stats && last?.kind === 'reply') last.stats = stats
+    }
     if (!savedReply && hasContent) out.push({ kind: 'stream', id: 'stream', ts: turn.startedAt / 1000, turn, showChips: !dbTools })
     // the saved reply replaces the streamed one, but what was asked and answered stays visible
     else if (savedReply && turn.approvals.length > 0) out.push({ kind: 'stream', id: 'stream', ts: turn.startedAt / 1000, turn: { ...turn, text: '', tools: [], result: undefined } as Turn, showChips: false })
   }
   return out
+}
+
+/** "1.5s · 120 in · 45 out", or null when the turn reported none. */
+export function turnStats(turn: Pick<Turn, 'result'>): string | null {
+  const r = turn.result
+  const parts = [r?.durationMs !== undefined ? formatDuration(r.durationMs) : null, r?.inputTokens !== undefined ? `${r.inputTokens} in` : null, r?.outputTokens !== undefined ? `${r.outputTokens} out` : null].filter(Boolean)
+  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 /** "web_search ✓ 1.2s" */
