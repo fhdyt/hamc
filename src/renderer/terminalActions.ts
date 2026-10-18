@@ -161,7 +161,9 @@ async function startShell(key: string, again: boolean): Promise<void> {
   st().patchTab(key, { state: 'starting', message: null })
   v.started = false
   v.tail = ''
-  const r = await window.mc.terminal.open({ cols: Math.max(2, v.term.cols), rows: Math.max(1, v.term.rows), kind: tab.kind })
+  // after a reconnect a built-in shell stays built-in, even if Settings now says the system ssh (no password prompt out of the blue)
+  const keep = again && tab.via === 'builtin' ? { via: 'builtin' as const } : {}
+  const r = await window.mc.terminal.open({ cols: Math.max(2, v.term.cols), rows: Math.max(1, v.term.rows), kind: tab.kind, ...keep })
   if (!views.has(key)) {
     if (r.ok) void window.mc.terminal.close(r.id)
     return
@@ -191,6 +193,13 @@ export function newTab(kind: TermKind = useUi.getState().settings['terminal.newS
   views.set(key, makeView(key))
   s.set({ tabs: [...s.tabs, { key, shellId: null, n: nextTabNumber(s.tabs), state: 'starting', message: null, kind, via: null, label: null }], active: key })
   if (!terminalOpen()) void saveSetting('terminal.open', true)
+  // the new shell takes the keys at once, as in the VS Code terminal (not the + button that opened it)
+  else
+    requestAnimationFrame(() => {
+      if (st().active !== key || document.querySelector('[aria-modal="true"]')) return
+      fitView(key)
+      views.get(key)?.term.focus()
+    })
   return key
 }
 

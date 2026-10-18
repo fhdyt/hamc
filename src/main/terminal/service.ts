@@ -74,7 +74,7 @@ export class TerminalService {
     const size = { cols: req.cols, rows: req.rows }
     if (req.kind === 'local') return this.openLocal(size)
     const l = this.d.local
-    const ssh = l && (this.d.serverVia?.() ?? 'system') === 'system' && !l.problem() ? findSsh(l.platform, l.env, l.exists) : null
+    const ssh = l && (req.via ?? this.d.serverVia?.() ?? 'system') === 'system' && !l.problem() ? findSsh(l.platform, l.env, l.exists) : null
     const target = this.d.conn.sshTarget()
     if (ssh && target) return this.openSystemSsh(size, ssh, target)
     return this.openBuiltin(size)

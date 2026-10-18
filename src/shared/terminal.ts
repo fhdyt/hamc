@@ -28,6 +28,8 @@ export type TermServerVia = 'system' | 'builtin'
 
 export interface TermOpenRequest extends TermSize {
   kind: TermKind
+  /** A server tab that starts again after a reconnect keeps the way it reached the server; otherwise Settings decides. */
+  via?: TermServerVia
 }
 
 /** `via` says what actually runs; `label` names it on the tab (`pwsh`, `zsh`, `ssh`…). */

@@ -141,6 +141,10 @@ describe('TerminalService with local terminals', () => {
       expect(await b.svc.open({ cols: 80, rows: 24, kind: 'server' })).toEqual({ ok: false, error: 'not-connected' })
       expect(b.spawned).toEqual([])
     }
+    // a built-in tab that starts again after a reconnect asks for the built-in shell, whatever Settings says now
+    const c = service({ target: true })
+    expect(await c.svc.open({ cols: 80, rows: 24, kind: 'server', via: 'builtin' })).toEqual({ ok: false, error: 'not-connected' })
+    expect(c.spawned).toEqual([])
   })
 
   it('kills every local terminal when the app quits', async () => {
