@@ -28,10 +28,20 @@ Linux needs a display and an unlocked keyring for Electron `safeStorage`. In a t
 
 ```bash
 sudo chown root dist/linux-unpacked/chrome-sandbox && sudo chmod 4755 dist/linux-unpacked/chrome-sandbox
-dbus-run-session -- bash -c 'echo -n ci | gnome-keyring-daemon --unlock --components=secrets >/dev/null; XDG_CURRENT_DESKTOP=GNOME xvfb-run -a npm run test:e2e:packaged'
+dbus-run-session -- bash -c 'echo -n ci | gnome-keyring-daemon --unlock --components=secrets >/dev/null; xvfb-run -a npm run test:e2e:packaged'
 ```
 
-The keyring password must not be empty (gnome-keyring then leaves the login keyring locked and libsecret asks a prompter that cannot show), and `XDG_CURRENT_DESKTOP` must name a desktop Chromium knows, or `safeStorage` falls back to `basic_text`, which the app refuses: the password is not saved and the relaunch tests see the Connect form.
+The keyring password must not be empty: gnome-keyring then leaves the login keyring locked and libsecret asks a prompter that cannot show, so the password is not saved and the relaunch tests see the Connect form.
+
+### Linux keyring choice
+
+On Linux Chromium picks the `safeStorage` backend from the desktop: libsecret for GNOME, Unity, Cinnamon, Deepin, Pantheon, XFCE, UKUI and COSMIC, KWallet for KDE, and `basic_text` for every other desktop (i3, sway, Hyprland, LXQt, a bare X session, an unset `XDG_CURRENT_DESKTOP`), even when a Secret Service such as GNOME Keyring or KeePassXC is on the session bus. The app refuses `basic_text`, so on those desktops it adds `--password-store=gnome-libsecret` itself before it starts (`src/main/store/passwordStore.ts`), but only when:
+
+- the user did not pass `--password-store` (their choice always wins: `--password-store=basic` turns password saving off, `kwallet6` forces KWallet);
+- the desktop is not one Chromium already maps to libsecret or KWallet (anything that looks like KDE or Plasma is left alone, so a KWallet user never loses a saved password);
+- something owns `org.freedesktop.secrets` on the session bus right now, asked with `NameHasOwner` through `dbus-send`, else `gdbus`, else `busctl --user` (about 10 ms, 1 s timeout).
+
+The last check matters. Measured with Electron 44 in WSL on 2026-10-18: with no Secret Service at all libsecret fails at once (`isEncryptionAvailable()` false, the app shows its reason), but when gnome-keyring is installed and only D-Bus activatable, the first `safeStorage` call starts it, its keyring prompt appears and the main process waits 6 to 7 s. The app logs `password-store gnome-libsecret: ...` in `app.log` when it adds the switch. The CI Linux step runs without `XDG_CURRENT_DESKTOP`, so it covers this path.
 
 ## Continuous integration and releases
 
@@ -53,7 +63,7 @@ Check the draft release, test an installer by hand with `docs/manual-vps-checkli
 
 - **Windows**: SmartScreen says "Windows protected your PC". Choose **More info**, then **Run anyway**. The installer is per user and needs no administrator.
 - **macOS**: Gatekeeper refuses an app from an unidentified developer. Drag the app to Applications, then **right-click > Open**, or run `xattr -cr "/Applications/Hermes Agent Mission Control.app"` once.
-- **Linux**: `chmod +x hermes-mission-control-*.AppImage && ./hermes-mission-control-*.AppImage`, or `sudo apt install ./hermes-mission-control-*.deb`. Without a Secret Service keyring (GNOME Keyring or KWallet) the app cannot remember the SSH password safely and turns "remember password" off; it explains this on the Connect screen.
+- **Linux**: `chmod +x hermes-mission-control-*.AppImage && ./hermes-mission-control-*.AppImage`, or `sudo apt install ./hermes-mission-control-*.deb`. Without a Secret Service keyring (GNOME Keyring, KeePassXC or KWallet) the app cannot remember the SSH password safely and turns "remember password" off; it explains this on the Connect screen. On a desktop Chromium does not know (i3, sway, Hyprland ...) the keyring must already be running when the app starts (see [Linux keyring choice](#linux-keyring-choice)).
 
 ## Turning signing on
 

@@ -15,6 +15,7 @@ import { UpdateService } from './update/service'
 import { createLogger } from './log'
 import { WEB_PREFERENCES, hardenWebContents, type AppTarget } from './security'
 import { MissionSession } from './session'
+import { passwordStoreSwitch, secretServiceRunning } from './store/passwordStore'
 import { SecretStore } from './store/secretStore'
 import { SettingsStore } from './store/settingsStore'
 import { ptyProblem, spawnPty } from './terminal/pty'
@@ -158,6 +159,15 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', () => focusWindow())
 
+  // Must be set before ready, when Chromium picks the safeStorage backend.
+  const passwordStore = passwordStoreSwitch({
+    platform: process.platform,
+    env: process.env,
+    hasSwitch: app.commandLine.hasSwitch('password-store'),
+    secretServiceRunning
+  })
+  if (passwordStore) app.commandLine.appendSwitch('password-store', passwordStore)
+
   void app.whenReady().then(() => {
     try {
       start()
@@ -170,6 +180,7 @@ if (!app.requestSingleInstanceLock()) {
   function start(): void {
     const userData = app.getPath('userData')
     const log = createLogger(userData)
+    if (passwordStore) log(`password-store ${passwordStore}: desktop unknown to Chromium, Secret Service running`)
     const store = new SettingsStore(join(userData, 'app.db'))
     const secrets = new SecretStore(safeStorage)
     const manager = new ConnectionManager({ getKnownHost: (h, p) => store.getKnownHost(h, p) })

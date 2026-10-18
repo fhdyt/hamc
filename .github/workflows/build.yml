@@ -104,14 +104,15 @@ jobs:
         run: npm run test:e2e:packaged
 
       # safeStorage needs an unlocked default keyring: gnome-keyring creates and unlocks "login" only for a non-empty
-      # password (with an empty one libsecret asks a prompter, which fails here), and without a known desktop Chromium
-      # picks basic_text, which the app refuses, so the password is never saved and the relaunch tests see the form.
+      # password (with an empty one libsecret asks a prompter, which fails here). XDG_CURRENT_DESKTOP stays unset on
+      # purpose: Chromium would pick basic_text, so this checks that the app switches to libsecret by itself when a
+      # Secret Service is running (src/main/store/passwordStore.ts); otherwise the relaunch tests see the Connect form.
       - name: Packaged app e2e (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo chown root dist/linux-unpacked/chrome-sandbox
           sudo chmod 4755 dist/linux-unpacked/chrome-sandbox
-          dbus-run-session -- bash -c 'echo -n ci | gnome-keyring-daemon --unlock --components=secrets >/dev/null; XDG_CURRENT_DESKTOP=GNOME xvfb-run -a npm run test:e2e:packaged'
+          dbus-run-session -- bash -c 'echo -n ci | gnome-keyring-daemon --unlock --components=secrets >/dev/null; xvfb-run -a npm run test:e2e:packaged'
 
       - name: Keep Playwright results of a failed run
         if: failure()
