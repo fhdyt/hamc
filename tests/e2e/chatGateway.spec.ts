@@ -47,6 +47,10 @@ test('chat goes through one Hermes gateway for every message and agent', async (
 })
 
 test('a reply plays the reply sound, and Off keeps it quiet', async () => {
+  // the last turn of the test before must have ended, and its sound be more than 0.4 s old: replies that finish
+  // within 0.4 s ring once, and the fake gateway answers in well under that
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeVisible({ timeout: 20_000 })
+  await page.waitForTimeout(500)
   // count the oscillators the reply sound starts (WebAudio has no other trace in the page)
   await page.evaluate(() => {
     const w = window as unknown as { __tones: number }
