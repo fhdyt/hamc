@@ -58,4 +58,14 @@ describe('isTrustedSender', () => {
     expect(isTrustedSender('https://example.com', prod)).toBe(false)
     expect(isTrustedSender(undefined, prod)).toBe(false)
   })
+
+  it('accepts the page of an app installed under an 8.3 short folder name', () => {
+    // Node's pathToFileURL writes `~` as %7E, Chromium keeps `~` (C:\Users\RUNNER~1\… on the CI runner)
+    const short = { indexFileUrl: 'file:///C:/Users/RUNNER%7E1/AppData/Local/app/resources/app.asar/out/renderer/index.html' }
+    expect(isTrustedSender('file:///C:/Users/RUNNER~1/AppData/Local/app/resources/app.asar/out/renderer/index.html', short)).toBe(true)
+    expect(isTrustedSender('file:///C:/Users/RUNNER%7e1/AppData/Local/app/resources/app.asar/out/renderer/index.html', short)).toBe(true)
+    expect(isTrustedSender('file:///C:/Users/RUNNER~2/AppData/Local/app/resources/app.asar/out/renderer/index.html', short)).toBe(false)
+    // only escapes of unreserved characters are equal to the character: an escaped slash is still not a slash
+    expect(isTrustedSender('file:///C:/app/out%2Frenderer/index.html', prod)).toBe(false)
+  })
 })

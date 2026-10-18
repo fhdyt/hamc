@@ -14,6 +14,18 @@ export interface AppTarget {
   indexFileUrl?: string
 }
 
+/**
+ * A URL path in the form RFC 3986 calls equivalent: an escape of an unreserved character becomes the character, other
+ * escapes get upper-case hex. Node's pathToFileURL writes `~` as %7E while Chromium keeps `~`, so without this an app
+ * installed under an 8.3 folder name (C:\Users\RUNNER~1\…) would reject its own page.
+ */
+function canonicalPath(p: string): string {
+  return p.replace(/%([0-9A-Fa-f]{2})/g, (_, hex: string) => {
+    const c = String.fromCharCode(parseInt(hex, 16))
+    return /[A-Za-z0-9._~-]/.test(c) ? c : `%${hex.toUpperCase()}`
+  })
+}
+
 export function isAllowedNavigation(url: string, target: AppTarget): boolean {
   let u: URL
   try {
@@ -24,7 +36,7 @@ export function isAllowedNavigation(url: string, target: AppTarget): boolean {
   if (target.devUrl) return u.origin === new URL(target.devUrl).origin
   if (target.indexFileUrl) {
     const index = new URL(target.indexFileUrl)
-    return u.protocol === 'file:' && u.pathname === index.pathname
+    return u.protocol === 'file:' && canonicalPath(u.pathname) === canonicalPath(index.pathname)
   }
   return false
 }
