@@ -24,19 +24,21 @@ npm run test:e2e:packaged     # app, dashboard, agent graph and cron suites agai
 
 On Windows, `powershell -File scripts/smoke-installer-win.ps1` also installs the NSIS installer silently into a temporary folder, runs the first-run suite against the installed app and uninstalls it again. Set `MC_PACKAGED_EXE` to point `test:e2e:packaged` at any app on disk.
 
-Linux needs a display and a keyring for Electron `safeStorage`. In a terminal without them:
+Linux needs a display and an unlocked keyring for Electron `safeStorage`. In a terminal without them:
 
 ```bash
 sudo chown root dist/linux-unpacked/chrome-sandbox && sudo chmod 4755 dist/linux-unpacked/chrome-sandbox
-dbus-run-session -- bash -c 'echo -n "" | gnome-keyring-daemon --unlock --components=secrets >/dev/null; xvfb-run -a npm run test:e2e:packaged'
+dbus-run-session -- bash -c 'echo -n ci | gnome-keyring-daemon --unlock --components=secrets >/dev/null; XDG_CURRENT_DESKTOP=GNOME xvfb-run -a npm run test:e2e:packaged'
 ```
+
+The keyring password must not be empty (gnome-keyring then leaves the login keyring locked and libsecret asks a prompter that cannot show), and `XDG_CURRENT_DESKTOP` must name a desktop Chromium knows, or `safeStorage` falls back to `basic_text`, which the app refuses: the password is not saved and the relaunch tests see the Connect form.
 
 ## Continuous integration and releases
 
 `.github/workflows/build.yml` runs on every push to `master` and every pull request:
 
 1. **checks**: typecheck, Vitest, pytest.
-2. **package** (Windows, macOS, Linux): builds the installer and uploads it as an artifact. Windows also runs the whole Playwright suite, the packaged-app suite and the installer smoke test; macOS and Linux run the packaged-app suite with `continue-on-error` until a first run shows that keychain access works on those runners.
+2. **package** (Windows, macOS, Linux): builds the installer and uploads it as an artifact. Windows also runs the whole Playwright suite, the packaged-app suite and the installer smoke test; Linux runs the packaged-app suite as a required step; macOS runs it with `continue-on-error`.
 3. **release** (only for a tag `v*`): attaches every installer to a **draft** GitHub release.
 
 To release: change `version` in `package.json`, commit, then

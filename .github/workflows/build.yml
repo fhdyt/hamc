@@ -81,8 +81,8 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb libsecret-1-0 gnome-keyring dbus-x11
 
-      # The whole suite against out/ on Windows, where the keychain (DPAPI) works on a runner. The other systems run it
-      # against the packaged app below and may fail on keychain access until that has been seen working.
+      # The whole suite against out/ on Windows, where the keychain (DPAPI) works on a runner. The other systems run the
+      # packaged-app suite below (macOS still with continue-on-error).
       - name: End-to-end tests (Windows)
         if: runner.os == 'Windows'
         run: npm run test:e2e
@@ -103,13 +103,15 @@ jobs:
         continue-on-error: true
         run: npm run test:e2e:packaged
 
+      # safeStorage needs an unlocked default keyring: gnome-keyring creates and unlocks "login" only for a non-empty
+      # password (with an empty one libsecret asks a prompter, which fails here), and without a known desktop Chromium
+      # picks basic_text, which the app refuses, so the password is never saved and the relaunch tests see the form.
       - name: Packaged app e2e (Linux)
         if: runner.os == 'Linux'
-        continue-on-error: true
         run: |
           sudo chown root dist/linux-unpacked/chrome-sandbox
           sudo chmod 4755 dist/linux-unpacked/chrome-sandbox
-          dbus-run-session -- bash -c 'echo -n "" | gnome-keyring-daemon --unlock --components=secrets >/dev/null; xvfb-run -a npm run test:e2e:packaged'
+          dbus-run-session -- bash -c 'echo -n ci | gnome-keyring-daemon --unlock --components=secrets >/dev/null; XDG_CURRENT_DESKTOP=GNOME xvfb-run -a npm run test:e2e:packaged'
 
       - name: Keep Playwright results of a failed run
         if: failure()
