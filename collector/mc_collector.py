@@ -3445,8 +3445,8 @@ def _ledger_files(items, sk):
         p, sha = it.get("path"), it.get("sha256")
         if not isinstance(p, str):
             continue
-        base = next((b for b in (sk, os.path.realpath(sk)) if p.startswith(b + "/")), None)
-        rel = p[len(base) + 1:] if base else p.rsplit("/", 1)[-1]
+        base = next((b for b in (sk, os.path.realpath(sk)) if p.startswith(b + "/") or p.startswith(b + os.sep)), None)
+        rel = p[len(base) + 1:].replace(os.sep, "/") if base else os.path.basename(p)
         out.append((rel[:200], sha if isinstance(sha, str) and SHA_RE.match(sha) else None))
     return out
 
