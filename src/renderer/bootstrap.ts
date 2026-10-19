@@ -19,6 +19,7 @@ import { playReplySound } from './soundActions'
 import { useNotices } from './stores/notices'
 import { useUpdate } from './stores/update'
 import { sortAgents } from './lib/roster'
+import { loadGroups, onGroupEvent } from './groupsActions'
 
 export async function bootstrap(): Promise<void> {
   const mc = window.mc
@@ -51,6 +52,7 @@ export async function bootstrap(): Promise<void> {
       .sort()
     useAgents.getState().setBusy(busy)
   })
+  mc.onGroup((ev) => onGroupEvent(ev))
   mc.onUpload((p) => useChat.getState().applyUpload(p))
   mc.onStatus((status) => {
     const was = useConn.getState().status.state
@@ -58,6 +60,7 @@ export async function bootstrap(): Promise<void> {
     if (status.state === 'connected' && was !== 'connected') {
       void refreshVault()
       void loadLooks()
+      void loadGroups()
     }
   })
   mc.onStartup((startup) => useConn.setState({ startup }))

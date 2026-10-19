@@ -6,14 +6,21 @@ export interface ViewState {
   chatCurrent: string | null
   /** The agent selected on the Dashboard (its chat room is in the agents panel). */
   agentSelected: string | null
+  /** The group chat room open in the Chat screen (it replaces the agent's chat there). */
+  roomCurrent?: string | null
   visible: boolean
   focused: boolean
 }
 
-/** Whether this agent's chat room is on screen right now, in a window the user can see. */
-export function isViewing(s: ViewState, profile: string): boolean {
+/** The unread key of a group chat room (unread counts keep agents and rooms together, so the Chat badge sums both). */
+export const roomKey = (id: string): string => `room:${id}`
+
+/** Whether this agent's chat (or, for a `room:` key, this room) is on screen right now, in a window the user can see. */
+export function isViewing(s: ViewState, key: string): boolean {
   if (!s.visible || !s.focused) return false
-  return (s.route === 'chat' && s.chatCurrent === profile) || (s.route === 'dashboard' && s.agentSelected === profile)
+  const room = s.roomCurrent ?? null
+  if (key.startsWith('room:')) return s.route === 'chat' && room === key.slice(5)
+  return (s.route === 'chat' && room === null && s.chatCurrent === key) || (s.route === 'dashboard' && s.agentSelected === key)
 }
 
 /** A reply is worth a badge only when the turn ended cleanly and the user did not stop it. */

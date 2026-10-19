@@ -24,6 +24,7 @@ import { useSkills } from './stores/skills'
 import { useMemoryTimeline } from './stores/memoryTimeline'
 import { useAgentOps } from './stores/agentOps'
 import { useUi } from './stores/ui'
+import { useGroups } from './stores/groups'
 
 export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
   // secrets stay out of the store; a retry after a host key prompt gets them from the main process
@@ -35,6 +36,7 @@ export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
     useFeed.getState().reset()
     useInteractions.getState().reset()
     useChat.getState().reset()
+    useGroups.getState().reset()
     useSessions.getState().reset()
     useUsage.getState().reset()
     usePalette.getState().reset()
@@ -86,6 +88,7 @@ export async function forgetConnection(): Promise<void> {
   useCostAlert.getState().reset()
   useBrain.getState().reset()
   useChat.getState().reset()
+  useGroups.getState().reset()
   useConn.setState({
     saved: null, status: IDLE_STATUS, startup: null, preflight: null, capabilities: null, hostKey: null, connectError: null, lastRequest: null
   })

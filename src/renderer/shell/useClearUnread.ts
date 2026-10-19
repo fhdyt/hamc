@@ -2,14 +2,16 @@ import { useEffect } from 'react'
 import { isViewing } from '../lib/unread'
 import { useAgents } from '../stores/agents'
 import { useChat } from '../stores/chat'
+import { useGroups } from '../stores/groups'
 import { useUi } from '../stores/ui'
 import { useUnread } from '../stores/unread'
 
-/** Clears the unread count of whichever agent's chat room is on screen in a visible, focused window. */
+/** Clears the unread count of whichever agent chat or group room is on screen in a visible, focused window. */
 export function useClearUnread(): void {
   const route = useUi((s) => s.route)
   const current = useChat((s) => s.current)
   const selected = useAgents((s) => s.selected)
+  const room = useGroups((s) => s.current)
 
   useEffect(() => {
     const clearViewed = (): void => {
@@ -19,6 +21,7 @@ export function useClearUnread(): void {
         route: ui.route,
         chatCurrent: useChat.getState().current,
         agentSelected: useAgents.getState().selected,
+        roomCurrent: useGroups.getState().current,
         visible: document.visibilityState === 'visible',
         focused: document.hasFocus()
       }
@@ -31,5 +34,5 @@ export function useClearUnread(): void {
       window.removeEventListener('focus', clearViewed)
       document.removeEventListener('visibilitychange', clearViewed)
     }
-  }, [route, current, selected])
+  }, [route, current, selected, room])
 }

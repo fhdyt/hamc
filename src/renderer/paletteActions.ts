@@ -8,6 +8,7 @@ import { useAgents } from './stores/agents'
 import { useBrain } from './stores/brain'
 import { useChat } from './stores/chat'
 import { useCron } from './stores/cron'
+import { useGroups } from './stores/groups'
 import { usePalette } from './stores/palette'
 import { useUi } from './stores/ui'
 import { useUnread } from './stores/unread'
@@ -91,7 +92,7 @@ export function countIfAway(profile: string): boolean {
   const ui = useUi.getState()
   const visible = typeof document === 'undefined' ? true : document.visibilityState === 'visible'
   const focused = typeof document === 'undefined' ? true : document.hasFocus()
-  const viewing = isViewing({ route: ui.route, chatCurrent: useChat.getState().current, agentSelected: useAgents.getState().selected, visible, focused }, profile)
+  const viewing = isViewing({ route: ui.route, chatCurrent: useChat.getState().current, agentSelected: useAgents.getState().selected, roomCurrent: useGroups.getState().current, visible, focused }, profile)
   if (!viewing) useUnread.getState().add(profile)
   return !viewing
 }
