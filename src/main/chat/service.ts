@@ -187,6 +187,35 @@ export class ChatService {
     return { ok: true, turn }
   }
 
+  /** Whether rooms can run: they need the TUI gateway, with no ACP or one-shot fallback. */
+  groupsAvailable(): { ok: boolean; reason?: string } {
+    if (this.d.useGateway && !this.d.useGateway()) return { ok: false, reason: 'Rooms need the Hermes TUI gateway, which is turned off in Settings → Chat.' }
+    if (this.gwOk === false) return { ok: false, reason: 'Rooms need the Hermes TUI gateway, which this server does not have or could not start.' }
+    if (this.gwDeaths >= 2) return { ok: false, reason: 'The Hermes TUI gateway stopped twice on this connection. Connect again to try once more.' }
+    return { ok: true }
+  }
+
+  /**
+   * One member turn of a room, in the member's own room session (slot `<profile>#<room>`, created hidden with the
+   * room's title). Uses the gateway of the 1:1 chat; there is no fallback.
+   */
+  async groupTurn(req: { profile: string; slot: string; turn: string; message: string; saved: string | null; create: Record<string, unknown>; emit: (e: ChatEvent) => void; onSession: (id: string) => void }): Promise<{ ok: true; handle: GatewayTurn } | { ok: false; error: 'no-gateway' | 'failed-to-start'; detail?: string }> {
+    if (!PROFILE.test(req.profile)) return { ok: false, error: 'failed-to-start', detail: 'Not a valid agent name.' }
+    const gw = await this.gateway()
+    if (!gw) return { ok: false, error: 'no-gateway', ...(this.groupsAvailable().reason ? { detail: this.groupsAvailable().reason } : {}) }
+    if (gw.refuses(req.profile)) return { ok: false, error: 'failed-to-start', detail: `Hermes could not open the profile ${req.profile}.` }
+    const emit = (e: { kind: ChatEvent['kind'] } & Record<string, unknown>): void => req.emit({ turn: req.turn, profile: req.profile, ...e } as ChatEvent)
+    try {
+      const handle = await gw.turn(req.turn, req.profile, req.message, req.saved, emit, (id) => {
+        if (id !== req.saved) req.onSession(id)
+      }, { slot: req.slot, create: req.create })
+      return { ok: true, handle }
+    } catch (e) {
+      this.d.log?.(`chat: the gateway could not open a room session for ${req.profile} (${e instanceof Error ? e.message : String(e)})`)
+      return { ok: false, error: 'failed-to-start', detail: (e instanceof Error ? e.message : String(e)).slice(0, 300) }
+    }
+  }
+
   private async acpReady(hermes: string): Promise<boolean> {
     if (!this.d.useAcp?.()) return false
     if (this.acpOk === null) {

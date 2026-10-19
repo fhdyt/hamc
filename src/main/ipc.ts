@@ -19,8 +19,10 @@ import type { UpdateService } from './update/service'
 import { normalizePhoto } from './looks'
 import { LOOK_NAME_MAX, PHOTO_MAX_CHARS, cleanLookName } from '@shared/looks'
 import { NOTICE_BODY_MAX, NOTICE_TITLE_MAX } from '@shared/notify'
+import { GROUP_ID_RE, GROUP_MAX_MEMBERS, GROUP_MESSAGE_MAX, GROUP_MIN_MEMBERS } from '@shared/groups'
 
 const ProfileName = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
+const GroupId = z.string().regex(GROUP_ID_RE)
 const FeedMessageArgs = z.object({
   profile: ProfileName,
   messageId: z.number().int().min(0),
@@ -219,6 +221,12 @@ export function registerIpc(d: IpcDeps): void {
     const { profile, title, body } = z.object({ profile: ProfileName, title: z.string().min(1).max(NOTICE_TITLE_MAX), body: z.string().max(NOTICE_BODY_MAX) }).parse(a)
     d.center?.push({ kind: 'chat', title, body, target: { kind: 'chat', profile } })
   })
+  handle(IPC.notifyGroup, (a) => {
+    // a room run ended while the room was not on screen; the text comes from the room the main process knows
+    const { id, replies, needsYou } = z.object({ id: GroupId, replies: z.number().int().min(0).max(100), needsYou: ProfileName.nullable() }).parse(a)
+    const n = d.session.groupNotice(id, replies, needsYou)
+    if (n) d.center?.push({ kind: 'chat', title: n.title.slice(0, NOTICE_TITLE_MAX), body: n.body.slice(0, NOTICE_BODY_MAX), target: { kind: 'group', id } })
+  })
 
   handle(IPC.pinsGet, () => {
     const c = d.store.getConnection()
@@ -316,6 +324,15 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.brainValidate, (a) => d.session.brainValidate(VaultPath.parse(a)))
   handle(IPC.brainBrowse, (a) => d.session.brainBrowse(BrowsePath.parse(a)))
   handle(IPC.brainNote, (a) => d.session.brainNote(NoteId.parse(a)))
+  handle(IPC.groupsList, () => d.session.groupsList())
+  handle(IPC.groupsCreate, (a) => d.session.groupsCreate(z.object({ name: z.string().min(1).max(200), members: z.array(ProfileName).min(GROUP_MIN_MEMBERS).max(GROUP_MAX_MEMBERS) }).parse(a)))
+  handle(IPC.groupsUpdate, (a) => d.session.groupsUpdate(z.object({ id: GroupId, name: z.string().min(1).max(200).optional(), members: z.array(ProfileName).min(GROUP_MIN_MEMBERS).max(GROUP_MAX_MEMBERS).optional() }).parse(a)))
+  handle(IPC.groupsDelete, (a) => d.session.groupsDelete(GroupId.parse(a)))
+  handle(IPC.groupsEntries, (a) => d.session.groupsEntries(z.object({ id: GroupId, before: z.number().int().positive().optional() }).parse(a)))
+  handle(IPC.groupsSend, (a) => d.session.groupsSend(z.object({ id: GroupId, text: z.string().max(GROUP_MESSAGE_MAX + 1000) }).parse(a)))
+  handle(IPC.groupsStop, (a) => d.session.groupsStop(GroupId.parse(a)))
+  handle(IPC.groupsApprove, (a) => d.session.groupsApprove(z.object({ turn: TurnId, approval: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/), option: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/).nullable() }).parse(a)))
+  handle(IPC.groupsClear, () => d.session.groupsClear())
   handle(IPC.chatSend, (a) => d.session.chatSend(ChatSendArgs.parse(a)))
   handle(IPC.chatStop, (a) => d.session.chatStop(TurnId.parse(a)))
   handle(IPC.chatApprove, (a) => d.session.chatApprove(z.object({ turn: TurnId, approval: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/), option: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/).nullable() }).parse(a)))

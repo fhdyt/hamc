@@ -46,6 +46,8 @@ import { inspectKey, keyInfoOf, readKeyFile } from './connection/keyFile'
 import type { ConnectParams, ConnectionManager } from './connection/manager'
 import { runPreflight } from './connection/preflight'
 import { StartupTracker } from './startup'
+import { GroupService } from './groups/service'
+import type { GroupEntry, GroupList, GroupRoom, GroupSendResult } from '@shared/groups'
 import type { SecretStore } from './store/secretStore'
 import type { SettingsStore } from './store/settingsStore'
 
@@ -149,6 +151,9 @@ export class MissionSession {
   private readonly memory: MemorySnapshots
   private readonly agentOps: AgentOpsService
   private readonly terminal: TerminalService
+  private readonly groups: GroupService
+  /** Profiles and Hermes display names from the latest agents event (null before the first one). */
+  private agentNames: Record<string, string> | null = null
 
   constructor(private readonly d: SessionDeps) {
     d.manager.on('close', () => this.onUnexpectedClose())
@@ -257,6 +262,29 @@ export class MissionSession {
       },
       log: (m) => d.log?.(m),
       ...(d.chatStopGraceMs !== undefined ? { stopGraceMs: d.chatStopGraceMs } : {})
+    })
+    this.groups = new GroupService({
+      store: d.store.groups,
+      runTurn: async (r) => {
+        const res = await this.chat.groupTurn({
+          profile: r.profile,
+          slot: `${r.profile}#${r.groupId}`,
+          turn: r.turn,
+          message: r.message,
+          saved: r.saved,
+          create: { title: r.title, hidden: true, room_plumbing: true, follow_profile_config: true },
+          emit: r.emit,
+          onSession: r.onSession
+        })
+        if (!res.ok) return res
+        return { ok: true, cancel: () => res.handle.cancel(), approve: (a, o) => res.handle.approve(a, o), done: res.handle.done }
+      },
+      available: () => this.chat.groupsAvailable(),
+      isConnected: () => d.manager.isConnected() && this.hermes !== null,
+      profiles: () => (this.agentNames ? Object.keys(this.agentNames) : null),
+      names: () => this.displayNames(),
+      emit: (e) => d.send(IPC.evGroup, e),
+      log: (m) => d.log?.(m)
     })
     this.queries = new QueryRunner(d.manager, d.collectorScript, () => (this.hermes && d.manager.isConnected() ? { python: this.hermes.python, home: this.hermes.home } : null), (m) => d.log?.(m))
   }
@@ -511,6 +539,7 @@ export class MissionSession {
       if (ev.type === 'memory') return this.memory.ingest(ev.data)
       this.d.send(IPC.evEvent, ev)
       if (ev.type === 'agents') {
+        this.agentNames = Object.fromEntries(ev.data.agents.map((a) => [a.profile, a.displayName]))
         void this.models?.update(ev.data.agents)
         const gateway = this.gatewayWatcher.ingest(ev.data.agents)
         if (this.d.store.getSetting('alerts.gateway.enabled')) for (const alert of gateway) this.d.notifyGateway?.(alert)
@@ -571,6 +600,7 @@ export class MissionSession {
     this.stopCollector()
     this.costAlert.stop()
     this.brain.detach()
+    this.groups.dispose()
     this.chat.dispose()
     this.terminal.closeAll()
     this.scheduleRetry(0)
@@ -610,6 +640,7 @@ export class MissionSession {
     this.stopLatency()
     this.stopCollector()
     this.brain.detach()
+    this.groups.dispose()
     this.chat.dispose()
     this.terminal.closeAll()
     this.uploads.reset()
@@ -740,6 +771,60 @@ export class MissionSession {
 
   interactionDetail(args: InteractionDetailArgs): Promise<QueryResult<InteractionDetail>> {
     return this.queries.run('interaction', args, InteractionDetail)
+  }
+
+  /** Display names by profile: the local name (Settings → Agents → Profile), else Hermes's. */
+  private displayNames(): Record<string, string> {
+    const id = this.d.store.getConnection()?.id
+    const looks = id === undefined ? {} : this.d.store.getLooks(id)
+    const out: Record<string, string> = { ...(this.agentNames ?? {}) }
+    for (const [p, l] of Object.entries(looks)) if (l.name) out[p] = l.name
+    return out
+  }
+
+  groupsList(): GroupList {
+    return this.groups.list()
+  }
+
+  groupsCreate(req: { name: string; members: string[] }): GroupRoom | { error: string } {
+    return this.groups.create(req.name, req.members)
+  }
+
+  groupsUpdate(req: { id: string; name?: string; members?: string[] }): GroupRoom | { error: string } {
+    return this.groups.update(req.id, { ...(req.name !== undefined ? { name: req.name } : {}), ...(req.members !== undefined ? { members: req.members } : {}) })
+  }
+
+  groupsDelete(id: string): void {
+    this.groups.remove(id)
+  }
+
+  groupsEntries(req: { id: string; before?: number }): GroupEntry[] {
+    return this.groups.entries(req.id, req.before)
+  }
+
+  groupsSend(req: { id: string; text: string }): Promise<GroupSendResult> {
+    return this.groups.send(req.id, req.text)
+  }
+
+  groupsStop(id: string): void {
+    this.groups.stop(id)
+  }
+
+  groupsApprove(req: { turn: string; approval: string; option: string | null }): boolean {
+    return this.groups.approve(req.turn, req.approval, req.option)
+  }
+
+  groupsClear(): void {
+    this.groups.clear()
+  }
+
+  /** The notice for a room run that ended while the room was not on screen. */
+  groupNotice(id: string, replies: number, needsYou: string | null): { title: string; body: string } | null {
+    const room = this.d.store.groups.get(id)
+    if (!room) return null
+    if (needsYou) return { title: room.name, body: `${this.displayNames()[needsYou] ?? needsYou} needs you` }
+    if (replies === 0) return null
+    return { title: room.name, body: replies === 1 ? '1 new reply' : `${replies} new replies` }
   }
 
   chatSend(req: { profile: string; text: string; attachmentIds: string[] }): ReturnType<ChatService['send']> {

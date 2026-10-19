@@ -8,6 +8,7 @@ import type { MemoryVersion, MemoryVersionText } from './memory'
 import type { BackupRequest, BackupResult, NewProfileRequest, OpsApply, OpsText, ToolChange } from './agentOps'
 import type { CostAlertState, CronOutputFiles, CronRuns, SkillBlobs, SkillsLedger, SkillsList, SkillText, KanbanBoards, KanbanTaskDetail, KanbanTasks, LogsList, LogsRead, UsageSummary, UsageTools } from './events'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from './logs'
+import type { GroupEntry, GroupEvent, GroupList, GroupRoom, GroupSendResult } from './groups'
 import type { UsageSummaryArgs, UsageToolsArgs } from './usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from './sessions'
 import type { SettingsMap } from './settings'
@@ -280,6 +281,8 @@ export interface MissionApi {
     test(): Promise<{ shown: boolean; reason?: string }>
     /** A chat reply finished while that agent was not on screen. */
     chat(profile: string, title: string, body: string): Promise<void>
+    /** A room run ended while that room was not on screen. */
+    group(id: string, replies: number, needsYou: string | null): Promise<void>
   }
   terminal: {
     /** Starts a shell: the system shell of this computer, or a shell on the server (system ssh or built-in). */
@@ -371,6 +374,19 @@ export interface MissionApi {
     /** The agent's `terminal.backend`, or null when it cannot be read. */
     backend(profile: string): Promise<string | null>
   }
+  /** Group chat rooms (F-ROOM). */
+  groups: {
+    list(): Promise<GroupList>
+    create(req: { name: string; members: string[] }): Promise<GroupRoom | { error: string }>
+    update(req: { id: string; name?: string; members?: string[] }): Promise<GroupRoom | { error: string }>
+    remove(id: string): Promise<void>
+    entries(req: { id: string; before?: number }): Promise<GroupEntry[]>
+    send(req: { id: string; text: string }): Promise<GroupSendResult>
+    stop(id: string): Promise<void>
+    approve(req: { turn: string; approval: string; option: string | null }): Promise<boolean>
+    /** Settings → Data: empties every room log (rooms and member sessions stay). */
+    clear(): Promise<void>
+  }
   uploads: {
     list(): Promise<QueryResult<UploadsList>>
     remove(path: string): Promise<{ ok: true } | { ok: false; error: string }>
@@ -391,6 +407,7 @@ export interface MissionApi {
   }
   onEvent(cb: (e: CollectorEvent) => void): Unsub
   onChat(cb: (e: ChatEvent) => void): Unsub
+  onGroup(cb: (e: GroupEvent) => void): Unsub
   onUpload(cb: (p: UploadProgress) => void): Unsub
   onStatus(cb: (s: ConnStatus) => void): Unsub
   onStartup(cb: (p: StartupProgress) => void): Unsub

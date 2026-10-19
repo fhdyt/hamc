@@ -5,6 +5,7 @@ export type NoticeKind = 'chat' | 'cron' | 'gateway' | 'cost' | 'test'
 
 export type NoticeTarget =
   | { kind: 'chat'; profile: string }
+  | { kind: 'group'; id: string }
   | { kind: 'cron'; profile: string; jobId: string }
   | { kind: 'logs'; tab: 'logs' | 'gateway' | 'approvals' }
   | { kind: 'usage' }

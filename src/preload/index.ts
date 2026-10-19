@@ -57,7 +57,8 @@ const api: MissionApi = {
   },
   notify: {
     test: () => ipcRenderer.invoke(IPC.notifyTest),
-    chat: (profile, title, body) => ipcRenderer.invoke(IPC.notifyChat, { profile, title, body })
+    chat: (profile, title, body) => ipcRenderer.invoke(IPC.notifyChat, { profile, title, body }),
+    group: (id, replies, needsYou) => ipcRenderer.invoke(IPC.notifyGroup, { id, replies, needsYou })
   },
   terminal: {
     open: (req) => ipcRenderer.invoke(IPC.termOpen, req),
@@ -124,6 +125,17 @@ const api: MissionApi = {
     browse: (path) => ipcRenderer.invoke(IPC.brainBrowse, path),
     note: (id) => ipcRenderer.invoke(IPC.brainNote, id)
   },
+  groups: {
+    list: () => ipcRenderer.invoke(IPC.groupsList),
+    create: (req) => ipcRenderer.invoke(IPC.groupsCreate, req),
+    update: (req) => ipcRenderer.invoke(IPC.groupsUpdate, req),
+    remove: (id) => ipcRenderer.invoke(IPC.groupsDelete, id),
+    entries: (req) => ipcRenderer.invoke(IPC.groupsEntries, req),
+    send: (req) => ipcRenderer.invoke(IPC.groupsSend, req),
+    stop: (id) => ipcRenderer.invoke(IPC.groupsStop, id),
+    approve: (req) => ipcRenderer.invoke(IPC.groupsApprove, req),
+    clear: () => ipcRenderer.invoke(IPC.groupsClear)
+  },
   chat: {
     send: (req) => ipcRenderer.invoke(IPC.chatSend, req),
     stop: (turn) => ipcRenderer.invoke(IPC.chatStop, turn),
@@ -154,6 +166,7 @@ const api: MissionApi = {
   },
   onEvent: (cb) => on(IPC.evEvent, cb),
   onChat: (cb) => on(IPC.evChat, cb),
+  onGroup: (cb) => on(IPC.evGroup, cb),
   onUpload: (cb) => on(IPC.evUpload, cb),
   onStatus: (cb) => on(IPC.evStatus, cb),
   onStartup: (cb) => on(IPC.evStartup, cb),
