@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { describe, expect, it } from 'vitest'
 import { findSsh, knownHostsLine, pickLocalShell, sshArgs, sshConfigPath, terminalEnv } from '../../src/main/terminal/localShell'
 import { TerminalService } from '../../src/main/terminal/service'
@@ -43,6 +44,18 @@ describe('system ssh', () => {
     expect(args.join(' ')).not.toMatch(/StrictHostKeyChecking=no|accept-new|password/i)
     expect(sshConfigPath('C:\\Users\\a%b\\x')).toBe('"C:/Users/a%%b/x"')
   })
+  it('signs in with the key file of the connection, and only that key', () => {
+    const args = sshArgs({ ...t, identity: 'C:\\Users\\me\\.ssh\\id_ed25519' }, '/kh')
+    expect(args).toEqual([
+      '-p', '2200',
+      '-o', 'UserKnownHostsFile="/kh"',
+      '-o', 'StrictHostKeyChecking=yes',
+      '-o', 'UpdateHostKeys=no',
+      '-o', 'IdentityFile="C:/Users/me/.ssh/id_ed25519"',
+      '-o', 'IdentitiesOnly=yes',
+      '-l', 'root', '--', 'vps.example.org'
+    ])
+  })
   it('gives local terminals a colour TERM and drops Electron-only variables', () => {
     const env = terminalEnv({ PATH: '/bin', ELECTRON_RUN_AS_NODE: '1', NODE_OPTIONS: '--x', HOME: '/h', MC_NO_UPDATE: '1' })
     expect(env).toEqual({ PATH: '/bin', HOME: '/h', TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'HermesMissionControl' })
@@ -72,8 +85,12 @@ function fakePty() {
   return { p, pty }
 }
 
+function fakeChannel() {
+  return Object.assign(new EventEmitter(), { stderr: new EventEmitter(), write: () => true, setWindow: () => {}, end: () => {}, close: () => {} })
+}
+
 describe('TerminalService with local terminals', () => {
-  function service(o: { connected?: boolean; target?: boolean; via?: 'system' | 'builtin'; ssh?: boolean } = {}) {
+  function service(o: { connected?: boolean; target?: boolean; via?: 'system' | 'builtin'; ssh?: boolean; problem?: string } = {}) {
     const sent: { channel: string; payload: unknown }[] = []
     const spawned: { file: string; args: string[]; cwd: string; env: Record<string, string> }[] = []
     const ptys: ReturnType<typeof fakePty>[] = []
@@ -81,8 +98,9 @@ describe('TerminalService with local terminals', () => {
     const svc = new TerminalService({
       conn: {
         isConnected: () => o.connected ?? false,
-        openShell: () => Promise.reject(new Error('no built-in shell in this test')),
-        sshTarget: () => (o.target ? { host: 'vps', port: 22, username: 'root', algo: 'ssh-ed25519', key: 'KEY' } : null)
+        openShell: () => (o.connected ? Promise.resolve(fakeChannel() as never) : Promise.reject(new Error('no built-in shell in this test'))),
+        sshTarget: () =>
+          o.target ? { host: 'vps', port: 22, username: 'root', algo: 'ssh-ed25519', key: 'KEY', ...(o.problem ? { systemSshProblem: o.problem } : {}) } : null
       },
       send: (channel, payload) => sent.push({ channel, payload }),
       flushMs: 1,
@@ -145,6 +163,15 @@ describe('TerminalService with local terminals', () => {
     const c = service({ target: true })
     expect(await c.svc.open({ cols: 80, rows: 24, kind: 'server', via: 'builtin' })).toEqual({ ok: false, error: 'not-connected' })
     expect(c.spawned).toEqual([])
+  })
+
+  it('a connection with a PuTTY key opens server tabs in the built-in shell and says why', async () => {
+    const a = service({ target: true, connected: true, problem: 'PuTTY key: built-in shell.' })
+    expect(await a.svc.open({ cols: 80, rows: 24, kind: 'server' })).toMatchObject({ ok: true, via: 'builtin', note: 'PuTTY key: built-in shell.' })
+    expect(a.spawned).toEqual([])
+    const b = service({ target: true, connected: true, via: 'builtin' })
+    const r = await b.svc.open({ cols: 80, rows: 24, kind: 'server' })
+    expect(r.ok && 'note' in r).toBe(false)
   })
 
   it('kills every local terminal when the app quits', async () => {

@@ -34,7 +34,7 @@ export interface TermOpenRequest extends TermSize {
 
 /** `via` says what actually runs; `label` names it on the tab (`pwsh`, `zsh`, `ssh`…). */
 export type TermOpenResult =
-  | { ok: true; id: string; via: 'local' | 'system-ssh' | 'builtin'; label: string }
+  | { ok: true; id: string; via: 'local' | 'system-ssh' | 'builtin'; label: string; /** Shown once in the tab (why it is not the shell Settings asked for). */ note?: string }
   | { ok: false; error: 'not-connected' | 'too-many' | 'failed' | 'unavailable'; detail?: string }
 
 /** What the Settings → Terminal tab shows about this computer. */

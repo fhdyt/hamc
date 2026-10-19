@@ -183,6 +183,7 @@ async function startShell(key: string, again: boolean): Promise<void> {
   byShell.set(r.id, key)
   st().patchTab(key, { shellId: r.id, via: r.via, label: r.label })
   if (again) v.term.write('\x1b[38;2;139;149;189m[Reconnected.]\x1b[0m\r\n')
+  if (r.note && !again) v.term.write(`\x1b[38;2;139;149;189m[${r.note}]\x1b[0m\r\n`)
 }
 
 /** Opens a new tab (and the panel): a shell of this computer or of the server, by default what Settings → Terminal says. */

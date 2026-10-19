@@ -103,6 +103,8 @@ export function sshArgs(t: SshTarget, knownHostsFile: string): string[] {
     'StrictHostKeyChecking=yes',
     '-o',
     'UpdateHostKeys=no',
+    // the key the connection signed in with, and no other (an -o value is parsed with quotes, an -i value is not)
+    ...(t.identity ? ['-o', `IdentityFile=${sshConfigPath(t.identity)}`, '-o', 'IdentitiesOnly=yes'] : []),
     '-l',
     t.username,
     '--',
