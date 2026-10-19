@@ -48,12 +48,36 @@ input:focus{outline:1px solid #50FA7B;outline-offset:0}
         <input id="user" type="text" value="root" style="background: #282A36; border: 1px solid #6272A4; color: #50FA7B; font: inherit; padding: 9px 10px">
       </div>
       <div style="display: flex; flex-direction: column; gap: 4px">
-        <label for="pass" style="color: #A9B2D3; font-size: 12px">password</label>
-        <input id="pass" type="password" value="hunter2hunter2" style="background: #282A36; border: 1px solid #6272A4; color: #50FA7B; font: inherit; padding: 9px 10px">
+        <span id="method-label" style="color: #A9B2D3; font-size: 12px">sign in with</span>
+        <div role="radiogroup" aria-labelledby="method-label" style="display: flex; width: fit-content; border: 1px solid #6272A4">
+          <button type="button" role="radio" aria-checked="{{pwChecked}}" onClick="{{setPw}}" style="min-height: 36px; padding: 0 14px; border: 0; background: {{pwBg}}; color: {{pwColor}}; font: inherit; cursor: pointer">Password</button>
+          <button type="button" role="radio" aria-checked="{{keyChecked}}" onClick="{{setKey}}" style="min-height: 36px; padding: 0 14px; border: 0; border-left: 1px solid #6272A4; background: {{keyBg}}; color: {{keyColor}}; font: inherit; cursor: pointer">Private key</button>
+        </div>
       </div>
+      <sc-if value="{{isPw}}">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <label for="pass" style="color: #A9B2D3; font-size: 12px">password</label>
+          <input id="pass" type="password" value="hunter2hunter2" style="background: #282A36; border: 1px solid #6272A4; color: #50FA7B; font: inherit; padding: 9px 10px">
+        </div>
+      </sc-if>
+      <sc-if value="{{isKey}}">
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <span style="color: #A9B2D3; font-size: 12px">private key file</span>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 38px; padding: 6px 10px; border: 1px solid #44475A; background: #282A36">
+            <code style="color: #F8F8F2">id_ed25519</code>
+            <span style="flex: 1 1 200px; color: #A9B2D3; font-size: 12px">ED25519 · SHA256:p2Qy7mTf…Lw4</span>
+            <button type="button" style="min-height: 22px; padding: 0 8px; border: 1px solid #6272A4; border-radius: 6px; background: transparent; color: #F8F8F2; font: inherit; cursor: pointer">Change</button>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px">
+          <label for="phrase" style="color: #A9B2D3; font-size: 12px">passphrase</label>
+          <input id="phrase" type="password" value="correct horse" style="background: #282A36; border: 1px solid #6272A4; color: #50FA7B; font: inherit; padding: 9px 10px">
+        </div>
+        <p style="margin: 0; color: #8B95BD; font-size: 11px">The public key must already be in ~/.ssh/authorized_keys on the server. The app does not add it.</p>
+      </sc-if>
       <label style="display: flex; align-items: center; gap: 10px; color: #F8F8F2; min-height: 44px; cursor: pointer">
         <input type="checkbox" checked style="accent-color: #50FA7B; width: 16px; height: 16px">
-        remember &amp; auto-connect on launch <span style="color: #8B95BD; font-size: 12px">(password → OS keychain)</span>
+        remember &amp; auto-connect on launch <span style="color: #8B95BD; font-size: 12px">({{secretWord}} → OS keychain)</span>
       </label>
       <a href="Main.dc.html" style="display: block; text-align: center; padding: 12px; background: #50FA7B; color: #282A36; font-weight: 700; text-decoration: none; letter-spacing: 2px">[ TEST &amp; CONNECT ]</a>
       <p style="margin: 0; color: #8B95BD; font-size: 11px">Asked only once. Next time the app opens it connects automatically — change it anytime with <span style="color: #50FA7B">edit connection</span>. Nothing is installed or changed on your VPS.</p>
@@ -90,9 +114,26 @@ input:focus{outline:1px solid #50FA7B;outline-offset:0}
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
 class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { auth: 'password' };
+  }
   renderVals() {
     var ok = '#50FA7B';
+    var self = this;
+    var key = this.state.auth === 'key';
     return {
+      isPw: !key,
+      isKey: key,
+      pwChecked: key ? 'false' : 'true',
+      keyChecked: key ? 'true' : 'false',
+      pwBg: key ? 'transparent' : '#343746',
+      keyBg: key ? '#343746' : 'transparent',
+      pwColor: key ? '#A9B2D3' : ok,
+      keyColor: key ? ok : '#A9B2D3',
+      secretWord: key ? 'passphrase' : 'password',
+      setPw: function () { self.setState({ auth: 'password' }); },
+      setKey: function () { self.setState({ auth: 'key' }); },
       checks: [
         { label: 'ssh root@203.0.113.42 -p 22', result: 'OK 38ms', color: ok },
         { label: 'host key SHA256:Xq3v…9fA', result: 'TRUSTED', color: ok },

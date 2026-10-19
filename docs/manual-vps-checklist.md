@@ -252,6 +252,13 @@ Chat sekarang memakai gateway TUI milik Hermes (`python -m tui_gateway.entry`) l
 149. **Kalender catatan (Dashboard, antara Server dan graph).** Kotak hijau per hari mengikuti jumlah catatan vault yang ditulis hari itu; hari ini ada di kolom paling kanan pada baris harinya. Klik satu hari: daftar catatannya muncul, klik catatan membuka dialog catatan. Tombol perbesar menampilkan setahun dan dari mana tanggalnya diambil (frontmatter `created`/`date`, tanggal di nama file, waktu file dibuat, atau waktu terakhir diubah bila filesystem VPS tidak menyimpan waktu dibuat). Catat apakah VPS menyimpan waktu dibuat (`stat -c %w file.md` bukan `-`).
 150. **Profil agent lokal.** Settings → Agents → Profile: pilih foto (dipotong persegi di tengah), foto muncul sebagai avatar di roster, Chat, Kanban dan Settings; Remove photo kembali ke inisial. Isi Display name lalu Enter: nama itu tampil di semua layar; tombol undo kembali ke nama Hermes. Pastikan di VPS tidak ada yang berubah (`profile.yaml`, `config.yaml` tetap sama, tidak ada perintah `hermes` yang berjalan) dan setelah aplikasi dibuka ulang nama dan foto tetap ada.
 
+## Tambahan login SSH key (F-CONN-7)
+
+151. **Key ed25519 tanpa passphrase.** Di komputer ini buat key (`ssh-keygen -t ed25519 -f ~/.ssh/hmac_test -N ""`), lalu tambahkan isi `hmac_test.pub` ke `~/.ssh/authorized_keys` user Hermes di VPS **sendiri** (aplikasi tidak memasangnya). Edit connection → Private key → Choose key file… → pilih `hmac_test`: nama file, `ED25519` dan fingerprint muncul. Test & save tersambung; tutup dan buka lagi aplikasi: tersambung otomatis.
+152. **Key dengan passphrase.** Ulangi dengan key ber-passphrase: field passphrase muncul; passphrase salah memberi "The passphrase is wrong."; yang benar tersambung, dan setelah aplikasi dibuka ulang tersambung tanpa mengetik passphrase lagi (Windows/macOS, atau Linux dengan keyring).
+153. **Key ditolak.** Hapus baris key itu dari `authorized_keys`, buka aplikasi: dialog Edit connection terbuka dengan "The server refused this key…". Kembalikan barisnya.
+154. **Terminal dan Zero-Change.** Buka tab server di Terminal (via system ssh): masuk memakai key yang sama (passphrase diminta oleh ssh sendiri dan diketik oleh kamu). Pastikan `~/.ssh/authorized_keys` di VPS tidak diubah aplikasi (`stat` dan isinya sama dengan sebelum langkah 151), dan `app.log` hanya berisi `auth: key ED25519 SHA256:…` tanpa isi key atau passphrase.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.

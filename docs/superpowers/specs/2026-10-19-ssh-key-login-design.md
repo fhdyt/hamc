@@ -49,7 +49,7 @@ logins on a public IP invite brute force). One connection uses one method, chose
 ## Main process
 
 - `src/main/connection/keyFile.ts` (new, pure where possible):
-  - `readKeyFile(path)`: `lstat` must be a regular file of at most 64 KiB, then read.
+  - `readKeyFile(path)`: `stat` (links are followed, as ssh does) must be a regular file of at most 64 KiB, then read.
   - `inspectKey(buf, passphrase?)` with ssh2 `utils.parseKey`. Results: ok (type, public fingerprint, encrypted),
     `needs-passphrase`, `bad-passphrase`, `ppk3` (a `PuTTY-User-Key-File-3` header: "Export it from PuTTYgen as an
     OpenSSH key (Conversions → Export OpenSSH key)."), `not-a-key`. ssh2 refuses an encrypted key without its passphrase,
@@ -85,7 +85,7 @@ logins on a public IP invite brute force). One connection uses one method, chose
 
 - `SshTarget` gains `identity?: string`. `ConnectionManager.sshTarget()` fills it with the key path when the connection
   used a key that OpenSSH can read (not PPK).
-- `sshArgs` adds `-i <sshConfigPath(identity)> -o IdentitiesOnly=yes` when `identity` is set. A passphrase is asked by
+- `sshArgs` adds `-o IdentityFile=<sshConfigPath(identity)> -o IdentitiesOnly=yes` when `identity` is set (an `-o` value is parsed with quotes, an `-i` value is not, and the app folder path has spaces). A passphrase is asked by
   ssh itself and typed by the user; the app still never types into a shell.
 - A connection with a PPK key opens server tabs with the built-in ssh2 shell (as when no `ssh` is found), and the tab
   says why once: "This key is in PuTTY format, which the system ssh cannot read: using the built-in shell."

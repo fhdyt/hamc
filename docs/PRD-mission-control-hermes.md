@@ -137,7 +137,7 @@ Prioritas: **P0** wajib ada di v1, **P1** diharapkan ada di v1, **P2** untuk nan
 | F-CONN-4 | Checkbox "Remember & auto-connect on launch" (**default aktif**). Host, port, username, dan fingerprint disimpan di `app.db` (lihat 8.4). Password dienkripsi dengan **keychain OS** lewat Electron `safeStorage` (Windows DPAPI, macOS Keychain, Linux Secret Service/KWallet). Jika di Linux tidak ada keyring yang tersedia, opsi menyimpan password dinonaktifkan dengan penjelasan, **tidak** jatuh ke enkripsi lemah. | P0 |
 | F-CONN-5 | **Hermes home:** pakai `$HERMES_HOME` milik user SSH jika ada, jika tidak `~/.hermes`. Jika tidak ditemukan, tampilkan pesan yang jelas. | P0 |
 | F-CONN-6 | Auto-reconnect dengan backoff (1s → 2s → 5s → 10s, maksimal 30s). Status bar menampilkan Connected / Reconnecting / Offline beserta latensi. | P0 |
-| F-CONN-7 | Login dengan SSH private key sebagai alternatif password. | P2 |
+| F-CONN-7 | Login dengan SSH private key sebagai alternatif password. **Dibangun (dimajukan dari v2, 2026-10-19):** satu metode per koneksi (Password atau Private key); file key dipilih lewat dialog native dan hanya path-nya disimpan; passphrase disimpan di keychain OS seperti password; format OpenSSH, PEM, dan PuTTY PPK v2 (PPK v3 ditolak dengan petunjuk ekspor); tab server di Terminal memakai key yang sama. Tanpa ssh-agent. | P2 |
 | F-CONN-8 | Tampilkan versi Hermes di VPS (`hermes --version`) dan beri peringatan jika versi di bawah yang didukung. | P1 |
 | F-CONN-9 | **Preflight check** setelah login, ditampilkan sebagai checklist hijau/merah: SSH OK · Hermes home ditemukan · versi Hermes · jumlah profile · `state.db` bisa dibaca · `hermes` CLI ditemukan · interpreter Python ditemukan. Untuk item merah, tampilkan penyebab dan saran **tanpa** menawarkan perubahan di VPS. Fitur yang tidak bergantung pada item merah tetap berjalan. | P0 |
 | F-CONN-10 | **Deteksi `hermes` CLI** yang tahan terhadap PATH sesi SSH non-interaktif: cek `command -v hermes`, lalu `~/.local/bin/hermes`, lalu lokasi venv instalasi Hermes. Interpreter Python diambil dari shebang executable `hermes` (pasti ada karena Hermes berbasis Python), dengan fallback ke `python3`. | P0 |
@@ -746,7 +746,7 @@ Password **tidak** disimpan sebagai plaintext. Yang disimpan di `app.db` hanya b
 | **M8 — Insights** (v1.1) | F-SESS-1..7 (spike: kueri FTS di `state.db` besar), F-USAGE-1..6, F-NAV-5..8 (badge, pintasan, command palette, filter bersama), alert biaya | Riwayat dan pencarian sesi, analitik biaya dan tool, palette Ctrl+K |
 | **M9 — Operations** (v1.1) | F-LOG-1..9, F-CRON-7..14 (spike: perintah `cron runs` dan `incidents` di Hermes asli), notifikasi cron/gateway yang diperluas | Log tail, status gateway, kebijakan approval, kontrol dan riwayat cron |
 | **M10 — Agent management** (v1.1) | F-SKILL-1..7, F-MEMT-1..6, F-CFG-19..26 (spike: `tools --summary`, `mcp list`, `fallback list` untuk parser) | Skills, memory timeline, MCP, toolsets, fallback, backup, profile baru |
-| v2 (kandidat) | Login SSH key, multi-VPS, chat room multi-agent, mode ACP, auto-update, membaca `.obsidian/graph.json`, auxiliary model, katalog model, aksi tulis di Kanban | — |
+| v2 (kandidat) | Multi-VPS, chat room multi-agent, mode ACP, auto-update, membaca `.obsidian/graph.json`, auxiliary model, katalog model, aksi tulis di Kanban | — |
 
 ## 11. Risiko & Mitigasi
 
@@ -760,7 +760,7 @@ Password **tidak** disimpan sebagai plaintext. Yang disimpan di `app.db` hanya b
 | Code signing: tanpa sertifikat, macOS Gatekeeper dan Windows SmartScreen menampilkan peringatan | Instalasi membingungkan bagi user lain | Siapkan konfigurasi signing dan notarization di electron-builder. Butuh Apple Developer ID dan sertifikat Windows (lihat Q10). |
 | Performa WebGL di VM atau GPU lemah | Graph patah-patah | Spike di awal M4. Ada batas jumlah node, opsi "reduce motion", dan layout dibekukan setelah stabil. |
 | PATH di sesi SSH non-interaktif tidak memuat `~/.local/bin` | `hermes` tidak ditemukan | Deteksi berlapis (F-CONN-10). |
-| Login SSH dengan password ke IP publik rentan brute-force (sisi VPS) | Keamanan VPS | Dokumentasikan rekomendasi memakai SSH key dan fail2ban. Login SSH key tersedia di v2 (bisa dimajukan). |
+| Login SSH dengan password ke IP publik rentan brute-force (sisi VPS) | Keamanan VPS | Dokumentasikan rekomendasi memakai SSH key dan fail2ban. Login SSH key sudah tersedia (F-CONN-7). |
 | Konten vault atau balasan agent berisi HTML/JS berbahaya | XSS di renderer | DOMPurify, CSP ketat, renderer di-sandbox tanpa akses Node. |
 | User dan agent mengedit MEMORY.md bersamaan | Ingatan agent hilang atau tertimpa | Cek hash sebelum simpan, diff 3 arah, tanpa penimpaan diam-diam (F-CFG-13). Penulisan atomik. |
 | API key dikirim sebagai argumen `hermes config set` (bila Hermes tidak menerima stdin) | Key sempat terlihat di daftar proses (`ps`, `/proc/<pid>/cmdline`) oleh user lain di VPS yang sama, selama < 1 detik | Utamakan stdin bila didukung (spike M6). Jika tidak bisa, tampilkan peringatan sebelum Save di VPS multi-user. Exec SSH non-interaktif tidak menulis riwayat shell. Key tidak pernah dicatat di log aplikasi. |
