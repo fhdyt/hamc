@@ -259,6 +259,15 @@ Chat sekarang memakai gateway TUI milik Hermes (`python -m tui_gateway.entry`) l
 153. **Key ditolak.** Hapus baris key itu dari `authorized_keys`, buka aplikasi: dialog Edit connection terbuka dengan "The server refused this key…". Kembalikan barisnya.
 154. **Terminal dan Zero-Change.** Buka tab server di Terminal (via system ssh): masuk memakai key yang sama (passphrase diminta oleh ssh sendiri dan diketik oleh kamu). Pastikan `~/.ssh/authorized_keys` di VPS tidak diubah aplikasi (`stat` dan isinya sama dengan sebelum langkah 151), dan `app.log` hanya berisi `auth: key ED25519 SHA256:…` tanpa isi key atau passphrase.
 
+## Tambahan chat room multi-agent (F-ROOM, v2)
+
+155. **Buat room.** Chat → Rooms → `+`: beri nama, pilih dua agent, Create room. Belum ada proses atau berkas baru di VPS (`ps aux | grep tui_gateway` kosong bila belum pernah Send).
+156. **Satu Send.** Tulis "Perkenalkan diri kalian singkat." Kedua agent menjawab bergantian di room, lalu room berhenti dengan "The room settled" atau batas ronde. Di `state.db` masing-masing profil ada sesi baru berjudul `Group: mc-…` dengan `source = 'mission-control'`; sesi chat 1:1 agent itu tidak berubah. Catat apakah sesi itu tersembunyi di `hermes sessions list` (perilaku `hidden` Hermes sendiri).
+157. **Mention.** Kirim "@<agent> apa pendapatmu?": hanya agent itu yang menjawab. Ketik `@` di composer: daftar agent muncul dan Enter memasukkan `@nama `. Minta satu agent menjawab dengan "@user": baris room memberi tanda "needs you".
+158. **Approval dan Stop.** Minta satu agent di room menjalankan perintah berisiko: kartu approval muncul dengan nama agent; Deny dikirim. Kirim pesan yang membuat agent bekerja lama lalu tekan Stop: turn berhenti (`session.interrupt`) dan room menulis "Stopped.".
+159. **Badge dan notifikasi.** Buka layar lain selama room berjalan: setelah selesai, Chat mendapat badge dan notifikasi "<room>: N new replies"; klik membuka room.
+160. **Zero-Change.** Hapus room: sesinya tetap ada di server. Tidak ada port baru (`ss -ltnp`) dan tidak ada `hermes serve`/dashboard yang berjalan. `app.log` hanya berisi `room <id> run …`/`turn …`, tanpa isi pesan.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.

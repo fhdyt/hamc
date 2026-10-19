@@ -26,6 +26,16 @@ body{background:#282A36}
   <div style="flex: 1; min-height: 0; display: flex">
 
       <aside class="dm-list" aria-label="Agents" style="flex: 0 0 240px; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; border-right: 1px solid #44475A; background: #21222C">
+        <div class="dm-title" style="flex: none; display: flex; align-items: center; justify-content: space-between; padding: 16px 10px 8px 16px; color: #8B95BD; font-size: 11px"><span>Rooms</span><button type="button" class="ib sm" aria-label="New room" title="New room: you and 2 to 6 agents"><i-con name="plus" size="13"></i-con></button></div>
+        <sc-for list="{{rooms}}" as="r" hint-placeholder-count="2">
+          <button type="button" data-key="{{r.id}}" onClick="{{r.pick}}" aria-current="{{r.current}}" title="{{r.name}}" style="flex: none; display: flex; gap: 10px; align-items: center; text-align: left; min-height: 48px; padding: 6px 14px; background: {{r.bg}}; border: 0; border-bottom: 1px solid #343746; color: inherit; font: inherit; cursor: pointer">
+            <span aria-hidden="true" style="position: relative; flex: none; width: 28px; height: 28px">
+              <span style="position: absolute; left: 0; top: 0; width: 18px; height: 18px; border-radius: 50%; background: #282A36; border: 1px solid {{r.c1}}; color: {{r.c1}}; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{r.i1}}</span>
+              <span style="position: absolute; left: 10px; top: 10px; width: 18px; height: 18px; border-radius: 50%; background: #282A36; border: 1px solid {{r.c2}}; color: {{r.c2}}; font-size: 8px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{r.i2}}</span>
+            </span>
+            <span class="dm-text" style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{r.name}}</span><span style="font-size: 11px; color: {{r.subColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.sub}}</span></span>
+          </button>
+        </sc-for>
         <div class="dm-title" style="flex: none; padding: 16px 16px 8px; color: #8B95BD; font-size: 11px">Direct messages</div>
         <sc-for list="{{agents}}" as="a" hint-placeholder-count="5">
           <button type="button" data-key="{{a.name}}" onClick="{{a.pick}}" aria-current="{{a.current}}" title="{{a.label}}" style="flex: none; display: flex; gap: 10px; align-items: center; text-align: left; min-height: 48px; padding: 6px 14px; background: {{a.bg}}; border: 0; border-bottom: 1px solid #343746; color: inherit; font: inherit; cursor: pointer; transition: background-color .15s">
@@ -35,6 +45,42 @@ body{background:#282A36}
         </sc-for>
       </aside>
 
+      <sc-if value="{{isRoom}}" hint-placeholder-val="{{false}}">
+      <main style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column">
+        <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 12px 24px; border-bottom: 1px solid #44475A">
+          <h1 style="margin: 0; font-size: 16px; display: inline-flex; align-items: center; gap: 8px"><i-con name="users" size="15"></i-con> {{room.name}}</h1>
+          <span style="color: #8B95BD; font-size: 12px">3 agents · room on this computer</span>
+          <div style="margin-left: auto; display: flex; gap: 8px">
+            <button type="button" class="cb"><i-con name="edit" size="13"></i-con> Edit</button>
+            <button type="button" class="cb" aria-label="Delete room"><i-con name="trash" size="13"></i-con> Delete</button>
+          </div>
+        </div>
+        <section aria-label="Room conversation" style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column-reverse">
+          <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+            <div style="align-self: flex-end; max-width: 80%"><div class="bub-me">Plan the v0.21.6 release post. @scout check the changelog first.</div></div>
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 88%">
+              <span style="font-size: 12px; font-weight: 600; color: #FFB86C">scout</span>
+              <div class="bub-ag">Changelog checked: gateway fix, cron race, read-only dashboard. @atlas can you draft?</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; max-width: 88%">
+              <span style="font-size: 12px; font-weight: 600; color: #50FA7B">atlas</span>
+              <div class="bub-ag">Draft ready. Two headline options; @user which tone do you want, playful or plain?</div>
+            </div>
+            <div style="align-self: center; font-size: 11px; color: #8B95BD">scribe passed</div>
+            <div style="align-self: center; font-size: 11px; color: #8B95BD">The room settled: nobody has more to add.</div>
+          </div>
+        </section>
+        <form style="flex: none; padding: 10px 20px 12px; border-top: 1px solid #44475A; display: flex; flex-direction: column; gap: 6px">
+          <label for="gmsg" class="vh">Message the room</label>
+          <div style="display: flex; gap: 8px; align-items: stretch">
+            <textarea id="gmsg" rows="2" placeholder="Message the room · @name to ask one agent" style="flex: 1; resize: none; background: #21222C; border: 1px solid #44475A; border-radius: 8px; color: #F8F8F2; font: inherit; padding: 8px 10px"></textarea>
+            <button type="button" aria-label="Send" title="Send (Enter)" style="width: 42px; display: flex; align-items: center; justify-content: center; background: #50FA7B; color: #282A36; border: 0; border-radius: 8px; cursor: pointer"><i-con name="send" size="16"></i-con></button>
+          </div>
+          <div style="display: flex; gap: 6px; font-size: 11px"><span style="padding: 1px 8px; border: 1px solid #44475A; border-radius: 11px; color: #50FA7B">@atlas</span><span style="padding: 1px 8px; border: 1px solid #44475A; border-radius: 11px; color: #FFB86C">@scout</span><span style="padding: 1px 8px; border: 1px solid #44475A; border-radius: 11px; color: #8BE9FD">@scribe</span></div>
+        </form>
+      </main>
+      </sc-if>
+      <sc-if value="{{notRoom}}" hint-placeholder-val="{{true}}">
       <main style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column">
         <div style="flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 12px 24px; border-bottom: 1px solid #44475A">
           <h1 style="margin: 0; font-size: 16px; color: {{sel.color}}">@{{sel.label}}</h1>
@@ -178,6 +224,7 @@ body{background:#282A36}
           </div>
 </form>
       </main>
+      </sc-if>
   </div>
 </div>
 </div>
@@ -190,6 +237,7 @@ class Component extends DCLogic {
     super(props);
     this.state = {
       agent: 'atlas', thinkOpen: true, draft: '', sent: [],
+      room: new URLSearchParams(location.search).get('room') === 'ops' ? 'ops' : null,
       files: [
         { id: 1, name: 'grafana-cpu.png', size: '340 KB', pct: 100, done: true },
         { id: 2, name: 'gateway-logs.tar.gz', size: '18.4 MB', pct: 62, done: false }
@@ -239,10 +287,24 @@ class Component extends DCLogic {
     var sel = list.filter(function (a) { return a.name === st.agent; })[0];
     var agents = this.orderedAgents(list).map(function (a) {
       var cur = a.name === st.agent;
-      return Object.assign({}, a, self.agentLook(a.name, a.color), { bg: cur ? '#44475A' : 'transparent', current: cur ? 'true' : 'false', pick: function () { self.setState({ agent: a.name }); } });
+      var cur2 = cur && !st.room;
+      return Object.assign({}, a, self.agentLook(a.name, a.color), { bg: cur2 ? '#44475A' : 'transparent', current: cur2 ? 'true' : 'false', pick: function () { self.setState({ agent: a.name, room: null }); } });
     });
+    var roomList = [
+      { id: 'ops', name: 'Launch ops', c1: '#50FA7B', i1: 'A', c2: '#FFB86C', i2: 'S', sub: 'needs you', subColor: '#FFB86C' },
+      { id: 'research', name: 'Research', c1: '#FFB86C', i1: 'S', c2: '#FF79C6', i2: 'H', sub: '2 agents', subColor: '#A9B2D3' }
+    ];
+    var rooms = roomList.map(function (r) {
+      var on = st.room === r.id;
+      return Object.assign({}, r, { bg: on ? '#44475A' : 'transparent', current: on ? 'true' : 'false', pick: function () { self.setState({ room: r.id }); } });
+    });
+    var room = roomList.filter(function (r) { return r.id === st.room; })[0] || roomList[0];
     return Object.assign(this.sharedVals(), this.navFor('chat'), {
       agents: agents,
+      rooms: rooms,
+      room: room,
+      isRoom: !!st.room,
+      notRoom: !st.room,
       sel: sel,
       isAtlas: st.agent === 'atlas',
       notAtlas: st.agent !== 'atlas',

@@ -9,6 +9,7 @@
 | **Target sistem** | Hermes Agent (Nous Research) v0.21.x di VPS Linux, instalasi standar apa adanya |
 
 **Riwayat perubahan**
+- v1.4 (v2, 2026-10-20): **chat room multi-agent** di layar Chat (6.22, F-ROOM-1..8): kamu dan 2–6 agent dalam satu room; satu Send memicu paling banyak 3 ronde giliran berurutan dengan aturan Hermes Desktop (@mention, `(pass)`, `@user`, batas 10 balasan). Diorkestrasi di aplikasi di atas gateway TUI; tiap anggota punya sesi Hermes tersembunyi `Group: <id>`; daftar room dan log room tersimpan lokal di `app.db`.
 - v1.3: **sidebar kiri permanen** di semua layar (kecuali Launch dan Connect) menggantikan menu di status bar; status bar hanya berisi status; notifikasi desktop OS tetap muncul di atas aplikasi lain (F-R13-*); jarak halaman dan filter diseragamkan (F-UI-9).
 - v1.2: semua menu pindah ke **status bar bawah** (rail kiri dihapus; F-NAV direvisi); terminal dibuka dari ikon di status bar dan muncul di lapisan yang sama dengan status bar; menu **Cron dihapus**: klik panel Cron di Dashboard membuka modal berisi seluruh isi Cron (6.14), dan klik panel Activity membuka modal Live feed; panel Cron dan Activity bisa disembunyikan; chat room di Dashboard tingginya tetap dan hanya isinya yang scroll; layar Chat dan Live feed setinggi jendela, hanya percakapan/feed yang scroll; klik node graph membuka **modal pembaca catatan**; **nama tampilan agent** lokal di Settings → Agents → Profile; layar **Kanban** baru (read-only). Lihat 6.20.
 - v1.1: navigasi diganti **icon rail** di kiri (menggantikan menu di status bar/tab bar; 6.11, F-NAV) beserta command palette Ctrl+K; layar baru **Sessions** (6.12), **Usage** (6.13), **Skills** (6.15), **Logs** dengan sub-tab Gateway dan Approvals (6.16); **Cron** mendapat kontrol dan riwayat run (6.14, aksi cron maju dari v2 ke v1.1); **Second Brain** mendapat sub-tab Memory timeline (6.17); **Settings → Agents** bertambah MCP, Toolsets, Fallback, Backup, dan wizard profile baru (6.18); alert biaya harian; aturan state di semua layar (6.19). Fakta perintah dan lokasi file diverifikasi ke dokumentasi resmi Hermes dan dicatat di Lampiran (13.1), termasuk yang **tidak terdokumentasi**.
@@ -95,7 +96,7 @@ Prinsip ini punya dua lapis:
 - Mengganti atau menimpa seluruh profile dalam satu klik (restore backup dilakukan manual atau lewat `hermes import` di terminal).
 - Menghapus sesi, skill, atau job secara permanen dari aplikasi.
 - Versi sebelumnya melarang start/stop gateway; sejak v1.1, restart dan stop gateway **per profile** boleh atas aksi eksplisit (6.16). Aksi cron (pause/resume/run/edit/ack lewat `hermes cron …` resmi) ikut masuk v1.1 (6.14).
-- Chat room multi-agent (beberapa agent dalam satu room, atau agent saling bicara). v1 hanya chat 1-on-1.
+- Chat room multi-agent (beberapa agent dalam satu room, atau agent saling bicara). v1 hanya chat 1-on-1. **Dibangun di v2 (6.22, F-ROOM).**
 - Mendukung banyak VPS sekaligus. v1 hanya satu VPS per jendela; multi-VPS masuk v2.
 - Versi mobile atau versi web.
 - Lokalisasi selain bahasa Inggris.
@@ -628,6 +629,21 @@ Urutan sub-tab: Profile, Model, Soul, Memory, User profile, **MCP, Toolsets, Fal
 | F-R13-3 | Pintasan Ctrl+1 … Ctrl+0 dan Ctrl+` mengikuti urutan sidebar. Panel terminal (F-R12-2) tetap membentang di atas status bar. | P1 |
 | F-R13-4 | **Notifikasi desktop OS** (Electron `Notification` dari main process) muncul **di atas aplikasi lain** saat Mission Control diminimalkan, tidak fokus, atau berjalan di tray; klik notifikasi memfokuskan jendela dan membuka layar terkait. Diatur di Settings → Notifications ("Show desktop notifications over other apps", default aktif) bersama preview, suara, dan do-not-disturb; ada tombol **Send a test notification**. Saat jendela fokus, notifikasi cukup tampil sebagai toast di dalam aplikasi. Mockup memakai Notification API browser sebagai pengganti. | P0 |
 | F-UI-9 | **Kerapian jarak:** isi halaman memakai padding 20 px (atas), 24 px (kiri/kanan), 16 px (bawah); judul halaman, baris filter, dan isi dipisah 14 px; baris filter memakai jarak antar-kontrol 8-12 px; panel dengan judul di garis tepi (`┤ judul ├`) memberi ruang minimal 10 px di atasnya sehingga judul tidak terpotong oleh area scroll atau tertutup baris filter. | P0 |
+### 6.22 Chat room multi-agent (F-ROOM) — v2
+
+Spec: `docs/superpowers/specs/2026-10-20-group-chat-rooms-design.md`. Diverifikasi ke sumber Hermes tag v2026.8.31: room "hosted" Hermes (`groups.*`, tabel `hosted_rooms`) hanya dijalankan oleh `hermes serve`/dashboard, jadi **tidak dipakai** (Zero-Change). Aplikasi mengikuti jalur room milik klien di Hermes Desktop: tiap anggota punya sesi Hermes sendiri berjudul `Group: <roomId>`, dibuat lewat gateway TUI dengan `session.create {title, hidden, room_plumbing, follow_profile_config}`.
+
+| ID | Kebutuhan | Prio |
+|---|---|---|
+| F-ROOM-1 | Layar **Chat** punya bagian **Rooms** di atas Direct messages, dengan tombol New room. Baris room menampilkan avatar anggota, nama, dan status (`working…`, `needs you`, jumlah balasan baru, atau jumlah agent). | P1 |
+| F-ROOM-2 | **New room / Edit room**: nama 1–60 karakter dan **2–6 agent** dari VPS ini. Membuat, mengganti nama, mengubah anggota, dan menghapus room hanya mengubah `app.db`; sesi anggota di server tetap ada setelah room dihapus. | P1 |
+| F-ROOM-3 | **Ronde:** satu Send memicu paling banyak **3 ronde** berurutan (tidak paralel). Yang mendapat giliran: agent yang di-@mention sejak pesan user terakhir, atau semua bila tidak ada mention atau ada `@everyone`/`@all`. Urutan digeser tiap ronde. Agent hanya ditanya bila ada baris room yang baru baginya (maks 24 baris di prompt). Room selesai bila satu ronde diam, atau setelah **10 balasan**. | P1 |
+| F-ROOM-4 | **Prompt anggota** sama dengan Hermes Desktop: siapa saja di room, baris baru, dan aturan room (jawab singkat, `(pass)` bila tidak ada yang baru, `@name` menarik teman, `@user` untuk keputusan user, tanpa membocorkan chat 1:1). `(pass)`, jawaban kosong, atau turn gagal dihitung diam. | P1 |
+| F-ROOM-5 | Percakapan room menampilkan pesan user, balasan per agent dengan avatar dan warna, gelembung live agent yang sedang menjawab (chip tool, kartu approval/clarify), baris "X passed", catatan gagal, dan alasan room berhenti. Composer: Enter mengirim, `@` menawarkan anggota (panah + Enter), chip `@agent`, **Stop** selama room berjalan; Send ditolak selama run. | P1 |
+| F-ROOM-6 | Room butuh **gateway TUI** (`chat.useGateway`); tanpa gateway room menampilkan alasannya dan Send nonaktif (tidak ada fallback ACP/one-shot). Approval tidak pernah dijawab otomatis; turn yang dihentikan menjawab `deny`. | P0 |
+| F-ROOM-7 | Room yang selesai saat tidak dilihat memberi **badge** di Chat, notifikasi (`<room>: N new replies` atau `<agent> needs you`, klik membuka room) dan suara balasan. Room muncul di command palette; graph agent dan layar Sessions menampilkan nama room lokal untuk judul `Group: mc-…`. | P2 |
+| F-ROOM-8 | Log room tersimpan lokal (maks 2.000 entri per room); **Settings → Data → Clear room history** mengosongkannya. `app.log` hanya mencatat `room <id> run/turn …`, tanpa isi pesan. | P1 |
+
 ### 8.1 Arsitektur yang dipilih
 
 **Pemantauan: SSH + collector efemeral lewat stdin.**
@@ -746,7 +762,7 @@ Password **tidak** disimpan sebagai plaintext. Yang disimpan di `app.db` hanya b
 | **M8 — Insights** (v1.1) | F-SESS-1..7 (spike: kueri FTS di `state.db` besar), F-USAGE-1..6, F-NAV-5..8 (badge, pintasan, command palette, filter bersama), alert biaya | Riwayat dan pencarian sesi, analitik biaya dan tool, palette Ctrl+K |
 | **M9 — Operations** (v1.1) | F-LOG-1..9, F-CRON-7..14 (spike: perintah `cron runs` dan `incidents` di Hermes asli), notifikasi cron/gateway yang diperluas | Log tail, status gateway, kebijakan approval, kontrol dan riwayat cron |
 | **M10 — Agent management** (v1.1) | F-SKILL-1..7, F-MEMT-1..6, F-CFG-19..26 (spike: `tools --summary`, `mcp list`, `fallback list` untuk parser) | Skills, memory timeline, MCP, toolsets, fallback, backup, profile baru |
-| v2 (kandidat) | Multi-VPS, chat room multi-agent, mode ACP, auto-update, membaca `.obsidian/graph.json`, auxiliary model, katalog model, aksi tulis di Kanban | — |
+| v2 (kandidat) | Multi-VPS, ~~chat room multi-agent~~ (dibangun, 6.22), ~~mode ACP~~ (dibangun), ~~auto-update~~ (dibangun), membaca `.obsidian/graph.json`, auxiliary model, katalog model, aksi tulis di Kanban | Room multi-agent di layar Chat |
 
 ## 11. Risiko & Mitigasi
 
