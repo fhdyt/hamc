@@ -1,5 +1,6 @@
 import type { AgentLook, AgentLooks } from '@shared/looks'
 import Database from 'better-sqlite3'
+import { GroupStore } from '../groups/store'
 import type { AuthMethod, SavedConnection } from '@shared/ipc'
 import { SETTINGS_DEFAULTS, SETTINGS_SCHEMA, type SettingsMap } from '@shared/settings'
 
@@ -54,7 +55,36 @@ const MIGRATIONS: string[] = [
    );`,
   // F-CONN-7: the sign-in method; password_enc then holds the secret of that method (password or key passphrase)
   `ALTER TABLE connections ADD COLUMN auth_method TEXT NOT NULL DEFAULT 'password';
-   ALTER TABLE connections ADD COLUMN key_path TEXT;`
+   ALTER TABLE connections ADD COLUMN key_path TEXT;`,
+  // group chat rooms (F-ROOM): rooms, their members (with each member's room session) and the room log
+  `CREATE TABLE group_rooms (
+     connection_id INTEGER NOT NULL,
+     group_id TEXT NOT NULL,
+     name TEXT NOT NULL,
+     needs_you INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL,
+     PRIMARY KEY (connection_id, group_id)
+   );
+   CREATE TABLE group_members (
+     connection_id INTEGER NOT NULL,
+     group_id TEXT NOT NULL,
+     profile TEXT NOT NULL,
+     position INTEGER NOT NULL,
+     session_id TEXT,
+     seen_seq INTEGER NOT NULL DEFAULT 0,
+     PRIMARY KEY (connection_id, group_id, profile)
+   );
+   CREATE TABLE group_entries (
+     connection_id INTEGER NOT NULL,
+     group_id TEXT NOT NULL,
+     seq INTEGER NOT NULL,
+     author TEXT NOT NULL,
+     text TEXT NOT NULL,
+     status TEXT NOT NULL,
+     ts INTEGER NOT NULL,
+     PRIMARY KEY (connection_id, group_id, seq)
+   );`
 ]
 
 /** Retention of memory snapshots (PRD F-MEMT-2): 200 versions per file, 180 days; the newest version always stays. */
@@ -108,11 +138,14 @@ interface ConnRow {
 
 export class SettingsStore {
   private db: Database.Database
+  /** Group chat rooms of the saved connection. */
+  readonly groups: GroupStore
 
   constructor(path: string) {
     this.db = new Database(path)
     this.db.pragma('journal_mode = WAL')
     this.migrate()
+    this.groups = new GroupStore(this.db, () => this.connRow()?.id ?? null)
   }
 
   private migrate(): void {
@@ -215,6 +248,7 @@ export class SettingsStore {
       this.db.prepare('DELETE FROM settings WHERE key LIKE ?').run(`chat.session.${r.id}.%`)
       this.db.prepare('DELETE FROM memory_snapshots WHERE connection_id = ?').run(r.id)
       this.db.prepare('DELETE FROM agent_looks WHERE connection_id = ?').run(r.id)
+      this.groups.forget(r.id)
       this.db.prepare('DELETE FROM known_hosts WHERE host = ? AND port = ?').run(r.host, r.port)
       this.db.prepare('DELETE FROM connections WHERE id = ?').run(r.id)
     })()
