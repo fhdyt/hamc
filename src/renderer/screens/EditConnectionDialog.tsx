@@ -28,7 +28,7 @@ export function EditConnectionDialogBody({ onDone }: { onDone: () => void }) {
         {confirmForget ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span style={{ color: '#FFB86C' }}>
-              This removes the saved connection, its password and its trusted host key from this computer. Nothing changes on your VPS.
+              This removes the saved connection, its password or key passphrase and its trusted host key from this computer. The key file itself stays where it is. Nothing changes on your VPS.
             </span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" className="cb dng" onClick={() => void forgetConnection()}>Forget this connection</button>

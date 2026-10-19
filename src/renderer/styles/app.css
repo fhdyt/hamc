@@ -50,6 +50,20 @@ body {
 .field label .hint { color: #8b95bd; }
 .inp { background: #282a36; border: 1px solid #6272a4; color: #50fa7b; font: inherit; padding: 9px 10px; border-radius: 0; width: 100%; box-sizing: border-box; }
 .inp:focus-visible { outline: 1px solid #50fa7b; outline-offset: 0; }
+/* connection form: sign-in method and key file (F-CONN-7) */
+.cf-label { color: #a9b2d3; font-size: 12px; }
+.cf-seg { display: flex; border: 1px solid #6272a4; width: fit-content; }
+.cf-seg button { min-height: 36px; padding: 0 14px; border: 0; background: transparent; color: #a9b2d3; font: inherit; cursor: pointer; }
+.cf-seg button + button { border-left: 1px solid #6272a4; }
+.cf-seg button[aria-checked='true'] { background: #343746; color: #50fa7b; }
+.cf-seg button:focus-visible { outline: 1px solid #50fa7b; outline-offset: -1px; }
+.cf-key { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 38px; padding: 6px 10px; border: 1px solid #44475a; background: #282a36; }
+.cf-key code { color: #f8f8f2; overflow-wrap: anywhere; }
+.cf-key-facts { flex: 1 1 200px; color: #a9b2d3; font-size: 12px; overflow-wrap: anywhere; }
+.cf-key-facts.warn { color: #ffb86c; }
+.cf-choose { align-self: flex-start; min-height: 38px; }
+.cf-pick-err { margin: 0; color: #ff5555; font-size: 12px; }
+.cf-help { margin: 0; color: #8b95bd; font-size: 11px; }
 .btn-main { display: block; width: 100%; text-align: center; padding: 12px; background: #50fa7b; color: #282a36; font: inherit; font-weight: 700; letter-spacing: 2px; border: 0; cursor: pointer; }
 .btn-main[disabled] { background: #44475a; color: #8b95bd; cursor: not-allowed; }
 .btn-warn { min-height: 40px; padding: 0 16px; background: #ffb86c; color: #282a36; border: 0; font: inherit; font-weight: 700; cursor: pointer; }

@@ -102,7 +102,19 @@ describe('procs', () => {
 })
 
 describe('validateConnectForm', () => {
-  const base = { host: '203.0.113.42', port: '22', username: 'root', password: 'x', hasSavedPassword: false, sameTarget: false }
+  const base = {
+    host: '203.0.113.42',
+    port: '22',
+    username: 'root',
+    auth: 'password' as const,
+    password: 'x',
+    keyPath: null,
+    keyEncrypted: false,
+    passphrase: '',
+    hasSavedSecret: false,
+    sameTarget: false,
+    sameKey: false
+  }
   it('accepts a complete form', () => {
     expect(validateConnectForm(base)).toEqual({ ok: true, port: 22 })
   })
@@ -115,8 +127,17 @@ describe('validateConnectForm', () => {
     expect(validateConnectForm({ ...base, password: '' })).toMatchObject({ ok: false, field: 'password' })
   })
   it('allows an empty password only for the same saved target', () => {
-    expect(validateConnectForm({ ...base, password: '', hasSavedPassword: true, sameTarget: true })).toEqual({ ok: true, port: 22 })
-    expect(validateConnectForm({ ...base, password: '', hasSavedPassword: true, sameTarget: false })).toMatchObject({ ok: false, field: 'password' })
+    expect(validateConnectForm({ ...base, password: '', hasSavedSecret: true, sameTarget: true })).toEqual({ ok: true, port: 22 })
+    expect(validateConnectForm({ ...base, password: '', hasSavedSecret: true, sameTarget: false })).toMatchObject({ ok: false, field: 'password' })
+  })
+  it('key sign-in needs a key file, and the passphrase of an encrypted key unless it is saved for that key', () => {
+    const key = { ...base, auth: 'key' as const, password: '' }
+    expect(validateConnectForm(key)).toEqual({ ok: false, field: 'key', message: 'Choose the key file.' })
+    expect(validateConnectForm({ ...key, keyPath: '/k' })).toEqual({ ok: true, port: 22 })
+    expect(validateConnectForm({ ...key, keyPath: '/k', keyEncrypted: true })).toEqual({ ok: false, field: 'passphrase', message: 'Enter the passphrase of this key.' })
+    expect(validateConnectForm({ ...key, keyPath: '/k', keyEncrypted: true, passphrase: 'pp' })).toEqual({ ok: true, port: 22 })
+    expect(validateConnectForm({ ...key, keyPath: '/k', keyEncrypted: true, hasSavedSecret: true, sameKey: true })).toEqual({ ok: true, port: 22 })
+    expect(validateConnectForm({ ...key, keyPath: '/k', keyEncrypted: true, hasSavedSecret: true, sameKey: false })).toMatchObject({ ok: false, field: 'passphrase' })
   })
 })
 

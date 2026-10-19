@@ -26,8 +26,9 @@ import { useAgentOps } from './stores/agentOps'
 import { useUi } from './stores/ui'
 
 export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
-  const { password: _password, ...withoutPassword } = req
-  useConn.setState({ connecting: true, connectError: null, hostKey: null, lastRequest: withoutPassword })
+  // secrets stay out of the store; a retry after a host key prompt gets them from the main process
+  const { password: _password, passphrase: _passphrase, ...withoutSecrets } = req
+  useConn.setState({ connecting: true, connectError: null, hostKey: null, lastRequest: withoutSecrets })
   // Feed ids only mean something on one server; drop what a different server left behind before new events arrive.
   const prev = useConn.getState().saved
   if (prev && (prev.host !== req.host || prev.port !== req.port || prev.username !== req.username)) {

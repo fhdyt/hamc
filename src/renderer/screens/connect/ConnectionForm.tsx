@@ -1,4 +1,5 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import type { AuthMethod, KeyInfo } from '@shared/ipc'
 import { runConnect } from '../../actions'
 import { validateConnectForm } from '../../lib/connectForm'
 import { useConn } from '../../stores/conn'
@@ -7,6 +8,11 @@ interface Props {
   mode: 'first' | 'edit'
   onConnected?: () => void
 }
+
+const METHODS: { id: AuthMethod; label: string }[] = [
+  { id: 'password', label: 'Password' },
+  { id: 'key', label: 'Private key' }
+]
 
 export function ConnectionForm({ mode, onConnected }: Props) {
   const saved = useConn((s) => s.saved)
@@ -18,21 +24,64 @@ export function ConnectionForm({ mode, onConnected }: Props) {
   const [host, setHost] = useState(saved?.host ?? '')
   const [port, setPort] = useState(String(saved?.port ?? 22))
   const [username, setUsername] = useState(saved?.username ?? '')
+  const [auth, setAuth] = useState<AuthMethod>(saved?.authMethod ?? 'password')
   const [password, setPassword] = useState('')
+  const [key, setKey] = useState<KeyInfo | null>(saved?.keyInfo ?? null)
+  const [keyPath, setKeyPath] = useState<string | null>(saved?.keyPath ?? null)
+  const [pickError, setPickError] = useState<string | null>(null)
+  const [passphrase, setPassphrase] = useState('')
   const [remember, setRemember] = useState(saved?.remember ?? true)
   const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null)
   const refs = {
     host: useRef<HTMLInputElement>(null),
     port: useRef<HTMLInputElement>(null),
     username: useRef<HTMLInputElement>(null),
-    password: useRef<HTMLInputElement>(null)
+    password: useRef<HTMLInputElement>(null),
+    key: useRef<HTMLButtonElement>(null),
+    passphrase: useRef<HTMLInputElement>(null)
   }
+  const methodRefs = useRef<(HTMLButtonElement | null)[]>([])
   const canRemember = secret?.canRemember ?? true
+  const savedSecretFor = (m: AuthMethod): boolean => !!saved?.hasSecret && saved.authMethod === m
+
+  async function chooseKey(): Promise<void> {
+    setPickError(null)
+    const r = await window.mc.connection.pickKey()
+    if (r.ok) {
+      setKey(r.key)
+      setKeyPath(r.key.path)
+      setPassphrase('')
+      if (fieldError?.field === 'key') setFieldError(null)
+    } else if (r.reason !== 'cancelled') {
+      setPickError(r.message ?? 'This file cannot be used as a private key.')
+    }
+  }
+
+  function onMethodKey(e: KeyboardEvent<HTMLButtonElement>, i: number): void {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return
+    e.preventDefault()
+    const next = (i + (e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1) + METHODS.length) % METHODS.length
+    setAuth(METHODS[next]!.id)
+    setFieldError(null)
+    methodRefs.current[next]?.focus()
+  }
 
   async function submit(e: FormEvent): Promise<void> {
     e.preventDefault()
     const sameTarget = !!saved && saved.host === host.trim() && String(saved.port) === port.trim() && saved.username === username.trim()
-    const check = validateConnectForm({ host, port, username, password, hasSavedPassword: !!saved?.hasSecret, sameTarget })
+    const check = validateConnectForm({
+      host,
+      port,
+      username,
+      auth,
+      password,
+      keyPath,
+      keyEncrypted: key?.encrypted ?? false,
+      passphrase,
+      hasSavedSecret: savedSecretFor(auth),
+      sameTarget,
+      sameKey: sameTarget && !!keyPath && saved?.keyPath === keyPath
+    })
     if (!check.ok) {
       setFieldError({ field: check.field, message: check.message })
       refs[check.field].current?.focus()
@@ -43,15 +92,21 @@ export function ConnectionForm({ mode, onConnected }: Props) {
       host: host.trim(),
       port: check.port,
       username: username.trim(),
-      ...(password ? { password } : {}),
+      auth,
+      ...(auth === 'password' && password ? { password } : {}),
+      ...(auth === 'key' && keyPath ? { keyPath } : {}),
+      ...(auth === 'key' && passphrase ? { passphrase } : {}),
       remember: remember && canRemember
     })
     setPassword('')
+    setPassphrase('')
     if (res.ok) onConnected?.()
   }
 
   const err = (f: string): string | undefined => (fieldError?.field === f ? fieldError.message : undefined)
   const describedBy = (f: string): string | undefined => (err(f) ? 'cf-err' : undefined)
+  const keyName = key?.name ?? (keyPath ? keyPath.split(/[\\/]/).pop() : null)
+  const keychainHint = auth === 'password' ? '(password → OS keychain)' : key?.encrypted ? '(passphrase → OS keychain)' : null
 
   return (
     <form onSubmit={(e) => void submit(e)} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -72,15 +127,81 @@ export function ConnectionForm({ mode, onConnected }: Props) {
         <input id="cf-user" ref={refs.username} className="inp" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" spellCheck={false} aria-invalid={!!err('username')} aria-describedby={describedBy('username')} />
       </div>
       <div className="field">
-        <label htmlFor="cf-pass">
-          password {mode === 'edit' && saved?.hasSecret && <span className="hint">(leave empty to keep the saved password)</span>}
-        </label>
-        <input id="cf-pass" ref={refs.password} className="inp" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" aria-invalid={!!err('password')} aria-describedby={describedBy('password')} />
+        <span id="cf-method-label" className="cf-label">sign in with</span>
+        <div className="cf-seg" role="radiogroup" aria-labelledby="cf-method-label">
+          {METHODS.map((m, i) => (
+            <button
+              key={m.id}
+              ref={(el) => {
+                methodRefs.current[i] = el
+              }}
+              type="button"
+              role="radio"
+              aria-checked={auth === m.id}
+              tabIndex={auth === m.id ? 0 : -1}
+              onClick={() => {
+                setAuth(m.id)
+                setFieldError(null)
+              }}
+              onKeyDown={(e) => onMethodKey(e, i)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
       </div>
+      {auth === 'password' ? (
+        <div className="field">
+          <label htmlFor="cf-pass">
+            password {mode === 'edit' && savedSecretFor('password') && <span className="hint">(leave empty to keep the saved password)</span>}
+          </label>
+          <input id="cf-pass" ref={refs.password} className="inp" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" aria-invalid={!!err('password')} aria-describedby={describedBy('password')} />
+        </div>
+      ) : (
+        <>
+          <div className="field">
+            <span className="cf-label">private key file</span>
+            {keyPath ? (
+              <div className="cf-key">
+                <code title={keyPath}>{keyName}</code>
+                {key ? (
+                  <span className="cf-key-facts">
+                    {key.type}
+                    {key.fingerprint && <> · {key.fingerprint}</>}
+                  </span>
+                ) : (
+                  <span className="cf-key-facts warn">the saved key file was not found</span>
+                )}
+                <button type="button" ref={refs.key} className="cb sm" onClick={() => void chooseKey()}>
+                  Change
+                </button>
+              </div>
+            ) : (
+              <button type="button" id="cf-key" ref={refs.key} className="cb cf-choose" onClick={() => void chooseKey()} aria-describedby={describedBy('key')}>
+                Choose key file…
+              </button>
+            )}
+            {pickError && (
+              <p role="alert" className="cf-pick-err">
+                {pickError}
+              </p>
+            )}
+          </div>
+          {key?.encrypted && (
+            <div className="field">
+              <label htmlFor="cf-phrase">
+                passphrase {mode === 'edit' && savedSecretFor('key') && saved?.keyPath === keyPath && <span className="hint">(leave empty to keep the saved passphrase)</span>}
+              </label>
+              <input id="cf-phrase" ref={refs.passphrase} className="inp" type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} autoComplete="off" aria-invalid={!!err('passphrase')} aria-describedby={describedBy('passphrase')} />
+            </div>
+          )}
+          <p className="cf-help">The public key must already be in ~/.ssh/authorized_keys on the server. The app does not add it.</p>
+        </>
+      )}
       <label className="chk">
         <input type="checkbox" checked={remember && canRemember} disabled={!canRemember} onChange={(e) => setRemember(e.target.checked)} />
         <span>
-          remember &amp; auto-connect on launch <span style={{ color: '#8B95BD', fontSize: 12 }}>(password → OS keychain)</span>
+          remember &amp; auto-connect on launch {keychainHint && <span style={{ color: '#8B95BD', fontSize: 12 }}>{keychainHint}</span>}
         </span>
       </label>
       {!canRemember && secret?.reason && <p style={{ margin: 0, color: '#FFB86C', fontSize: 11 }}>{secret.reason}</p>}
