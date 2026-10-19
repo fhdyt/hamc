@@ -18,6 +18,32 @@ import type { TermData, TermExit, TermOpenResult, TermSize, TermOpenRequest, Ter
 
 export { IPC } from './channels'
 
+/** How a connection signs in (F-CONN-7): one method per connection. */
+export type AuthMethod = 'password' | 'key'
+export type KeyFormat = 'openssh' | 'pem' | 'ppk'
+
+/** What the app may say about a private key file: never its contents. */
+export interface KeyFacts {
+  /** `ED25519`, `ECDSA`, `RSA`, `DSA`, or `encrypted` while the type is locked behind the passphrase. */
+  type: string
+  /** `SHA256:…` of the public key, or null while it cannot be read without the passphrase. */
+  fingerprint: string | null
+  encrypted: boolean
+  format: KeyFormat
+}
+
+export interface KeyInfo extends KeyFacts {
+  path: string
+  /** The file name, for display. */
+  name: string
+}
+
+export type KeyProblem = 'unreadable' | 'too-big' | 'not-a-key' | 'ppk3' | 'needs-passphrase' | 'bad-passphrase'
+
+export type PickKeyResult =
+  | { ok: true; key: KeyInfo }
+  | { ok: false; reason: 'cancelled' | 'unreadable' | 'too-big' | 'not-a-key' | 'ppk3'; message?: string }
+
 export const ConnectRequestSchema = z.object({
   host: z.string().trim().min(1).max(253),
   port: z.number().int().min(1).max(65535),
