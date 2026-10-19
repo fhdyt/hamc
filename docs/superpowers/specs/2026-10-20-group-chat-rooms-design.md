@@ -68,7 +68,7 @@ Let the user talk to several agents in one room (PRD §2 "Chat room multi-agent"
 ## Data (`app.db` migration 6)
 
 ```sql
-CREATE TABLE groups (
+CREATE TABLE group_rooms (
   connection_id INTEGER NOT NULL, group_id TEXT NOT NULL, name TEXT NOT NULL,
   needs_you INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
   PRIMARY KEY (connection_id, group_id));
@@ -98,8 +98,8 @@ CREATE TABLE group_entries (
   1. Store the user entry, mark the room not needing the user.
   2. For each round (≤ 3): the speakers are `rotate(responders(...), round)`. For each speaker, until 10 member
      messages: build the prompt from the `ok` entries after the member's `seen_seq` (last 24), run the turn, collect
-     the text, store an entry (`ok` with the reply, `pass`, `failed` with the error, or `stopped`), and move the
-     member's `seen_seq` to the seq before its reply (its own reply is in its own session already). A reply mentioning
+     the text, store an entry (`ok` with the reply, `pass`, `failed` with the error, or `stopped`), and set the
+     member's `seen_seq` to the newest seq it was shown (its own entries never go into its prompts: they are in its own session already). A reply mentioning
      `@user` sets `needs_you`.
   3. The run ends with `settled` (a round with no `ok` reply), `cap` (10 messages or 3 rounds), `stopped`, or `error`
      (the gateway died or could not start).
