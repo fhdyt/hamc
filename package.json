@@ -1,7 +1,7 @@
 {
   "name": "hermes-mission-control",
   "productName": "Hermes Agent Mission Control",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Mission Control for Hermes Agent",
   "author": "fhdyt <fhdyt@users.noreply.github.com>",
