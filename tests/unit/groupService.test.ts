@@ -165,6 +165,18 @@ describe('GroupService', () => {
     expect(t.prompts).toHaveLength(1)
   })
 
+  it('writes nothing more for a room deleted while it runs', async () => {
+    const t = setup()
+    const id = t.room(['ada', 'bo'])
+    t.scripts['ada'] = ['SLOW']
+    await t.svc.send(id, 'hi')
+    await waitFor(() => t.prompts.length === 1, { label: 'turn' })
+    t.svc.remove(id)
+    await waitFor(() => !!t.ended(), { label: 'run end' })
+    expect(t.store.groups.entries(id)).toEqual([])
+    expect(t.store.groups.lastSeq(id)).toBe(0)
+  })
+
   it('needs the gateway and checks the message', async () => {
     const t = setup({ available: false })
     const id = t.room(['ada', 'bo'])

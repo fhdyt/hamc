@@ -182,7 +182,9 @@ export class GroupService {
     for (const id of [...this.runs.keys()]) this.stop(id)
   }
 
-  private add(id: string, author: string, text: string, status: GroupEntryStatus): GroupEntry {
+  private add(id: string, author: string, text: string, status: GroupEntryStatus): GroupEntry | null {
+    // a room deleted while its last turn was ending gets nothing more
+    if (!this.d.store.get(id)) return null
     const entry = this.d.store.addEntry(id, author, text, status)
     this.d.emit({ groupId: id, kind: 'entry', entry })
     return entry
