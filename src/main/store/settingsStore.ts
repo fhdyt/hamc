@@ -1,6 +1,6 @@
 import type { AgentLook, AgentLooks } from '@shared/looks'
 import Database from 'better-sqlite3'
-import type { SavedConnection } from '@shared/ipc'
+import type { AuthMethod, SavedConnection } from '@shared/ipc'
 import { SETTINGS_DEFAULTS, SETTINGS_SCHEMA, type SettingsMap } from '@shared/settings'
 
 const MIGRATIONS: string[] = [
@@ -51,7 +51,10 @@ const MIGRATIONS: string[] = [
      photo TEXT,
      updated_at INTEGER NOT NULL,
      PRIMARY KEY (connection_id, profile)
-   );`
+   );`,
+  // F-CONN-7: the sign-in method; password_enc then holds the secret of that method (password or key passphrase)
+  `ALTER TABLE connections ADD COLUMN auth_method TEXT NOT NULL DEFAULT 'password';
+   ALTER TABLE connections ADD COLUMN key_path TEXT;`
 ]
 
 /** Retention of memory snapshots (PRD F-MEMT-2): 200 versions per file, 180 days; the newest version always stays. */
@@ -78,7 +81,10 @@ export interface UpsertConnection {
   port: number
   username: string
   remember: boolean
-  passwordEnc?: Buffer | null
+  authMethod?: AuthMethod
+  keyPath?: string | null
+  /** The encrypted password or key passphrase. Undefined keeps the stored one while the method and key file stay the same. */
+  secretEnc?: Buffer | null
 }
 
 export interface KnownHost {
@@ -96,6 +102,8 @@ interface ConnRow {
   remember: number
   password_enc: Buffer | null
   last_connected_at: number | null
+  auth_method: AuthMethod
+  key_path: string | null
 }
 
 export class SettingsStore {
@@ -163,32 +171,33 @@ export class SettingsStore {
       port: r.port,
       username: r.username,
       remember: r.remember === 1,
-      hasPassword: r.password_enc !== null,
+      hasSecret: r.password_enc !== null,
+      authMethod: r.auth_method,
+      keyPath: r.key_path,
       lastConnectedAt: r.last_connected_at,
       fingerprint: kh?.fingerprint ?? null
     }
   }
 
-  getPasswordEnc(): Buffer | null {
+  getSecretEnc(): Buffer | null {
     return this.connRow()?.password_enc ?? null
   }
 
   upsertConnection(input: UpsertConnection): number {
     const existing = this.connRow()
-    const passwordEnc = !input.remember
-      ? null
-      : input.passwordEnc === undefined
-        ? (existing?.password_enc ?? null)
-        : input.passwordEnc
+    const authMethod = input.authMethod ?? existing?.auth_method ?? 'password'
+    const keyPath = authMethod === 'key' ? (input.keyPath ?? existing?.key_path ?? null) : null
+    const sameAuth = !!existing && existing.auth_method === authMethod && existing.key_path === keyPath
+    const secretEnc = !input.remember ? null : input.secretEnc !== undefined ? input.secretEnc : sameAuth ? existing.password_enc : null
     if (existing) {
       this.db
-        .prepare('UPDATE connections SET name=?, host=?, port=?, username=?, remember=?, password_enc=? WHERE id=?')
-        .run(input.name, input.host, input.port, input.username, input.remember ? 1 : 0, passwordEnc, existing.id)
+        .prepare('UPDATE connections SET name=?, host=?, port=?, username=?, remember=?, password_enc=?, auth_method=?, key_path=? WHERE id=?')
+        .run(input.name, input.host, input.port, input.username, input.remember ? 1 : 0, secretEnc, authMethod, keyPath, existing.id)
       return existing.id
     }
     const res = this.db
-      .prepare('INSERT INTO connections (name, host, port, username, remember, password_enc) VALUES (?,?,?,?,?,?)')
-      .run(input.name, input.host, input.port, input.username, input.remember ? 1 : 0, passwordEnc)
+      .prepare('INSERT INTO connections (name, host, port, username, remember, password_enc, auth_method, key_path) VALUES (?,?,?,?,?,?,?,?)')
+      .run(input.name, input.host, input.port, input.username, input.remember ? 1 : 0, secretEnc, authMethod, keyPath)
     return Number(res.lastInsertRowid)
   }
 

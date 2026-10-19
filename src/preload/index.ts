@@ -15,7 +15,8 @@ const api: MissionApi = {
     disconnect: () => ipcRenderer.invoke(IPC.disconnect),
     forget: () => ipcRenderer.invoke(IPC.forget),
     saved: () => ipcRenderer.invoke(IPC.saved),
-    secretStatus: () => ipcRenderer.invoke(IPC.secretStatus)
+    secretStatus: () => ipcRenderer.invoke(IPC.secretStatus),
+    pickKey: () => ipcRenderer.invoke(IPC.pickKey)
   },
   settings: {
     all: () => ipcRenderer.invoke(IPC.settingsAll),

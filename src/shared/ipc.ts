@@ -49,6 +49,11 @@ export const ConnectRequestSchema = z.object({
   port: z.number().int().min(1).max(65535),
   username: z.string().trim().min(1).max(64),
   password: z.string().max(1024).optional(),
+  /** Absent: the saved connection's method for the same target, else password. */
+  auth: z.enum(['password', 'key']).optional(),
+  /** A path the main process returned from its key dialog in this run, or the saved one; anything else is refused. */
+  keyPath: z.string().min(1).max(4096).optional(),
+  passphrase: z.string().max(1024).optional(),
   remember: z.boolean(),
   useSaved: z.boolean().optional()
 })
@@ -102,7 +107,12 @@ export interface SavedConnection {
   port: number
   username: string
   remember: boolean
-  hasPassword: boolean
+  /** A password or key passphrase is in the keychain. */
+  hasSecret: boolean
+  authMethod: AuthMethod
+  keyPath: string | null
+  /** The saved key file as it is now; null when it is gone or unreadable (filled by the session, not the store). */
+  keyInfo?: KeyInfo | null
   lastConnectedAt: number | null
   fingerprint: string | null
 }
@@ -212,6 +222,8 @@ export interface MissionApi {
     forget(): Promise<void>
     saved(): Promise<SavedConnection | null>
     secretStatus(): Promise<{ canRemember: boolean; reason: string | null }>
+    /** The native dialog for a private key file; only facts about the key come back. */
+    pickKey(): Promise<PickKeyResult>
   }
   settings: {
     all(): Promise<SettingsMap>

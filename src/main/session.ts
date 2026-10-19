@@ -288,7 +288,7 @@ export class MissionSession {
     const saved = this.d.store.getConnection()
     const sameTarget = !!saved && saved.host === req.host && saved.port === req.port && saved.username === req.username
     if (!password && sameTarget) {
-      const enc = this.d.store.getPasswordEnc()
+      const enc = this.d.store.getSecretEnc()
       const plain = enc ? this.d.secrets.decrypt(enc) : null
       if (plain) {
         password = plain
@@ -396,7 +396,7 @@ export class MissionSession {
         port: params.port,
         username: params.username,
         remember: this.remember,
-        passwordEnc: canKeep ? this.d.secrets.encrypt(params.password) : null
+        secretEnc: canKeep ? this.d.secrets.encrypt(params.password) : null
       })
       store.touchConnected(id, Date.now())
     }

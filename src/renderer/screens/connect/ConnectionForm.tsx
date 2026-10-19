@@ -32,7 +32,7 @@ export function ConnectionForm({ mode, onConnected }: Props) {
   async function submit(e: FormEvent): Promise<void> {
     e.preventDefault()
     const sameTarget = !!saved && saved.host === host.trim() && String(saved.port) === port.trim() && saved.username === username.trim()
-    const check = validateConnectForm({ host, port, username, password, hasSavedPassword: !!saved?.hasPassword, sameTarget })
+    const check = validateConnectForm({ host, port, username, password, hasSavedPassword: !!saved?.hasSecret, sameTarget })
     if (!check.ok) {
       setFieldError({ field: check.field, message: check.message })
       refs[check.field].current?.focus()
@@ -73,7 +73,7 @@ export function ConnectionForm({ mode, onConnected }: Props) {
       </div>
       <div className="field">
         <label htmlFor="cf-pass">
-          password {mode === 'edit' && saved?.hasPassword && <span className="hint">(leave empty to keep the saved password)</span>}
+          password {mode === 'edit' && saved?.hasSecret && <span className="hint">(leave empty to keep the saved password)</span>}
         </label>
         <input id="cf-pass" ref={refs.password} className="inp" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" aria-invalid={!!err('password')} aria-describedby={describedBy('password')} />
       </div>

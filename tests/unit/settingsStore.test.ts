@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import Database from 'better-sqlite3'
 import { SettingsStore } from '../../src/main/store/settingsStore'
 import { SETTINGS_DEFAULTS } from '@shared/settings'
 
@@ -27,7 +28,7 @@ describe('settings', () => {
   })
 
   it('resets every setting to its default and keeps the window bounds, the connection and what belongs to it', () => {
-    const id = store.upsertConnection({ ...conn, passwordEnc: Buffer.from('enc') })
+    const id = store.upsertConnection({ ...conn, secretEnc: Buffer.from('enc') })
     store.setPins(id, ['scout'])
     store.setVault(id, '/home/hermes/vault')
     store.setSetting('ui.zoom', 1.3)
@@ -51,24 +52,57 @@ describe('connections', () => {
   })
 
   it('stores a connection with an encrypted password blob', () => {
-    const id = store.upsertConnection({ ...conn, passwordEnc: Buffer.from('enc') })
+    const id = store.upsertConnection({ ...conn, secretEnc: Buffer.from('enc') })
     const c = store.getConnection()!
-    expect(c).toMatchObject({ id, host: '10.0.0.1', port: 22, username: 'root', remember: true, hasPassword: true })
-    expect(store.getPasswordEnc()!.toString()).toBe('enc')
+    expect(c).toMatchObject({ id, host: '10.0.0.1', port: 22, username: 'root', remember: true, hasSecret: true })
+    expect(store.getSecretEnc()!.toString()).toBe('enc')
   })
 
-  it('keeps the old password when passwordEnc is undefined', () => {
-    store.upsertConnection({ ...conn, passwordEnc: Buffer.from('enc') })
+  it('keeps the old password when secretEnc is undefined', () => {
+    store.upsertConnection({ ...conn, secretEnc: Buffer.from('enc') })
     store.upsertConnection({ ...conn, port: 2222 })
     expect(store.getConnection()!.port).toBe(2222)
-    expect(store.getPasswordEnc()!.toString()).toBe('enc')
+    expect(store.getSecretEnc()!.toString()).toBe('enc')
   })
 
   it('clears the password when remember is false', () => {
-    store.upsertConnection({ ...conn, passwordEnc: Buffer.from('enc') })
+    store.upsertConnection({ ...conn, secretEnc: Buffer.from('enc') })
     store.upsertConnection({ ...conn, remember: false })
-    expect(store.getConnection()!.hasPassword).toBe(false)
-    expect(store.getPasswordEnc()).toBeNull()
+    expect(store.getConnection()!.hasSecret).toBe(false)
+    expect(store.getSecretEnc()).toBeNull()
+  })
+
+  it('reads a connection saved before migration 5 as a password connection', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mc-store-old-'))
+    const file = join(dir, 'app.db')
+    const old = new Database(file)
+    old.exec(`CREATE TABLE connections (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, host TEXT NOT NULL, port INTEGER NOT NULL,
+                username TEXT NOT NULL, remember INTEGER NOT NULL DEFAULT 1, password_enc BLOB, last_connected_at INTEGER);
+              CREATE TABLE known_hosts (host TEXT NOT NULL, port INTEGER NOT NULL, algo TEXT NOT NULL, fingerprint TEXT NOT NULL, first_seen_at INTEGER NOT NULL, PRIMARY KEY (host, port));
+              CREATE TABLE schema_version (version INTEGER NOT NULL);
+              INSERT INTO schema_version VALUES (1), (2), (3), (4);`)
+    old.prepare('INSERT INTO connections (name, host, port, username, remember, password_enc) VALUES (?,?,?,?,?,?)').run('prod', '10.0.0.1', 22, 'root', 1, Buffer.from('enc'))
+    old.close()
+    const s = new SettingsStore(file)
+    expect(s.getConnection()).toMatchObject({ host: '10.0.0.1', authMethod: 'password', keyPath: null, hasSecret: true })
+    s.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('stores the key method with its path and passphrase, and keeps the passphrase while both stay the same', () => {
+    store.upsertConnection({ ...conn, authMethod: 'key', keyPath: '/home/me/.ssh/id_ed25519', secretEnc: Buffer.from('pp') })
+    expect(store.getConnection()).toMatchObject({ authMethod: 'key', keyPath: '/home/me/.ssh/id_ed25519', hasSecret: true })
+    store.upsertConnection({ ...conn, authMethod: 'key', keyPath: '/home/me/.ssh/id_ed25519' })
+    expect(store.getSecretEnc()!.toString()).toBe('pp')
+  })
+
+  it('drops the secret when the method or the key file changes', () => {
+    store.upsertConnection({ ...conn, authMethod: 'key', keyPath: '/a', secretEnc: Buffer.from('pp') })
+    store.upsertConnection({ ...conn, authMethod: 'key', keyPath: '/b' })
+    expect(store.getConnection()).toMatchObject({ keyPath: '/b', hasSecret: false })
+    store.upsertConnection({ ...conn, authMethod: 'key', keyPath: '/b', secretEnc: Buffer.from('pp') })
+    store.upsertConnection({ ...conn, authMethod: 'password' })
+    expect(store.getConnection()).toMatchObject({ authMethod: 'password', keyPath: null, hasSecret: false })
   })
 
   it('keeps a single connection row', () => {

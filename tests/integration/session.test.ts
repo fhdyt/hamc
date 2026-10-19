@@ -116,8 +116,8 @@ describe('first connection', () => {
     await trusted(session)
     expect((await session.connect(req())).ok).toBe(true)
     const saved = store.getConnection()!
-    expect(saved).toMatchObject({ host: '127.0.0.1', username: 'tester', remember: true, hasPassword: true })
-    expect(store.getPasswordEnc()!.toString()).toBe('enc:test-pass-123')
+    expect(saved).toMatchObject({ host: '127.0.0.1', username: 'tester', remember: true, hasSecret: true })
+    expect(store.getSecretEnc()!.toString()).toBe('enc:test-pass-123')
     expect(saved.lastConnectedAt).not.toBeNull()
   })
 
@@ -126,7 +126,7 @@ describe('first connection', () => {
     const { session, store } = makeSession()
     await trusted(session, { remember: false })
     expect((await session.connect(req({ remember: false }))).ok).toBe(true)
-    expect(store.getConnection()!.hasPassword).toBe(false)
+    expect(store.getConnection()!.hasSecret).toBe(false)
   })
 
   it('reports a rejected password without leaking it', async () => {
