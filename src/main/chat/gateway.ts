@@ -134,31 +134,34 @@ export class TuiGateway {
     this.d.log?.('gateway: ready')
   }
 
-  /** The session of this profile: the one in memory, the saved one resumed, or a new one. */
-  private async session(profile: string, saved: string | null): Promise<{ s: Sess; fresh: boolean }> {
+  /**
+   * The session of one slot (a profile's 1:1 chat, or its seat in a room): the one in memory, the saved one resumed, or
+   * a new one. `create` goes into `session.create` as it is (a room's title and hidden flags).
+   */
+  private async session(profile: string, slot: string, saved: string | null, create?: Record<string, unknown>): Promise<{ s: Sess; fresh: boolean }> {
     const rpc = this.rpc!
-    const have = this.sessions.get(profile)
+    const have = this.sessions.get(slot)
     if (have && saved !== null && have.stored === saved) return { s: have, fresh: false }
     const scope = profile === 'default' ? {} : { profile }
     if (saved !== null) {
       try {
         const res = await rpc.request('session.resume', { session_id: saved, ...scope, omit_messages: true }, 120_000)
-        const s = this.adopt(profile, res, saved)
+        const s = this.adopt(profile, slot, res, saved)
         if (s) return { s, fresh: false }
       } catch (e) {
         // an unknown id answers 4007; anything else is reported too, and a new session starts
         this.d.log?.(`gateway: resume of the saved session failed (${profile}): ${e instanceof Error ? e.message : String(e)}`)
       }
     }
-    const res = await rpc.request('session.create', { source: GATEWAY_SOURCE, ...scope }, 120_000)
-    const s = this.adopt(profile, res, null)
+    const res = await rpc.request('session.create', { source: GATEWAY_SOURCE, ...scope, ...(create ?? {}) }, 120_000)
+    const s = this.adopt(profile, slot, res, null)
     if (!s) throw new Error('Hermes did not return a session.')
     // a new session starts from zero, so its first turn's tokens are known; a resumed one learns its totals first
     s.usage = { input: 0, output: 0 }
     return { s, fresh: true }
   }
 
-  private adopt(profile: string, res: unknown, fallbackStored: string | null): Sess | null {
+  private adopt(profile: string, slot: string, res: unknown, fallbackStored: string | null): Sess | null {
     if (!isObj(res)) return null
     const runtime = str(res['session_id'])
     const info = isObj(res['info']) ? res['info'] : {}
@@ -171,14 +174,18 @@ export class TuiGateway {
       throw new Error(`Hermes opened the profile “${opened}” instead of “${profile}”.`)
     }
     const s: Sess = { runtime, stored, usage: null }
-    this.sessions.set(profile, s)
+    this.sessions.set(slot, s)
     return s
   }
 
-  /** Sends one message; what happens comes back through `emit`, as with ACP and the one-shot chat. */
-  async turn(turn: string, profile: string, message: string, saved: string | null, emit: Emit, begin: (storedId: string) => void): Promise<GatewayTurn> {
+  /**
+   * Sends one message; what happens comes back through `emit`, as with ACP and the one-shot chat. `opts.slot` keeps a
+   * second session of the same profile apart (a room seat); without it the slot is the profile's 1:1 chat.
+   */
+  async turn(turn: string, profile: string, message: string, saved: string | null, emit: Emit, begin: (storedId: string) => void, opts: { slot?: string; create?: Record<string, unknown> } = {}): Promise<GatewayTurn> {
     if (!this.alive) throw new Error('The Hermes gateway is not running.')
-    const { s } = await this.session(profile, saved)
+    const slot = opts.slot ?? profile
+    const { s } = await this.session(profile, slot, saved, opts.create)
     emit({ kind: 'start', mode: 'gateway' })
     begin(s.stored)
     let resolveDone: () => void = () => {}
@@ -233,7 +240,7 @@ export class TuiGateway {
       run.errored = true
       emit({ kind: 'error', message: (e instanceof Error ? e.message : String(e)).slice(0, 500) })
       // a session Hermes no longer holds is dropped, so the next message resumes or starts one
-      if (this.sessions.get(profile) === s) this.sessions.delete(profile)
+      if (this.sessions.get(slot) === s) this.sessions.delete(slot)
       run.finish('error')
     }
     return {

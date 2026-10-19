@@ -9,7 +9,9 @@ unknown profile falls back to the launch profile (default), as Hermes does.
 
 Special words in a prompt: "danger" asks for approval before a tool runs, "ask" sends a clarify question with
 choices, "slow" runs until interrupted, "crash" ends the process, "silent" completes without text. The reply names
-the turn number of the session, so a test can tell whether a conversation was continued.
+the turn number of the session, so a test can tell whether a conversation was continued. A room prompt (it starts
+with "[Group chat:") gets "<profile>: noted." on the session's first turn, then "(pass)" unless a new room line
+mentions "@<profile>" ("<profile>: on it.").
 """
 import json
 import os
@@ -96,13 +98,16 @@ def turn(rid, text):
     s = sessions[rid]
     db = s["db"]
     if not stored_exists(db, s["stored"]):
-        mf.add_session(db, s["stored"], s["source"], time.time())
+        cols = {"title": s["title"]} if s.get("title") else {}
+        mf.add_session(db, s["stored"], s["source"], time.time(), **cols)
     s["turns"] += 1
     mf.add_message(db, s["stored"], "user", text, time.time())
+    # in a room prompt only the room lines count for the special words (the room rules contain "ask")
+    probe = " | ".join(room_lines(text)) if text.startswith("[Group chat:") else text
     event(rid, "message.start")
-    if "crash" in text:
+    if "crash" in probe:
         os._exit(3)
-    if "slow" in text:
+    if "slow" in probe:
         for _ in range(300):
             time.sleep(0.05)
             if s.get("interrupted"):
@@ -113,7 +118,9 @@ def turn(rid, text):
     time.sleep(0.05)
     event(rid, "tool.complete", {"tool_id": "call_1", "name": "web_search", "result": {"ok": True}, "duration_s": 0.4, "summary": "1 result"})
     reply = "Here is **what I found** (turn %d)." % s["turns"]
-    if "danger" in text:
+    if text.startswith("[Group chat:"):
+        reply = group_reply(s, text)
+    if "danger" in probe:
         event(rid, "approval.request", {"command": "rm -rf ~/tmp/cache", "description": "Delete a folder", "pattern_keys": ["rm"], "request_id": "req1", "choices": ["once", "session", "always", "deny"]})
         choice = wait_for(s, "approval")
         if choice is None:
@@ -121,12 +128,12 @@ def turn(rid, text):
             event(rid, "message.complete", {"text": "", "status": "interrupted", "usage": s["usage"]})
             return
         reply = "Done, I ran it." if choice != "deny" else "I was not allowed to run that."
-    if "ask" in text:
+    if "ask" in probe:
         event(rid, "clarify.request", {"question": "Which colour?", "choices": ["red", "blue"], "request_id": "q1"})
         answer = wait_for(s, "clarify")
         reply = "You picked %s." % (answer or "nothing")
     s["usage"] = {"input": s["usage"]["input"] + 100, "output": s["usage"]["output"] + 20, "total": s["usage"]["total"] + 120}
-    if "silent" in text:
+    if "silent" in probe:
         event(rid, "message.complete", {"text": "", "status": "complete", "usage": s["usage"]})
         return
     for part in (reply[:10], reply[10:]):
@@ -136,13 +143,36 @@ def turn(rid, text):
     event(rid, "message.complete", {"text": reply, "status": "complete", "usage": s["usage"]})
 
 
+def room_lines(text):
+    lines, inside = [], False
+    for line in text.splitlines():
+        if line.startswith("New messages in the room"):
+            inside = True
+        elif line.startswith("Rules for this room"):
+            inside = False
+        elif inside and line.startswith("  "):
+            lines.append(line.strip())
+    return lines
+
+
+def group_reply(s, text):
+    """A room member: says something the first time, then passes unless a new room line mentions it."""
+    lines = room_lines(text)
+    me = s["profile"]
+    if s["turns"] == 1:
+        return "%s: noted." % me
+    if any(("@" + me) in l.lower() for l in lines):
+        return "%s: on it." % me
+    return "(pass)"
+
+
 def handle(msg):
     method = msg.get("method")
     p = msg.get("params") or {}
     if method == "session.create":
         db, prof = db_of(p.get("profile"))
         rid = new_runtime()
-        sessions[rid] = {"stored": "s-gw-%d-%d" % (int(time.time() * 1000), counter[0]), "profile": prof, "db": db, "source": p.get("source") or "tui", "turns": 0, "usage": {"input": 0, "output": 0, "total": 0}}
+        sessions[rid] = {"stored": "s-gw-%d-%d" % (int(time.time() * 1000), counter[0]), "profile": prof, "db": db, "source": p.get("source") or "tui", "turns": 0, "usage": {"input": 0, "output": 0, "total": 0}, "title": str(p.get("title") or ""), "hidden": bool(p.get("hidden"))}
         return respond(msg, {"session_id": rid, "stored_session_id": sessions[rid]["stored"], "message_count": 0, "messages": [], "info": info(sessions[rid])})
     if method == "session.resume":
         db, prof = db_of(p.get("profile"))
