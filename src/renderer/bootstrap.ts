@@ -5,6 +5,7 @@ import { countIfAway } from './paletteActions'
 import { useAgents } from './stores/agents'
 import { useBrain } from './stores/brain'
 import { useChat } from './stores/chat'
+import { useGroups } from './stores/groups'
 import { useConn } from './stores/conn'
 import { useCostAlert } from './stores/costAlert'
 import { useCron } from './stores/cron'
@@ -44,14 +45,16 @@ export async function bootstrap(): Promise<void> {
       playReplySound(away)
     }
   })
-  // an agent that is answering a chat from this app shows as working, whatever state.db says yet
-  useChat.subscribe((s) => {
-    const busy = Object.entries(s.rooms)
+  // an agent that is answering a chat or a room from this app shows as working, whatever state.db says yet
+  const markBusy = (): void => {
+    const chat = Object.entries(useChat.getState().rooms)
       .filter(([, r]) => r.sending || (r.turn !== null && !r.turn.ended))
       .map(([p]) => p)
-      .sort()
-    useAgents.getState().setBusy(busy)
-  })
+    const rooms = Object.values(useGroups.getState().live).flatMap((l) => (l && !l.turn.ended ? [l.profile] : []))
+    useAgents.getState().setBusy([...new Set([...chat, ...rooms])].sort())
+  }
+  useChat.subscribe(markBusy)
+  useGroups.subscribe(markBusy)
   mc.onGroup((ev) => onGroupEvent(ev))
   mc.onUpload((p) => useChat.getState().applyUpload(p))
   mc.onStatus((status) => {
