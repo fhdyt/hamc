@@ -6,6 +6,8 @@
  * the main process (rounds) and the renderer (mention suggestions) share it.
  */
 
+import type { ChatEvent } from './ipc'
+
 export const GROUP_ID_RE = /^mc-[a-z0-9]{10}$/
 export const GROUP_MIN_MEMBERS = 2
 export const GROUP_MAX_MEMBERS = 6
@@ -46,6 +48,30 @@ export interface GroupRoom {
 }
 
 export type GroupRunEnd = 'settled' | 'cap' | 'stopped' | 'error'
+
+/** What the main process reports about a room while it runs, on `mc:ev:group`. */
+export type GroupEvent = { groupId: string } & (
+  | { kind: 'run-start' }
+  | { kind: 'turn-start'; profile: string; turn: string }
+  /** One event of the member turn that runs now, in the 1:1 chat's shape (text, tools, approvals, errors, end). */
+  | { kind: 'turn'; event: ChatEvent }
+  | { kind: 'entry'; entry: GroupEntry }
+  | { kind: 'turn-end'; profile: string; turn: string }
+  | { kind: 'run-end'; reason: GroupRunEnd; replies: number; needsYou: string | null; error?: string }
+  /** The room list changed (created, renamed, members, deleted). */
+  | { kind: 'changed' }
+)
+
+export type GroupSendError = 'not-connected' | 'busy' | 'empty' | 'too-long' | 'not-found' | 'no-gateway'
+export type GroupSendResult = { ok: true } | { ok: false; error: GroupSendError; detail?: string }
+
+export interface GroupList {
+  rooms: GroupRoom[]
+  /** Rooms with a run going. */
+  running: string[]
+  /** Rooms need Hermes's TUI gateway; `reason` says why it cannot be used. */
+  gateway: { ok: boolean; reason?: string }
+}
 
 export interface GroupMember {
   profile: string
