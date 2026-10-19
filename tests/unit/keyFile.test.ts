@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { utils, type ParsedKey } from 'ssh2'
 import { afterAll, describe, expect, it } from 'vitest'
 import { KEY_FILE_MAX, PPK3_TEXT, fingerprintOf, inspectKey, keyInfoOf, openSshPublic, readKeyFile, typeLabel } from '../../src/main/connection/keyFile'
+import { makeClientKey } from '../helpers/fakeSshServer'
 import { removeDir } from '../helpers/wait'
 
 const dir = mkdtempSync(join(tmpdir(), 'mc-keyfile-'))
@@ -14,17 +15,17 @@ const fpOfPublic = (pub: string): string => fingerprintOf((utils.parseKey(pub) a
 
 describe('inspectKey', () => {
   it.each([
-    ['ed25519', 'ED25519', {}],
-    ['ecdsa', 'ECDSA', { bits: 256 }],
-    ['rsa', 'RSA', { bits: 2048 }]
-  ] as const)('reads an unencrypted OpenSSH %s key', (kind, label, opts) => {
-    const pair = utils.generateKeyPairSync(kind as 'ed25519', opts as never)
+    ['ed25519', 'ED25519'],
+    ['ecdsa', 'ECDSA'],
+    ['rsa', 'RSA']
+  ] as const)('reads an unencrypted OpenSSH %s key', (kind, label) => {
+    const pair = makeClientKey(kind)
     const r = inspectKey(Buffer.from(pair.private))
     expect(r).toEqual({ ok: true, unlocked: true, facts: { type: label, fingerprint: fpOfPublic(pair.public), encrypted: false, format: 'openssh' } })
   })
 
   it('reads the type and fingerprint of an encrypted OpenSSH key without its passphrase, then unlocks it', () => {
-    const pair = utils.generateKeyPairSync('ed25519', { passphrase: 'open sesame', cipher: 'aes256-ctr', rounds: 2 })
+    const pair = makeClientKey('ed25519', 'open sesame')
     const fp = fpOfPublic(pair.public)
     expect(inspectKey(Buffer.from(pair.private))).toEqual({ ok: true, unlocked: false, facts: { type: 'ED25519', fingerprint: fp, encrypted: true, format: 'openssh' } })
     expect(inspectKey(Buffer.from(pair.private), 'open sesame')).toEqual({ ok: true, unlocked: true, facts: { type: 'ED25519', fingerprint: fp, encrypted: true, format: 'openssh' } })
@@ -47,7 +48,7 @@ describe('inspectKey', () => {
   })
 
   it('refuses what is not a private key', () => {
-    const pair = utils.generateKeyPairSync('ed25519')
+    const pair = makeClientKey()
     const pkcs8 = nodeKeyPair('ed25519', { privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } })
     for (const text of [pair.public, 'hello world', pkcs8.privateKey, '']) {
       expect(inspectKey(Buffer.from(text))).toMatchObject({ ok: false, problem: 'not-a-key', message: 'This file is not a private key.' })

@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { Server, utils, type Connection, type ServerChannel } from 'ssh2'
+import { Server, utils, type AuthenticationType, type Connection, type ParsedKey, type ServerChannel } from 'ssh2'
 import { pythonExe, type FixtureDirs } from './fixture'
 import { attachSftp, type SftpOp } from './fakeSftp'
 import { newHermesState, runConfigCommands, runFetchScript, type FakeHermesState } from './fakeHermes'
@@ -24,6 +24,17 @@ export function makeHostKey(): HostKeyPair {
   throw new Error('cannot generate a usable host key')
 }
 
+/** A client key pair (OpenSSH format) that ssh2 can parse back, optionally encrypted with a passphrase. */
+export function makeClientKey(kind: 'ed25519' | 'ecdsa' | 'rsa' = 'ed25519', passphrase?: string): HostKeyPair {
+  const opts = { ...(kind === 'ecdsa' ? { bits: 256 } : kind === 'rsa' ? { bits: 2048 } : {}), ...(passphrase ? { passphrase, cipher: 'aes256-ctr', rounds: 2 } : {}) }
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const kp = utils.generateKeyPairSync(kind as 'ed25519', opts as never)
+    const back = utils.parseKey(kp.private, passphrase)
+    if (!(back instanceof Error) && !(Array.isArray(back) && back[0] instanceof Error)) return { private: kp.private, public: kp.public }
+  }
+  throw new Error('cannot generate a usable client key')
+}
+
 export function fingerprintOfPublic(pub: string): string {
   const parsed = utils.parseKey(pub)
   const key = Array.isArray(parsed) ? parsed[0] : parsed
@@ -36,6 +47,8 @@ export interface FakeSshOptions {
   fixture: FixtureDirs
   username?: string
   password?: string
+  /** An OpenSSH public key line the server accepts for `publickey` sign-in (none by default: password only). */
+  publicKey?: string
   port?: number
   hostKey?: HostKeyPair
   remoteHome?: string
@@ -75,8 +88,8 @@ export interface FakeSsh {
   close(): Promise<void>
 }
 
-type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp' | 'tuiGateway' | 'configSetHelp' | 'credentials'>> &
-  Pick<FakeSshOptions, 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp' | 'tuiGateway' | 'configSetHelp' | 'credentials'> & { st: FakeHermesState }
+type Resolved = Required<Omit<FakeSshOptions, 'port' | 'hostKey' | 'publicKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp' | 'tuiGateway' | 'configSetHelp' | 'credentials'>> &
+  Pick<FakeSshOptions, 'publicKey' | 'capabilities' | 'models' | 'chatHelp' | 'backend' | 'acp' | 'tuiGateway' | 'configSetHelp' | 'credentials'> & { st: FakeHermesState }
 
 const MARKERS = ['config.yaml', '.env', 'SOUL.md', 'profile.yaml', 'state.db']
 
@@ -387,9 +400,17 @@ export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {
     clients.add(client)
     client.on('close', () => clients.delete(client))
     client.on('error', () => {})
+    const methods: AuthenticationType[] = o.publicKey ? ['password', 'publickey'] : ['password']
     client.on('authentication', (ctx) => {
-      if (ctx.method === 'password' && ctx.username === o.username && ctx.password === o.password) ctx.accept()
-      else ctx.reject(['password'])
+      if (ctx.method === 'password' && ctx.username === o.username && ctx.password === o.password) return ctx.accept()
+      if (ctx.method === 'publickey' && o.publicKey && ctx.username === o.username) {
+        const pub = utils.parseKey(o.publicKey) as ParsedKey
+        if (ctx.key.algo !== pub.type || !ctx.key.data.equals(pub.getPublicSSH())) return ctx.reject(methods)
+        // without a signature the client only asks whether this key would do
+        if (!ctx.signature || !ctx.blob) return ctx.accept()
+        return pub.verify(ctx.blob, ctx.signature, ctx.hashAlgo) === true ? ctx.accept() : ctx.reject(methods)
+      }
+      ctx.reject(methods)
     })
     client.on('ready', () => {
       client.on('session', (accept) => {

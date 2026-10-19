@@ -26,14 +26,16 @@ export function classifyConnectError(err: { code?: string; level?: string }): Co
   return 'unknown'
 }
 
-export function friendlyMessage(kind: ConnectErrorKind, host: string, port: number, raw: string): string {
+export function friendlyMessage(kind: ConnectErrorKind, host: string, port: number, raw: string, who?: { key: boolean; username: string }): string {
   switch (kind) {
     case 'unreachable':
       return `Cannot reach ${host}:${port}. Check the address, the port and your network.`
     case 'timeout':
       return `Timed out connecting to ${host}:${port}.`
     case 'auth':
-      return 'The server rejected the username or password.'
+      return who?.key
+        ? `The server refused this key. Check that its public key is in ~/.ssh/authorized_keys of ${who.username}.`
+        : 'The server rejected the username or password.'
     default:
       return raw
   }

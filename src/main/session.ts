@@ -8,7 +8,7 @@ import type { UsageSummaryArgs, UsageToolsArgs } from '@shared/usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from '@shared/sessions'
 import type { BrowserWindow } from 'electron'
 import type {
-  ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, HostKeyChallenge, InteractionDetailArgs, QueryResult, SavedConnection
+  ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, HostKeyChallenge, InteractionDetailArgs, PickKeyResult, QueryResult, SavedConnection
 } from '@shared/ipc'
 import { BrainService } from './brain/service'
 import { AgentFileService } from './agentcfg/files'
@@ -42,6 +42,7 @@ import { CronWatcher, type CronAlert } from './cron/watcher'
 import { backoffDelay } from './connection/backoff'
 import { probeCapabilities } from './connection/capabilities'
 import { ConnectError, HostKeyError } from './connection/errors'
+import { inspectKey, keyInfoOf, readKeyFile } from './connection/keyFile'
 import type { ConnectParams, ConnectionManager } from './connection/manager'
 import { runPreflight } from './connection/preflight'
 import { StartupTracker } from './startup'
@@ -78,6 +79,8 @@ export interface SessionDeps {
   terminalLocal?: TerminalDeps['local']
   /** The save dialog of exports and backups (tests answer it themselves). */
   saveDialog?: SaveDialog
+  /** The open dialog for a private key file (F-CONN-7); null when cancelled. Tests and the E2E answer it themselves. */
+  openKeyDialog?: () => Promise<string | null>
   latencyIntervalMs?: number
 }
 
@@ -91,13 +94,20 @@ interface Hermes {
   python: string
 }
 
+type Creds = { method: 'password'; password: string } | { method: 'key'; keyPath: string; passphrase: string }
+
 interface Pending {
   host: string
   port: number
   username: string
-  password: string
+  creds: Creds
   at: number
 }
+
+type Resolved = { ok: true; params: ConnectParams; fromKeychain: boolean; detail: string; logLine: string } | { ok: false; message: string; detail: string }
+
+const credsOf = (p: ConnectParams): Creds =>
+  'password' in p ? { method: 'password', password: p.password } : { method: 'key', keyPath: p.keyPath, passphrase: p.passphrase ?? '' }
 
 const fail = (kind: ConnectErrorKind, message: string): ConnectResult => ({ ok: false, kind, message })
 
@@ -115,8 +125,10 @@ export class MissionSession {
   private everConnected = false
   private blocked = false
   private generation = 0
-  /** Password held only in memory so a host key can be trusted without retyping it. */
+  /** Password or passphrase held only in memory so a host key can be trusted without retyping it. */
   private pending: Pending | null = null
+  /** Key files returned by the open dialog in this run: the only paths a connect request may name besides the saved one. */
+  private readonly keyPicks = new Set<string>()
   private readonly cronStore = new CronStore()
   private readonly cronWatcher = new CronWatcher()
   private lastTarget: string | null = null
@@ -257,7 +269,23 @@ export class MissionSession {
   }
 
   getSaved(): SavedConnection | null {
-    return this.d.store.getConnection()
+    const c = this.d.store.getConnection()
+    if (!c || c.authMethod !== 'key' || !c.keyPath) return c
+    const file = readKeyFile(c.keyPath)
+    const check = file.ok ? inspectKey(file.data) : null
+    return { ...c, keyInfo: check?.ok ? keyInfoOf(c.keyPath, check.facts) : null }
+  }
+
+  /** F-CONN-7: the user picks a private key file; only facts about it go back to the renderer. */
+  async pickKey(): Promise<PickKeyResult> {
+    const path = this.d.openKeyDialog ? await this.d.openKeyDialog() : null
+    if (!path) return { ok: false, reason: 'cancelled' }
+    const file = readKeyFile(path)
+    if (!file.ok) return { ok: false, reason: file.reason, message: file.message }
+    const check = inspectKey(file.data)
+    if (!check.ok) return { ok: false, reason: check.problem === 'ppk3' ? 'ppk3' : 'not-a-key', message: check.message }
+    this.keyPicks.add(path)
+    return { ok: true, key: keyInfoOf(path, check.facts) }
   }
 
   secretStatus(): { canRemember: boolean; reason: string | null } {
@@ -283,33 +311,18 @@ export class MissionSession {
     this.remember = req.remember
     this.setStatus({ ...IDLE, state: 'connecting' })
 
-    let password = req.password ?? ''
-    let fromKeychain = false
-    const saved = this.d.store.getConnection()
-    const sameTarget = !!saved && saved.host === req.host && saved.port === req.port && saved.username === req.username
-    if (!password && sameTarget) {
-      const enc = this.d.store.getSecretEnc()
-      const plain = enc ? this.d.secrets.decrypt(enc) : null
-      if (plain) {
-        password = plain
-        fromKeychain = true
-      }
-    }
-    const p = this.pending
-    if (!password && p && p.host === req.host && p.port === req.port && p.username === req.username && Date.now() - p.at < PENDING_TTL_MS) {
-      password = p.password
-    }
-
-    const startup = new StartupTracker((s) => this.d.send(IPC.evStartup, s), fromKeychain)
+    const resolved = this.credentials(req)
+    const startup = new StartupTracker((st) => this.d.send(IPC.evStartup, st), resolved.ok && resolved.fromKeychain)
     startup.begin('credentials')
-    if (!password) {
-      startup.fail('credentials', 'no password')
+    if (!resolved.ok) {
+      startup.fail('credentials', resolved.detail)
       this.setStatus({ ...IDLE })
-      return fail('auth', 'Enter the password to connect.')
+      return fail('auth', resolved.message)
     }
-    startup.done('credentials', fromKeychain ? 'from keychain' : '')
+    startup.done('credentials', resolved.detail)
+    this.log(resolved.logLine)
 
-    const params: ConnectParams = { host: req.host, port: req.port, username: req.username, password }
+    const params = resolved.params
     const target = `${req.host}:${req.port}:${req.username}`
     if (this.lastTarget !== null && this.lastTarget !== target) {
       this.cronWatcher.reset()
@@ -321,9 +334,65 @@ export class MissionSession {
     const result = await this.establish(params, startup, gen, true)
     if (gen !== this.generation) return fail('unknown', 'Connection attempt was cancelled.')
     if (result.ok || !result.kind.startsWith('hostkey')) this.pending = null
-    else this.pending = { host: params.host, port: params.port, username: params.username, password: params.password, at: Date.now() }
+    else this.pending = { host: params.host, port: params.port, username: params.username, creds: credsOf(params), at: Date.now() }
     if (!result.ok) this.afterFailedConnect(result)
     return result
+  }
+
+  /** The sign-in of a connect request: its own secret, else the keychain (same target), else a pending host key prompt. */
+  private credentials(req: ConnectRequest): Resolved {
+    const saved = this.d.store.getConnection()
+    const sameTarget = !!saved && saved.host === req.host && saved.port === req.port && saved.username === req.username
+    const method = req.auth ?? (sameTarget && saved ? saved.authMethod : 'password')
+    const p = this.pending
+    const pending = p && p.host === req.host && p.port === req.port && p.username === req.username && Date.now() - p.at < PENDING_TTL_MS ? p.creds : null
+    const target = { host: req.host, port: req.port, username: req.username }
+    const fromStore = (): string | null => {
+      const enc = this.d.store.getSecretEnc()
+      return enc ? this.d.secrets.decrypt(enc) : null
+    }
+
+    if (method === 'password') {
+      let password = req.password ?? ''
+      let fromKeychain = false
+      if (!password && sameTarget && saved?.authMethod === 'password') {
+        const plain = fromStore()
+        if (plain) {
+          password = plain
+          fromKeychain = true
+        }
+      }
+      if (!password && pending?.method === 'password') password = pending.password
+      if (!password) return { ok: false, message: 'Enter the password to connect.', detail: 'no password' }
+      return { ok: true, params: { ...target, password }, fromKeychain, detail: fromKeychain ? 'from keychain' : '', logLine: 'auth: password' }
+    }
+
+    const keyPath = req.keyPath ?? (sameTarget && saved?.authMethod === 'key' ? saved.keyPath : null)
+    if (!keyPath) return { ok: false, message: 'Choose the key file.', detail: 'no key file' }
+    if (!this.keyPicks.has(keyPath) && keyPath !== saved?.keyPath) return { ok: false, message: 'Choose the key file again.', detail: 'key file not picked' }
+    const file = readKeyFile(keyPath)
+    if (!file.ok) return { ok: false, message: file.message, detail: file.reason }
+    let passphrase = req.passphrase ?? ''
+    let fromKeychain = false
+    if (!passphrase && sameTarget && saved?.authMethod === 'key' && saved.keyPath === keyPath) {
+      const plain = fromStore()
+      if (plain) {
+        passphrase = plain
+        fromKeychain = true
+      }
+    }
+    if (!passphrase && pending?.method === 'key' && pending.keyPath === keyPath) passphrase = pending.passphrase
+    const check = inspectKey(file.data, passphrase || undefined)
+    if (!check.ok) return { ok: false, message: check.message, detail: check.problem }
+    if (!check.unlocked) return { ok: false, message: 'This key needs its passphrase.', detail: 'needs passphrase' }
+    const name = keyInfoOf(keyPath, check.facts).name
+    return {
+      ok: true,
+      params: { ...target, privateKey: file.data, keyPath, keyFormat: check.facts.format, ...(check.facts.encrypted ? { passphrase } : {}) },
+      fromKeychain,
+      detail: `key ${name}${fromKeychain ? ' · passphrase from keychain' : ''}`,
+      logLine: `auth: key ${check.facts.type} ${check.facts.fingerprint ?? ''}`.trimEnd()
+    }
   }
 
   private afterFailedConnect(r: Extract<ConnectResult, { ok: false }>): void {
@@ -390,13 +459,16 @@ export class MissionSession {
     if (persist) {
       const store = this.d.store
       const canKeep = this.remember && this.d.secrets.status().available
+      const secret = 'password' in params ? params.password : (params.passphrase ?? null)
       const id = store.upsertConnection({
         name: `${params.username}@${params.host}`,
         host: params.host,
         port: params.port,
         username: params.username,
         remember: this.remember,
-        secretEnc: canKeep ? this.d.secrets.encrypt(params.password) : null
+        authMethod: 'password' in params ? 'password' : 'key',
+        keyPath: 'password' in params ? null : params.keyPath,
+        secretEnc: canKeep && secret ? this.d.secrets.encrypt(secret) : null
       })
       store.touchConnected(id, Date.now())
     }

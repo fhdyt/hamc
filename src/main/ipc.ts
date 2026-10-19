@@ -179,6 +179,7 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.forget, () => d.session.forget())
   handle(IPC.saved, () => d.session.getSaved())
   handle(IPC.secretStatus, () => d.session.secretStatus())
+  handle(IPC.pickKey, () => d.session.pickKey())
 
   handle(IPC.settingsAll, () => d.store.allSettings())
   handle(IPC.settingsReset, () => d.store.resetSettings())

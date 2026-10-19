@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeImage, Notification, safeStorage, Tray, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, Menu, nativeImage, Notification, safeStorage, Tray, type MenuItemConstructorOptions, type OpenDialogOptions } from 'electron'
 import { statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -33,6 +33,14 @@ const projectRoot = join(__dirname, '..', '..')
 
 function collectorPath(): string {
   return app.isPackaged ? join(process.resourcesPath, 'mc_collector.py') : join(projectRoot, 'collector', 'mc_collector.py')
+}
+
+function isDir(p: string): boolean {
+  try {
+    return statSync(p).isDirectory()
+  } catch {
+    return false
+  }
 }
 
 const inFront = (): boolean => !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized() && win.isFocused()
@@ -214,6 +222,15 @@ if (!app.requestSingleInstanceLock()) {
       pickFiles: async () => {
         const r = await (win ? dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] }) : dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] }))
         return r.canceled ? [] : r.filePaths
+      },
+      // F-CONN-7: the key file is picked here; the E2E names its throwaway key instead of driving a native dialog
+      openKeyDialog: async () => {
+        const forced = process.env['MC_E2E_KEY_FILE']
+        if (forced) return forced
+        const ssh = join(homedir(), '.ssh')
+        const opts: OpenDialogOptions = { title: 'Choose the private key', properties: ['openFile', 'showHiddenFiles'], ...(isDir(ssh) ? { defaultPath: ssh } : {}) }
+        const r = await (win ? dialog.showOpenDialog(win, opts) : dialog.showOpenDialog(opts))
+        return r.canceled ? null : (r.filePaths[0] ?? null)
       },
       terminalLocal: {
         spawn: spawnPty,

@@ -18,6 +18,10 @@ export interface SshTarget {
   /** The key type (`ssh-ed25519`…) and the key in base64, as in a known_hosts line. */
   algo: string
   key: string
+  /** The private key file the connection signed in with, when the system ssh can read it. */
+  identity?: string
+  /** Why server tabs cannot use the system ssh for this connection (a PuTTY key): they use the built-in shell. */
+  systemSshProblem?: string
 }
 
 type Env = Record<string, string | undefined>

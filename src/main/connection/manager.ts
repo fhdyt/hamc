@@ -1,17 +1,17 @@
 import { EventEmitter } from 'node:events'
 import { Client, type ClientChannel, type SFTPWrapper } from 'ssh2'
-import type { HostKeyChallenge } from '@shared/ipc'
+import type { HostKeyChallenge, KeyFormat } from '@shared/ipc'
 import { ConnectError, HostKeyError, classifyConnectError, friendlyMessage } from './errors'
 import { algoOf, decideHostKey, type KnownKey } from './hostkey'
 import type { SshTarget } from '../terminal/localShell'
 import { buildCommand } from './quote'
 
-export interface ConnectParams {
-  host: string
-  port: number
-  username: string
-  password: string
-}
+/** One sign-in method per connection (F-CONN-7). The key's bytes stay in the main process. */
+export type ConnectAuth = { password: string } | { privateKey: Buffer; passphrase?: string; keyPath: string; keyFormat: KeyFormat }
+
+export type ConnectParams = { host: string; port: number; username: string } & ConnectAuth
+
+export const PPK_TERMINAL_NOTE = 'This key is in PuTTY format, which the system ssh cannot read: using the built-in shell.'
 
 export interface HostKeyLookup {
   getKnownHost(host: string, port: number): KnownKey | null
@@ -36,7 +36,7 @@ export class ConnectionManager extends EventEmitter implements Execer {
   private client: Client | null = null
   private closing = false
   /** Where the current connection goes and the host key it was checked against (for the system ssh of a server tab). */
-  private target: { host: string; port: number; username: string; key: Buffer } | null = null
+  private target: { host: string; port: number; username: string; key: Buffer; keyPath: string | null; keyFormat: KeyFormat | null } | null = null
 
   constructor(
     private readonly hostKeys: HostKeyLookup,
@@ -52,7 +52,10 @@ export class ConnectionManager extends EventEmitter implements Execer {
   /** The server of the last successful connection with the host key the user trusted, for the system ssh. */
   sshTarget(): SshTarget | null {
     const t = this.target
-    return t ? { host: t.host, port: t.port, username: t.username, algo: algoOf(t.key), key: t.key.toString('base64') } : null
+    if (!t) return null
+    const base = { host: t.host, port: t.port, username: t.username, algo: algoOf(t.key), key: t.key.toString('base64') }
+    if (!t.keyPath) return base
+    return t.keyFormat === 'ppk' ? { ...base, systemSshProblem: PPK_TERMINAL_NOTE } : { ...base, identity: t.keyPath }
   }
 
   async connect(p: ConnectParams): Promise<{ fingerprint: string; algo: string }> {
@@ -68,7 +71,9 @@ export class ConnectionManager extends EventEmitter implements Execer {
         settled = true
         this.closing = false
         this.client = client
-        this.target = seenKey ? { host: p.host, port: p.port, username: p.username, key: seenKey } : null
+        this.target = seenKey
+          ? { host: p.host, port: p.port, username: p.username, key: seenKey, keyPath: 'keyPath' in p ? p.keyPath : null, keyFormat: 'keyFormat' in p ? p.keyFormat : null }
+          : null
         resolve(seen)
       })
       client.on('error', (err: Error & { code?: string; level?: string }) => {
@@ -79,7 +84,7 @@ export class ConnectionManager extends EventEmitter implements Execer {
         settled = true
         if (challenge) return reject(new HostKeyError(challenge))
         const kind = classifyConnectError(err)
-        reject(new ConnectError(kind, friendlyMessage(kind, p.host, p.port, err.message)))
+        reject(new ConnectError(kind, friendlyMessage(kind, p.host, p.port, err.message, { key: 'privateKey' in p, username: p.username })))
       })
       client.on('close', () => {
         if (this.client === client) {
@@ -97,7 +102,7 @@ export class ConnectionManager extends EventEmitter implements Execer {
         host: p.host,
         port: p.port,
         username: p.username,
-        password: p.password,
+        ...('password' in p ? { password: p.password } : { privateKey: p.privateKey, ...(p.passphrase ? { passphrase: p.passphrase } : {}) }),
         readyTimeout: this.readyTimeoutMs,
         keepaliveInterval: 10_000,
         keepaliveCountMax: 3,
