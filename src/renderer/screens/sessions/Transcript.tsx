@@ -11,6 +11,8 @@ import { buildSteps } from '../../lib/transcript'
 import { continueInChat, exportSession, loadMoreTranscript, openSession } from '../../sessionsActions'
 import { useAgents } from '../../stores/agents'
 import { useSessions } from '../../stores/sessions'
+import { useGroups } from '../../stores/groups'
+import { sessionTitle } from '../../lib/groupView'
 import { ActionDialog } from './ActionDialogs'
 import { ToolChip } from './ToolChip'
 
@@ -21,6 +23,7 @@ const FORMATS: { ext: ExportExt; label: string }[] = [
 ]
 
 function Header({ row, onDialog }: { row: SessionRow; onDialog: (a: SessionAction) => void }) {
+  const rooms = useGroups((s) => s.rooms)
   const chain = useSessions((s) => s.transcript.chain)
   const select = useSessions((s) => s.select)
   const agents = useAgents((s) => s.agents)
@@ -44,7 +47,7 @@ function Header({ row, onDialog }: { row: SessionRow; onDialog: (a: SessionActio
         <button type="button" className="ib ses-back" aria-label="Back to the list" onClick={() => select(null)}>
           <Icon name="chevs-left" size={14} />
         </button>
-        <h2>{row.title ?? 'Untitled session'}</h2>
+        <h2>{sessionTitle(row.title, rooms) ?? 'Untitled session'}</h2>
         <span className="ses-status" data-status={row.status}>
           {statusLabel(row.status)}
         </span>

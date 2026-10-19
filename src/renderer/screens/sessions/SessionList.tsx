@@ -10,6 +10,8 @@ import { costLabel, rowKey, splitHighlight, statusLabel } from '../../lib/sessio
 import { loadList, loadMore, openSession, setQuery } from '../../sessionsActions'
 import { useAgents } from '../../stores/agents'
 import { useSessions } from '../../stores/sessions'
+import { useGroups } from '../../stores/groups'
+import { sessionTitle } from '../../lib/groupView'
 
 const ROW_H = 72
 
@@ -22,6 +24,7 @@ function Highlight({ snippet }: { snippet: string }) {
 }
 
 function Row({ row, name, selected, now, top }: { row: SessionRow; name: string; selected: boolean; now: number; top: number }) {
+  const rooms = useGroups((s) => s.rooms)
   const age = row.startedAt === null ? 'unknown time' : formatAge(Math.max(0, now / 1000 - row.startedAt))
   return (
     <div
@@ -32,7 +35,7 @@ function Row({ row, name, selected, now, top }: { row: SessionRow; name: string;
       style={{ transform: `translateY(${top}px)` }}
       onClick={() => void openSession(row.profile, row.id)}
     >
-      <span className="ses-title">{row.title ?? `Untitled session`}</span>
+      <span className="ses-title">{sessionTitle(row.title, rooms) ?? `Untitled session`}</span>
       <span className="ses-cost num">{costLabel(row)}</span>
       <span className="ses-meta">
         <span className="dot" style={{ background: agentColor(row.profile) }} aria-hidden="true" />

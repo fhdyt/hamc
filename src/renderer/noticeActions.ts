@@ -1,8 +1,7 @@
 import type { NoticeTarget } from '@shared/notify'
 import { previewText } from '@shared/notify'
-import { openGroup } from './groupsActions'
+import { openDm, openGroup } from './groupsActions'
 import { useAgents } from './stores/agents'
-import { useChat } from './stores/chat'
 import { useCron } from './stores/cron'
 import { useLogs } from './stores/logs'
 import { useNotices } from './stores/notices'
@@ -16,7 +15,7 @@ export function openNoticeTarget(t: NoticeTarget): void {
   switch (t.kind) {
     case 'chat':
       useAgents.getState().select(t.profile)
-      useChat.getState().setCurrent(t.profile)
+      openDm(t.profile)
       ui.navigate('chat')
       return
     case 'group':

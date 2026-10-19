@@ -18,6 +18,7 @@
 @import './cron.css';
 @import './skills.css';
 @import './memory.css';
+@import './groups.css';
 
 @theme {
   --font-sans: 'JetBrains Mono', ui-monospace, monospace;

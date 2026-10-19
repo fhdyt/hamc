@@ -11,6 +11,7 @@ export type PaletteGroup = 'screen' | 'action' | 'agent' | 'session' | 'note'
 export type PaletteTarget =
   | { kind: 'screen'; route: Route }
   | { kind: 'chat'; profile: string }
+  | { kind: 'room'; id: string }
   | { kind: 'agent-settings'; profile: string; tab: AgentTab }
   | { kind: 'session'; profile: string; id: string }
   | { kind: 'note'; id: string }
@@ -63,11 +64,13 @@ export interface PaletteInput {
   agents: readonly { profile: string; displayName: string }[]
   sessions: readonly SessionRow[]
   notes: readonly { id: string; title: string }[]
+  /** Group chat rooms. */
+  rooms?: readonly { id: string; name: string }[]
   /** Epoch seconds, for the age of a session. */
   now: number
 }
 
-export function buildItems({ agents, sessions, notes, now }: PaletteInput): PaletteItem[] {
+export function buildItems({ agents, sessions, notes, rooms = [], now }: PaletteInput): PaletteItem[] {
   const names = new Map(agents.map((a) => [a.profile, a.displayName]))
   const items: PaletteItem[] = []
   for (const n of NAV) {
@@ -105,6 +108,7 @@ export function buildItems({ agents, sessions, notes, now }: PaletteInput): Pale
       target: { kind: 'session', profile: s.profile, id: s.id }
     })
   }
+  for (const r of rooms) items.push({ id: `room:${r.id}`, group: 'agent', label: `Room: ${r.name}`, keywords: 'group chat room agents', target: { kind: 'room', id: r.id } })
   for (const n of notes) items.push({ id: `note:${n.id}`, group: 'note', label: n.title, hint: n.id, target: { kind: 'note', id: n.id } })
   return items
 }

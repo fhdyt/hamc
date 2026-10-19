@@ -8,6 +8,7 @@ import { EmptyState, Skeleton } from '../../components/States'
 import { activeCount, buildRoster, railAgents } from '../../lib/roster'
 import { useAgents } from '../../stores/agents'
 import { useChat } from '../../stores/chat'
+import { useGroups } from '../../stores/groups'
 import { useConn } from '../../stores/conn'
 import { useAgentCfg } from '../../stores/agentCfg'
 import { useUi } from '../../stores/ui'
@@ -180,6 +181,7 @@ export function AgentsPanel({ width }: { width: number }) {
                   className="ib sm"
                   onClick={() => {
                     setCurrent(selected)
+                    useGroups.getState().setCurrent(null)
                     navigate('chat')
                   }}
                   aria-label="Open full chat"

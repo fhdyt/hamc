@@ -8,6 +8,7 @@ import { exportName, toHtml, toJsonl, toMarkdown } from './lib/sessionExport'
 import { rowKey, toArgs, type SessionQuery } from './lib/sessions'
 import { useAgents } from './stores/agents'
 import { useChat } from './stores/chat'
+import { useGroups } from './stores/groups'
 import { useSessions } from './stores/sessions'
 import { useUi } from './stores/ui'
 
@@ -136,6 +137,7 @@ export async function exportSession(row: SessionRow, ext: ExportExt): Promise<{ 
 export async function continueInChat(row: SessionRow): Promise<void> {
   useAgents.getState().select(row.profile)
   useChat.getState().setCurrent(row.profile)
+  useGroups.getState().setCurrent(null)
   await resumeSession(row.profile, row.id)
   useUi.getState().navigate('chat')
 }

@@ -1,4 +1,4 @@
-import { mentionForms, type GroupEntry, type GroupMember, type GroupRoom, type GroupRunEnd } from '@shared/groups'
+import { GROUP_ID_RE, groupIdOfTitle, mentionForms, type GroupEntry, type GroupMember, type GroupRoom, type GroupRunEnd } from '@shared/groups'
 import type { Turn } from './chat'
 
 /** What a room's conversation shows, oldest first. */
@@ -73,4 +73,18 @@ export function roomSub(room: GroupRoom, running: boolean, unread: number): stri
   if (room.needsYou) return 'needs you'
   if (unread > 0) return unread === 1 ? '1 new reply' : `${unread} new replies`
   return `${room.members.length} agents`
+}
+
+/** Rooms made by this app show their local name in the agent graph (Hermes only knows the `Group: mc-…` title). */
+export function withRoomNames<T extends { rooms: { id: string; name: string }[] }>(data: T, rooms: readonly GroupRoom[]): T {
+  if (rooms.length === 0 || !data.rooms.some((r) => GROUP_ID_RE.test(r.name))) return data
+  return { ...data, rooms: data.rooms.map((r) => ({ ...r, name: rooms.find((g) => g.id === r.name)?.name ?? r.name })) }
+}
+
+/** A session title as the user knows it: `Group: mc-…` becomes `Room: <name>` for a room of this app. */
+export function sessionTitle(title: string | null, rooms: readonly GroupRoom[]): string | null {
+  if (!title) return title
+  const id = groupIdOfTitle(title)
+  const room = id ? rooms.find((g) => g.id === id) : undefined
+  return room ? `Room: ${room.name}` : title
 }

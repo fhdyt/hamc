@@ -9,6 +9,7 @@ import { useBrain } from './stores/brain'
 import { useChat } from './stores/chat'
 import { useCron } from './stores/cron'
 import { useGroups } from './stores/groups'
+import { openDm, openGroup } from './groupsActions'
 import { usePalette } from './stores/palette'
 import { useUi } from './stores/ui'
 import { useUnread } from './stores/unread'
@@ -56,7 +57,11 @@ export function runItem(item: PaletteItem): void {
       return
     case 'chat':
       useAgents.getState().select(t.profile)
-      useChat.getState().setCurrent(t.profile)
+      openDm(t.profile)
+      ui.navigate('chat')
+      return
+    case 'room':
+      openGroup(t.id)
       ui.navigate('chat')
       return
     case 'agent-settings':

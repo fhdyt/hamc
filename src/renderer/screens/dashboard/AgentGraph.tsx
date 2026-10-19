@@ -7,6 +7,8 @@ import { useStalled } from '../../hooks/useStalled'
 import { KIND_COLOR, KIND_LABEL, KINDS, RANGE_LABEL, buildGraph, describeNode, filterData, type Range } from '../../lib/agentGraph'
 import { useAgents } from '../../stores/agents'
 import { useConn } from '../../stores/conn'
+import { useGroups } from '../../stores/groups'
+import { withRoomNames } from '../../lib/groupView'
 import { useInteractions } from '../../stores/interactions'
 import { useUi } from '../../stores/ui'
 import { AgentGraphSvg, type SvgHandle } from './AgentGraphSvg'
@@ -49,9 +51,10 @@ export function AgentGraph({ tabs }: { tabs: ReactNode }) {
   const connected = connState === 'connected'
   const stalled = useStalled(data === null && (connected || connState === 'connecting'))
 
+  const rooms = useGroups((s) => s.rooms)
   const graph = useMemo(
-    () => (data ? buildGraph(roster.map((a) => ({ profile: a.profile, displayName: a.displayName, status: a.status })), filterData(data, cfg.kinds, cfg.range, now), now) : null),
-    [data, roster, cfg.kinds, cfg.range, now]
+    () => (data ? buildGraph(roster.map((a) => ({ profile: a.profile, displayName: a.displayName, status: a.status })), filterData(withRoomNames(data, rooms), cfg.kinds, cfg.range, now), now) : null),
+    [data, roster, rooms, cfg.kinds, cfg.range, now]
   )
   const edge = graph && selected?.type === 'edge' ? (graph.edges.find((e) => e.id === selected.id) ?? null) : null
   const node = graph && selected?.type === 'node' ? (graph.nodes.find((n) => n.id === selected.id) ?? null) : null

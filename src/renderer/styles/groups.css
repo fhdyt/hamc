@@ -1,0 +1,40 @@
+/* Group chat rooms in the Chat screen (gr-*) */
+.gr-list-title { display: flex; align-items: center; justify-content: space-between; padding-right: 10px; }
+.gr-empty { flex: none; padding: 2px 16px 10px; font-size: 11px; color: #a9b2d3; }
+.gr-row.needs .dm-sub { color: #ffb86c; }
+.gr-stack { flex: none; display: flex; width: 28px; height: 28px; position: relative; }
+.gr-stack .avatar { position: absolute; border: 1.5px solid #21222c; border-radius: 50%; }
+.gr-stack .avatar:nth-child(1) { left: 0; top: 0; }
+.gr-stack .avatar:nth-child(2) { left: 10px; top: 10px; }
+.gr-stack .avatar:nth-child(3) { left: 0; top: 14px; }
+.gr-title { display: inline-flex; align-items: center; gap: 8px; color: #f8f8f2; }
+.gr-faces { display: inline-flex; }
+.gr-faces .avatar { border: 1.5px solid #282a36; border-radius: 50%; margin-left: -6px; }
+.gr-faces .avatar:first-child { margin-left: 0; }
+.gr-speaker { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.gr-note { align-self: center; max-width: 90%; padding: 2px 10px; font-size: 11px; color: #8b95bd; text-align: center; }
+.gr-note.bad { color: #ff5555; }
+.gr-mentions { list-style: none; margin: 0; padding: 4px; display: flex; flex-direction: column; gap: 2px; max-height: 180px; overflow-y: auto; background: #21222c; border: 1px solid #44475a; border-radius: 8px; }
+.gr-mentions li { padding: 5px 8px; border-radius: 5px; cursor: pointer; font-size: 12px; color: #f8f8f2; }
+.gr-mentions li[aria-selected='true'], .gr-mentions li:hover { background: #44475a; }
+.gr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gr-chip { padding: 1px 8px; min-height: 22px; border: 1px solid #44475a; border-radius: 11px; background: transparent; font: inherit; font-size: 11px; cursor: pointer; }
+.gr-chip:hover { background: #343746; }
+.gr-chip:focus-visible { outline: 2px solid #bd93f9; outline-offset: 1px; }
+.gr-side { gap: 0; padding: 14px; border-left: 1px solid #44475a; background: #21222c; overflow-y: auto; }
+.gr-side-title { padding: 2px 2px 8px; font-size: 11px; color: #8b95bd; }
+.gr-member { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 2px; border-bottom: 1px solid #343746; }
+.gr-member .dm-text { flex: 1; }
+.gr-form { display: flex; flex-direction: column; gap: 14px; }
+.gr-field { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; border: 0; font-size: 12px; color: #a9b2d3; }
+.gr-field legend { padding: 0; margin-bottom: 6px; }
+.gr-field input:not([type]), .gr-field input[type='text'] { min-height: 32px; padding: 0 10px; background: #21222c; border: 1px solid #44475a; border-radius: 6px; color: #f8f8f2; font: inherit; font-size: 13px; }
+.gr-field input:focus-visible { outline: 2px solid #bd93f9; outline-offset: 1px; }
+.gr-hint { font-size: 11px; color: #8b95bd; margin: 0; }
+.gr-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; max-height: 280px; overflow-y: auto; }
+.gr-pick { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 4px 8px; border: 1px solid #44475a; border-radius: 6px; cursor: pointer; color: #f8f8f2; font-size: 12px; }
+.gr-pick.on { border-color: #bd93f9; background: #343746; }
+.gr-pick.gone { color: #ffb86c; }
+.gr-pick:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
+.gr-pick input { accent-color: #bd93f9; }
+.gr-actions { display: flex; justify-content: flex-end; gap: 8px; }

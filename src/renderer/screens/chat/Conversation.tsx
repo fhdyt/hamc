@@ -20,7 +20,9 @@ function Chip({ chip }: { chip: ToolChip }) {
   )
 }
 
-function Approval({ turn, a }: { turn: string; a: ApprovalCard }) {
+type Answer = (turn: string, approval: string, option: string | null) => void
+
+function Approval({ turn, a, onAnswer = (t, id, o) => void answerApproval(t, id, o) }: { turn: string; a: ApprovalCard; onAnswer?: Answer }) {
   const pending = a.state === 'pending'
   const label = a.state === 'allowed' ? `Allowed${a.choice ? `: ${a.choice}` : ''}` : a.state === 'denied' ? `Denied${a.choice ? `: ${a.choice}` : ''}` : a.state === 'cancelled' ? 'Not answered' : ''
   return (
@@ -33,7 +35,7 @@ function Approval({ turn, a }: { turn: string; a: ApprovalCard }) {
       {pending ? (
         <div className="cv-approval-actions">
           {a.options.map((o) => (
-            <button key={o.id} type="button" className={`cb ${o.kind === 'allow' ? 'pri' : 'dng'}`} onClick={() => void answerApproval(turn, a.id, o.id)}>
+            <button key={o.id} type="button" className={`cb ${o.kind === 'allow' ? 'pri' : 'dng'}`} onClick={() => onAnswer(turn, a.id, o.id)}>
               {o.name}
             </button>
           ))}
@@ -59,7 +61,8 @@ function Foldout({ label, color, children }: { label: string; color: string; chi
   )
 }
 
-function StreamBubble({ turn, showChips }: { turn: Turn; showChips: boolean }) {
+/** The reply being written, with its tool chips and approval cards; rooms pass their own way to answer an approval. */
+export function StreamBubble({ turn, showChips, onAnswer }: { turn: Turn; showChips: boolean; onAnswer?: Answer }) {
   const waiting = !turn.ended && turn.text === '' && !turn.approvals.some((a) => a.state === 'pending')
   const stats = [
     turn.result?.durationMs !== undefined ? formatDuration(turn.result.durationMs) : null,
@@ -81,7 +84,7 @@ function StreamBubble({ turn, showChips }: { turn: Turn; showChips: boolean }) {
         </div>
       )}
       {turn.approvals.map((a) => (
-        <Approval key={a.id} turn={turn.id} a={a} />
+        <Approval key={a.id} turn={turn.id} a={a} {...(onAnswer ? { onAnswer } : {})} />
       ))}
       {turn.notice && (
         <div className="cv-banner warn" role="status">

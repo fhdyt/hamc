@@ -4,6 +4,7 @@ import { buildItems, searchItems, type PaletteGroup, type PaletteItem } from '..
 import { closePalette, runItem } from '../paletteActions'
 import { useAgents } from '../stores/agents'
 import { useBrain } from '../stores/brain'
+import { useGroups } from '../stores/groups'
 import { usePalette } from '../stores/palette'
 import { useSessions } from '../stores/sessions'
 import { Icon } from './Icon'
@@ -41,11 +42,12 @@ function PaletteBody() {
   const agents = useAgents((s) => s.agents)
   const own = useSessions((s) => s.rows)
   const notes = useBrain((s) => s.notes)
+  const rooms = useGroups((s) => s.rooms)
   const listRef = useRef<HTMLDivElement>(null)
 
   const items = useMemo(
-    () => buildItems({ agents, sessions: mergeSessions(loaded, own), notes: Array.from(notes.values(), (n) => ({ id: n.id, title: n.title })), now: Date.now() / 1000 }),
-    [agents, loaded, own, notes]
+    () => buildItems({ agents, sessions: mergeSessions(loaded, own), notes: Array.from(notes.values(), (n) => ({ id: n.id, title: n.title })), rooms, now: Date.now() / 1000 }),
+    [agents, loaded, own, notes, rooms]
   )
   const results = useMemo(() => searchItems(items, query), [items, query])
   const active = Math.min(index, Math.max(results.length - 1, 0))
