@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
-import { SettingsStore } from '../../src/main/store/settingsStore'
+import { SettingsStore, TargetTakenError } from '../../src/main/store/settingsStore'
 import { SETTINGS_DEFAULTS } from '@shared/settings'
 
 let store: SettingsStore
@@ -59,8 +59,8 @@ describe('connections', () => {
   })
 
   it('keeps the old password when secretEnc is undefined', () => {
-    store.upsertConnection({ ...conn, secretEnc: Buffer.from('enc') })
-    store.upsertConnection({ ...conn, port: 2222 })
+    const id = store.upsertConnection({ ...conn, secretEnc: Buffer.from('enc') })
+    store.upsertConnection({ ...conn, id, port: 2222 })
     expect(store.getConnection()!.port).toBe(2222)
     expect(store.getSecretEnc()!.toString()).toBe('enc')
   })
@@ -105,13 +105,6 @@ describe('connections', () => {
     expect(store.getConnection()).toMatchObject({ authMethod: 'password', keyPath: null, hasSecret: false })
   })
 
-  it('keeps a single connection row', () => {
-    const a = store.upsertConnection(conn)
-    const b = store.upsertConnection({ ...conn, host: '10.0.0.2' })
-    expect(b).toBe(a)
-    expect(store.getConnection()!.host).toBe('10.0.0.2')
-  })
-
   it('forget removes the connection, its pins and its host key', () => {
     const id = store.upsertConnection(conn)
     store.trustHost('10.0.0.1', 22, 'ssh-ed25519', 'SHA256:abc')
@@ -121,6 +114,117 @@ describe('connections', () => {
     expect(store.getKnownHost('10.0.0.1', 22)).toBeNull()
     expect(store.getPins(id)).toEqual([])
     expect(store.pinsInitialized(id)).toBe(false)
+  })
+})
+
+describe('server list', () => {
+  it('adds a row per target and lists the newest connected first', () => {
+    const a = store.upsertConnection(conn)
+    const b = store.upsertConnection({ ...conn, host: '10.0.0.2', name: 'lab' })
+    expect(b).not.toBe(a)
+    store.touchConnected(a, 100)
+    store.touchConnected(b, 200)
+    expect(store.listConnections().map((c) => c.id)).toEqual([b, a])
+    expect(store.getConnection(b)).toMatchObject({ label: 'lab', name: 'lab' })
+    expect(store.getConnection(a)).toMatchObject({ label: 'prod', name: 'prod' })
+  })
+
+  it('lists never-connected rows last', () => {
+    const a = store.upsertConnection(conn)
+    const b = store.upsertConnection({ ...conn, host: '10.0.0.2' })
+    store.touchConnected(b, 5)
+    expect(store.listConnections().map((c) => c.id)).toEqual([b, a])
+  })
+
+  it('shows user@host when the label is empty', () => {
+    const id = store.upsertConnection({ ...conn, name: '' })
+    expect(store.getConnection(id)).toMatchObject({ label: '', name: 'root@10.0.0.1' })
+  })
+
+  it('finds a row by its target', () => {
+    const a = store.upsertConnection(conn)
+    expect(store.findConnection('10.0.0.1', 22, 'root')!.id).toBe(a)
+    expect(store.findConnection('10.0.0.1', 22, 'other')).toBeNull()
+    expect(store.upsertConnection({ ...conn, name: undefined as never })).toBe(a)
+  })
+
+  it('updates by id and refuses an address another row has', () => {
+    const a = store.upsertConnection(conn)
+    const b = store.upsertConnection({ ...conn, host: '10.0.0.2' })
+    expect(store.upsertConnection({ ...conn, id: a, port: 2200 })).toBe(a)
+    expect(store.getConnection(a)!.port).toBe(2200)
+    expect(() => store.upsertConnection({ ...conn, id: a, host: '10.0.0.2' })).toThrow(TargetTakenError)
+    expect(store.getConnection(b)!.host).toBe('10.0.0.2')
+    expect(store.getConnection(a)!.host).toBe('10.0.0.1')
+  })
+
+  it('keeps the label when the name is absent', () => {
+    const a = store.upsertConnection(conn)
+    store.upsertConnection({ ...conn, id: a, name: undefined })
+    expect(store.getConnection(a)!.label).toBe('prod')
+  })
+
+  it('follows the active row, the newest one by default', () => {
+    const a = store.upsertConnection(conn)
+    const b = store.upsertConnection({ ...conn, host: '10.0.0.2', secretEnc: Buffer.from('b') })
+    store.touchConnected(b, 10)
+    expect(store.getConnection()!.id).toBe(b)
+    expect(store.activeId()).toBe(b)
+    store.setActive(a)
+    expect(store.getConnection()!.id).toBe(a)
+    expect(store.activeId()).toBe(a)
+    expect(store.getSecretEnc()).toBeNull()
+    expect(store.getSecretEnc(b)!.toString()).toBe('b')
+    store.setActive(null)
+    expect(store.getConnection()).toBeNull()
+    expect(store.activeId()).toBeNull()
+    store.setActive(undefined)
+    expect(store.getConnection()!.id).toBe(b)
+  })
+
+  it('renames and checks the label', () => {
+    const a = store.upsertConnection(conn)
+    store.renameConnection(a, '  lab  ')
+    expect(store.getConnection(a)!.label).toBe('lab')
+    expect(() => store.renameConnection(a, 'x'.repeat(41))).toThrow()
+    expect(() => store.renameConnection(a, 'a\u0007b')).toThrow()
+    expect(() => store.upsertConnection({ ...conn, id: a, name: 'x'.repeat(41) })).toThrow()
+  })
+
+  it('forget(id) drops only that row and keeps a host key another row uses', () => {
+    const a = store.upsertConnection(conn)
+    const b = store.upsertConnection({ ...conn, username: 'hermes' })
+    store.trustHost('10.0.0.1', 22, 'ssh-ed25519', 'SHA256:abc')
+    store.setPins(a, ['x'])
+    store.setPins(b, ['y'])
+    store.setActive(a)
+    store.forgetConnection(a)
+    expect(store.getConnection(a)).toBeNull()
+    expect(store.getConnection()!.id).toBe(b)
+    expect(store.getPins(b)).toEqual(['y'])
+    expect(store.getPins(a)).toEqual([])
+    expect(store.getKnownHost('10.0.0.1', 22)).not.toBeNull()
+    store.forgetConnection(b)
+    expect(store.getKnownHost('10.0.0.1', 22)).toBeNull()
+  })
+
+  it('migration 7 clears automatic names and keeps real labels', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mc-store-m7-'))
+    const file = join(dir, 'app.db')
+    const first = new SettingsStore(file)
+    first.upsertConnection({ ...conn, name: 'prod' })
+    first.upsertConnection({ ...conn, host: '10.0.0.2', name: '' })
+    first.close()
+    const raw = new Database(file)
+    raw.exec(`UPDATE connections SET name = username || '@' || host WHERE host = '10.0.0.2';
+              DROP INDEX idx_connections_target;
+              DELETE FROM schema_version WHERE version = 7;`)
+    raw.close()
+    const s = new SettingsStore(file)
+    expect(s.findConnection('10.0.0.2', 22, 'root')).toMatchObject({ label: '', name: 'root@10.0.0.2' })
+    expect(s.findConnection('10.0.0.1', 22, 'root')).toMatchObject({ label: 'prod' })
+    s.close()
+    rmSync(dir, { recursive: true, force: true })
   })
 })
 

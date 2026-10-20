@@ -1,7 +1,7 @@
 import type { AgentLook, AgentLooks } from '@shared/looks'
 import Database from 'better-sqlite3'
 import { GroupStore } from '../groups/store'
-import type { AuthMethod, SavedConnection } from '@shared/ipc'
+import { cleanLabel, type AuthMethod, type SavedConnection } from '@shared/ipc'
 import { SETTINGS_DEFAULTS, SETTINGS_SCHEMA, type SettingsMap } from '@shared/settings'
 
 const MIGRATIONS: string[] = [
@@ -84,8 +84,18 @@ const MIGRATIONS: string[] = [
      status TEXT NOT NULL,
      ts INTEGER NOT NULL,
      PRIMARY KEY (connection_id, group_id, seq)
-   );`
+   );`,
+  // multi-VPS (F-CONN-14): one row per server; name is the optional label, so the old automatic user@host goes
+  `UPDATE connections SET name = '' WHERE name = username || '@' || host;
+   CREATE UNIQUE INDEX IF NOT EXISTS idx_connections_target ON connections (host, port, username);`
 ]
+
+/** An edit would give a saved server the address of another saved server. */
+export class TargetTakenError extends Error {
+  constructor() {
+    super('Another saved server already uses this address.')
+  }
+}
 
 /** Retention of memory snapshots (PRD F-MEMT-2): 200 versions per file, 180 days; the newest version always stays. */
 export const SNAPSHOTS_PER_FILE = 200
@@ -106,7 +116,10 @@ export interface MemorySnapshotRow {
 }
 
 export interface UpsertConnection {
-  name: string
+  /** The row to update; without it the row with the same target, else a new one. */
+  id?: number
+  /** The label; undefined keeps the stored one, '' clears it. */
+  name?: string | undefined
   host: string
   port: number
   username: string
@@ -138,8 +151,10 @@ interface ConnRow {
 
 export class SettingsStore {
   private db: Database.Database
-  /** Group chat rooms of the saved connection. */
+  /** Group chat rooms of the active connection. */
   readonly groups: GroupStore
+  /** The server the session works with: undefined = not chosen (the newest row), null = a new server not saved yet. */
+  private active: number | null | undefined = undefined
 
   constructor(path: string) {
     this.db = new Database(path)
@@ -189,17 +204,34 @@ export class SettingsStore {
     return out as unknown as SettingsMap
   }
 
-  private connRow(): ConnRow | undefined {
-    return this.db.prepare('SELECT * FROM connections ORDER BY id LIMIT 1').get() as ConnRow | undefined
+  private newestRow(): ConnRow | undefined {
+    return this.db
+      .prepare('SELECT * FROM connections ORDER BY last_connected_at IS NULL, last_connected_at DESC, id LIMIT 1')
+      .get() as ConnRow | undefined
   }
 
-  getConnection(): SavedConnection | null {
-    const r = this.connRow()
-    if (!r) return null
+  private idRow(id: number): ConnRow | undefined {
+    return this.db.prepare('SELECT * FROM connections WHERE id = ?').get(id) as ConnRow | undefined
+  }
+
+  private targetRow(host: string, port: number, username: string): ConnRow | undefined {
+    return this.db.prepare('SELECT * FROM connections WHERE host = ? AND port = ? AND username = ?').get(host, port, username) as ConnRow | undefined
+  }
+
+  /** A row by id, else the active one (the newest while none was chosen; none for a new server). */
+  private connRow(id?: number): ConnRow | undefined {
+    if (id !== undefined) return this.idRow(id)
+    if (this.active === null) return undefined
+    if (this.active !== undefined) return this.idRow(this.active) ?? this.newestRow()
+    return this.newestRow()
+  }
+
+  private toSaved(r: ConnRow): SavedConnection {
     const kh = this.getKnownHost(r.host, r.port)
     return {
       id: r.id,
-      name: r.name,
+      name: r.name || `${r.username}@${r.host}`,
+      label: r.name,
       host: r.host,
       port: r.port,
       username: r.username,
@@ -212,12 +244,42 @@ export class SettingsStore {
     }
   }
 
-  getSecretEnc(): Buffer | null {
-    return this.connRow()?.password_enc ?? null
+  /** F-CONN-14: the server the session works with; every call without an id follows it. */
+  setActive(id: number | null | undefined): void {
+    this.active = id
+  }
+
+  activeId(): number | null {
+    return this.connRow()?.id ?? null
+  }
+
+  /** Every saved server, the newest connected first and never-connected ones last. */
+  listConnections(): SavedConnection[] {
+    const rows = this.db.prepare('SELECT * FROM connections ORDER BY last_connected_at IS NULL, last_connected_at DESC, id').all() as ConnRow[]
+    return rows.map((r) => this.toSaved(r))
+  }
+
+  getConnection(id?: number): SavedConnection | null {
+    const r = this.connRow(id)
+    return r ? this.toSaved(r) : null
+  }
+
+  findConnection(host: string, port: number, username: string): SavedConnection | null {
+    const r = this.targetRow(host, port, username)
+    return r ? this.toSaved(r) : null
+  }
+
+  getSecretEnc(id?: number): Buffer | null {
+    return this.connRow(id)?.password_enc ?? null
   }
 
   upsertConnection(input: UpsertConnection): number {
-    const existing = this.connRow()
+    const existing = input.id !== undefined ? this.idRow(input.id) : this.targetRow(input.host, input.port, input.username)
+    if (existing) {
+      const other = this.targetRow(input.host, input.port, input.username)
+      if (other && other.id !== existing.id) throw new TargetTakenError()
+    }
+    const name = input.name === undefined ? (existing?.name ?? '') : cleanLabel(input.name)
     const authMethod = input.authMethod ?? existing?.auth_method ?? 'password'
     const keyPath = authMethod === 'key' ? (input.keyPath ?? existing?.key_path ?? null) : null
     const sameAuth = !!existing && existing.auth_method === authMethod && existing.key_path === keyPath
@@ -225,21 +287,26 @@ export class SettingsStore {
     if (existing) {
       this.db
         .prepare('UPDATE connections SET name=?, host=?, port=?, username=?, remember=?, password_enc=?, auth_method=?, key_path=? WHERE id=?')
-        .run(input.name, input.host, input.port, input.username, input.remember ? 1 : 0, secretEnc, authMethod, keyPath, existing.id)
+        .run(name, input.host, input.port, input.username, input.remember ? 1 : 0, secretEnc, authMethod, keyPath, existing.id)
       return existing.id
     }
     const res = this.db
       .prepare('INSERT INTO connections (name, host, port, username, remember, password_enc, auth_method, key_path) VALUES (?,?,?,?,?,?,?,?)')
-      .run(input.name, input.host, input.port, input.username, input.remember ? 1 : 0, secretEnc, authMethod, keyPath)
+      .run(name, input.host, input.port, input.username, input.remember ? 1 : 0, secretEnc, authMethod, keyPath)
     return Number(res.lastInsertRowid)
+  }
+
+  renameConnection(id: number, name: string): void {
+    this.db.prepare('UPDATE connections SET name = ? WHERE id = ?').run(cleanLabel(name), id)
   }
 
   touchConnected(id: number, ts: number): void {
     this.db.prepare('UPDATE connections SET last_connected_at = ? WHERE id = ?').run(ts, id)
   }
 
-  forgetConnection(): void {
-    const r = this.connRow()
+  /** Removes a saved server (the active one without an id) and what belongs to it; a host key another server uses stays. */
+  forgetConnection(id?: number): void {
+    const r = this.connRow(id)
     if (!r) return
     this.db.transaction(() => {
       this.db.prepare('DELETE FROM agent_pins WHERE connection_id = ?').run(r.id)
@@ -249,9 +316,11 @@ export class SettingsStore {
       this.db.prepare('DELETE FROM memory_snapshots WHERE connection_id = ?').run(r.id)
       this.db.prepare('DELETE FROM agent_looks WHERE connection_id = ?').run(r.id)
       this.groups.forget(r.id)
-      this.db.prepare('DELETE FROM known_hosts WHERE host = ? AND port = ?').run(r.host, r.port)
+      const shared = this.db.prepare('SELECT COUNT(*) AS n FROM connections WHERE host = ? AND port = ? AND id != ?').get(r.host, r.port, r.id) as { n: number }
+      if (shared.n === 0) this.db.prepare('DELETE FROM known_hosts WHERE host = ? AND port = ?').run(r.host, r.port)
       this.db.prepare('DELETE FROM connections WHERE id = ?').run(r.id)
     })()
+    if (this.active === r.id) this.active = undefined
   }
 
   getKnownHost(host: string, port: number): KnownHost | null {

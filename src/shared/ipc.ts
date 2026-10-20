@@ -45,6 +45,18 @@ export type PickKeyResult =
   | { ok: true; key: KeyInfo }
   | { ok: false; reason: 'cancelled' | 'unreadable' | 'too-big' | 'not-a-key' | 'ppk3'; message?: string }
 
+/** F-CONN-14: a server label is short, one line and local only. */
+export const LABEL_MAX = 40
+export const LABEL_PROBLEM = `Use at most ${LABEL_MAX} characters, without control characters.`
+
+/** The trimmed label, or an error for one that is too long or holds control characters. */
+export function cleanLabel(name: string): string {
+  const t = name.trim()
+  // eslint-disable-next-line no-control-regex
+  if (t.length > LABEL_MAX || /[\u0000-\u001f\u007f]/.test(t)) throw new Error(LABEL_PROBLEM)
+  return t
+}
+
 export const ConnectRequestSchema = z.object({
   host: z.string().trim().min(1).max(253),
   port: z.number().int().min(1).max(65535),
@@ -56,7 +68,11 @@ export const ConnectRequestSchema = z.object({
   keyPath: z.string().min(1).max(4096).optional(),
   passphrase: z.string().max(1024).optional(),
   remember: z.boolean(),
-  useSaved: z.boolean().optional()
+  useSaved: z.boolean().optional(),
+  /** F-CONN-14: the saved server this request is for (edit or switch); absent = the server with the same target, else a new one. */
+  connectionId: z.number().int().positive().optional(),
+  /** The label; checked again with cleanLabel in main. Absent keeps the saved one. */
+  name: z.string().max(LABEL_MAX * 4).optional()
 })
 export type ConnectRequest = z.infer<typeof ConnectRequestSchema>
 
@@ -103,7 +119,10 @@ export type ConnectResult =
 
 export interface SavedConnection {
   id: number
+  /** What the app shows: the label, else user@host. */
   name: string
+  /** The label the user gave this server (F-CONN-14); may be empty. */
+  label: string
   host: string
   port: number
   username: string
