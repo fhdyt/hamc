@@ -9,6 +9,7 @@
 | **Target sistem** | Hermes Agent (Nous Research) v0.21.x di VPS Linux, instalasi standar apa adanya |
 
 **Riwayat perubahan**
+- v1.6 (v2, 2026-10-20): sisa kandidat v2 dibangun: **graph mengikuti `.obsidian/graph.json`** (F-BRAIN-10); **aksi tulis Kanban** (buat task, assign, komentar, complete/block/unblock/promote/archive lewat `hermes kanban --board`, F-R12-10); **katalog model Hermes** dan **18 slot model auxiliary** di Settings → Agents → Model (F-CFG-19); **agent di mesin lain** sebagai node *remote* di graph agents (F-AGRAPH-7). Diverifikasi ke source Hermes tag v2026.8.31: `hermes kanban edit` hanya mengisi ulang `--result` (judul/isi/prioritas tidak bisa diubah lewat CLI), auxiliary punya 18 slot (bukan 11, `web_extract` sudah dihapus).
 - v1.5 (v2, 2026-10-20): **multi-VPS** (F-CONN-14..17): banyak server tersimpan, satu yang tersambung; pindah server dari menu di item koneksi status bar, Settings → Servers, atau palette ("Switch to …"); tiap server boleh diberi nama (label) lokal; data per server (pin, foto, room, vault, sesi chat, snapshot memory) tidak pernah tercampur.
 - v1.4 (v2, 2026-10-20): **chat room multi-agent** di layar Chat (6.22, F-ROOM-1..8): kamu dan 2–6 agent dalam satu room; satu Send memicu paling banyak 3 ronde giliran berurutan dengan aturan Hermes Desktop (@mention, `(pass)`, `@user`, batas 10 balasan). Diorkestrasi di aplikasi di atas gateway TUI; tiap anggota punya sesi Hermes tersembunyi `Group: <id>`; daftar room dan log room tersimpan lokal di `app.db`.
 - v1.3: **sidebar kiri permanen** di semua layar (kecuali Launch dan Connect) menggantikan menu di status bar; status bar hanya berisi status; notifikasi desktop OS tetap muncul di atas aplikasi lain (F-R13-*); jarak halaman dan filter diseragamkan (F-UI-9).
@@ -226,7 +227,7 @@ Second brain diasumsikan berupa **vault Obsidian**: folder berisi file `.md` den
 | F-BRAIN-7 | **Local graph:** dari pratinjau catatan, tampilkan graph hanya untuk catatan itu dengan kedalaman 1–3. | P1 |
 | F-BRAIN-8 | **Realtime:** graph diperbarui otomatis saat agent menambah atau mengubah catatan (polling mtime setiap 3 detik oleh collector; pakai `inotifywait` jika sudah tersedia di VPS). Node baru muncul dengan animasi "pulse" dan tidak mengacak ulang layout. | P0 |
 | F-BRAIN-9 | Performa: lancar (≥ 30 fps) untuk vault berisi 5.000 catatan dan 20.000 link. | P0 |
-| F-BRAIN-10 | Membaca `.obsidian/graph.json` milik vault (read-only) supaya warna *groups* dan pengaturan forces sama dengan yang user pakai di Obsidian. | P2 |
+| F-BRAIN-10 | Membaca `.obsidian/graph.json` milik vault (read-only) supaya warna *groups* dan pengaturan forces sama dengan yang user pakai di Obsidian. **Dibangun (v2):** sakelar *Use .obsidian/graph.json* (default aktif) di kontrol graph; nilai Obsidian (filter, display, forces, grup warna) menimpa nilai aplikasi selama aktif dan kontrol yang diikuti terkunci dengan label *from graph.json*; grup Obsidian tampil read-only setelah grup milik user; dibaca ulang saat vault dipasang, saat layar dibuka, dan lewat tombol Reload. | P2 |
 | F-BRAIN-11 | Tombol "Animate": memutar ulang pertumbuhan vault berdasarkan waktu pembuatan file (fitur timelapse ala Obsidian). | P2 |
 | F-BRAIN-12 | Mendukung lebih dari satu vault per koneksi (dropdown). | P2 |
 
@@ -249,7 +250,7 @@ Tab kedua di panel Graph View Dashboard (**Second Brain | Agents**) yang memperl
 | F-AGRAPH-4 | **Realtime:** interaksi dengan event dalam 60 detik terakhir ditandai sebagai *aktif*, berupa titik yang bergerak di sepanjang garis. Data baru masuk ≤ 2 detik (collector membaca `task_events` dengan id > terakhir, sesi baru, dan perubahan room). | P1 |
 | F-AGRAPH-5 | **Klik garis atau node** untuk membuka kartu detail: jenis, pengirim → penerima, judul tugas atau isi pesan terakhir, waktu, dan lokasi sumber data, dengan tautan ke sesi terkait di Live Feed. Klik node agent menyorot semua interaksinya dan menampilkan ringkasan jumlah per jenis. | P1 |
 | F-AGRAPH-6 | Filter jenis interaksi dan rentang waktu (1 jam / 24 jam / 7 hari). | P2 |
-| F-AGRAPH-7 | Interaksi lintas mesin (A2A plugin, `hermes peer`). | v2 |
+| F-AGRAPH-7 | Interaksi lintas mesin (A2A plugin, `hermes peer`). **Dibangun (v2):** jenis edge `peer` (filter *remote*) ke node eksternal `peer:<nama>` dari tiga sumber read-only: pengirim Bot Chat yang bukan profile di server ini (`bot chat`), pemanggilan `hermes peer dm|run <target>` di tool call agent (`peer dm`), dan `<profile home>/a2a_audit.jsonl` (`a2a`; hanya ts, arah, peer, task id; `summary` hanya dibaca saat edge diklik). Paling banyak 40 node eksternal. | v2 |
 
 > **Batasan:** graph hanya terisi jika agent memang memakai mekanisme di atas. `message_agent` hanya ada di instalasi Bot Mode. Skema `kanban.db` tidak didokumentasikan lengkap, jadi pembacaannya toleran (`PRAGMA table_info`) dengan fallback `hermes kanban … --json`. Format `source` untuk turn Bot Chat tidak terdokumentasi, sehingga deteksinya memakai judul sesi dan awalan pesan.
 
@@ -330,7 +331,7 @@ Perintah yang dipakai:
 | F-CFG-7 | Ubah **Reasoning effort** (`agent.reasoning_effort`: off, minimal … ultra) lewat `config set`. | P1 |
 | F-CFG-8 | Tombol **Test model:** jalankan `hermes -p <p> chat --oneshot -q "Reply with OK" --format stream-json --source mission-control-test`, lalu periksa event `system` (model yang dipakai) dan `exit_code`. Hasilnya ✓/✗ beserta latensi. | P1 |
 | F-CFG-9 | **Kapan berlaku:** model baru berlaku untuk sesi baru. Tombol **"Restart this agent's gateway"** (`hermes -p <p> gateway restart`) hanya me-restart profile tersebut dalam mode multiplex. Ada dialog konfirmasi. | P1 |
-| F-CFG-19 | Fallback providers (`fallback_providers`) dan model auxiliary/delegation memakai alur yang sama. | P2 |
+| F-CFG-19 | Fallback providers (`fallback_providers`) dan model auxiliary/delegation memakai alur yang sama. **Auxiliary dibangun (v2):** bagian *Auxiliary models* di tab Model menampilkan 18 slot `auxiliary.<task>` (dibaca dengan skrip baca terbatas yang hanya mencetak provider, model, base_url, dan ada/tidaknya api_key); Change, Use main model, dan Reset all to auto lewat `hermes config set auxiliary.<task>.provider|model|base_url` setelah konfirmasi; tidak ada key yang dibaca atau ditulis. **Katalog model (v2):** daftar *Hermes catalog* untuk OpenRouter dan Nous Portal dari cache `cache/model_catalog.json` di VPS, atau manifest publik resmi yang diambil dari komputer user (cache 1 jam); juga menjadi saran model di slot auxiliary. | P2 |
 
 > Model per cron job tidak termasuk, karena Hermes tidak menyediakan CLI untuk mengubah model sebuah job.
 > **Perlu diverifikasi di spike M6:** apakah `hermes config set` / `hermes auth add` bisa menerima nilai key dari stdin. Jika tidak, key terpaksa dikirim sebagai argumen, sehingga sempat terlihat di `/proc/<pid>/cmdline` oleh user lain di VPS yang sama selama perintah berjalan (biasanya < 1 detik). Risiko ini didokumentasikan di 11.
@@ -604,7 +605,7 @@ Urutan sub-tab: Profile, Model, Soul, Memory, User profile, **MCP, Toolsets, Fal
 | F-R12-7 | **Klik node graph** (Dashboard dan Second brain) langsung membuka **modal pembaca catatan**: judul, path, tag (bisa diklik), isi markdown dengan `[[wikilink]]` yang bisa diklik, dan daftar tautan. Node tag menampilkan catatan yang memakai tag itu; node unresolved menampilkan catatan yang menautnya. Kartu info node di pojok graph Dashboard dihapus. Isi catatan disanitasi seperti markdown agent (DOMPurify). | P0 |
 | F-R12-8 | **Auto start:** Settings → General → "Start automatically when your computer starts" (login item di Windows/macOS, autostart `.desktop` di Linux). | P0 |
 | F-R12-9 | **Nama tampilan agent:** Settings → Agents → Profile punya input *Display name* (maks 24 karakter, kosong = nama profile). Disimpan hanya di `app.db` (`agent_names`), dipakai di semua layar (panel Agents, chat, feed, cron, kanban, graph), dan **tidak pernah mengubah** nama profile atau config Hermes di VPS. Kunci internal tetap nama profile. | P0 |
-| F-R12-10 | **Layar Kanban (read-only):** kolom triage, to do, ready, running, blocked, review, done dari `~/.hermes/kanban.db` dan `kanban/boards/<slug>/kanban.db` (pilihan board; fallback `hermes kanban list/show --json`). Kartu menampilkan nomor, judul, prioritas, assignee (foto dan nama tampilan), jumlah komentar, dan umur. Filter assignee dan pencarian. Klik kartu membuka modal detail: deskripsi markdown, komentar antar agent, pembuat, waktu, run (`task_runs`), tautan (`task_links`), dan activity (`task_events`). Kolom menyusut agar tujuh kolom muat di 1440 px; di layar lebih sempit papan scroll horizontal. Tidak ada aksi tulis di v1.2. | P1 |
+| F-R12-10 | **Layar Kanban (read-only):** kolom triage, to do, ready, running, blocked, review, done dari `~/.hermes/kanban.db` dan `kanban/boards/<slug>/kanban.db` (pilihan board; fallback `hermes kanban list/show --json`). Kartu menampilkan nomor, judul, prioritas, assignee (foto dan nama tampilan), jumlah komentar, dan umur. Filter assignee dan pencarian. Klik kartu membuka modal detail: deskripsi markdown, komentar antar agent, pembuat, waktu, run (`task_runs`), tautan (`task_links`), dan activity (`task_events`). Kolom menyusut agar tujuh kolom muat di 1440 px; di layar lebih sempit papan scroll horizontal. Tidak ada aksi tulis di v1.2. **Aksi tulis (v2):** tombol *New task* (judul, deskripsi, assignee, prioritas, triage) dan, di dialog task, Complete / Block / Unblock / Promote to ready / Archive, pilihan Assignee, dan kotak komentar; semuanya lewat `hermes kanban --board <slug> …` (selalu dengan `--board`, nilai opsi `--opt=value`, teks sesudah `--`) dengan pratinjau perintah dan konfirmasi di dalam dialog. | P1 |
 
 ## 7. Kebutuhan Non-Fungsional
 
@@ -767,7 +768,7 @@ Password **tidak** disimpan sebagai plaintext. Yang disimpan di `app.db` hanya b
 | **M8 — Insights** (v1.1) | F-SESS-1..7 (spike: kueri FTS di `state.db` besar), F-USAGE-1..6, F-NAV-5..8 (badge, pintasan, command palette, filter bersama), alert biaya | Riwayat dan pencarian sesi, analitik biaya dan tool, palette Ctrl+K |
 | **M9 — Operations** (v1.1) | F-LOG-1..9, F-CRON-7..14 (spike: perintah `cron runs` dan `incidents` di Hermes asli), notifikasi cron/gateway yang diperluas | Log tail, status gateway, kebijakan approval, kontrol dan riwayat cron |
 | **M10 — Agent management** (v1.1) | F-SKILL-1..7, F-MEMT-1..6, F-CFG-19..26 (spike: `tools --summary`, `mcp list`, `fallback list` untuk parser) | Skills, memory timeline, MCP, toolsets, fallback, backup, profile baru |
-| v2 (kandidat) | ~~Multi-VPS~~ (dibangun, F-CONN-14..17), ~~chat room multi-agent~~ (dibangun, 6.22), ~~mode ACP~~ (dibangun), ~~auto-update~~ (dibangun), membaca `.obsidian/graph.json`, auxiliary model, katalog model, aksi tulis di Kanban | Room multi-agent di layar Chat |
+| v2 (kandidat) | ~~Multi-VPS~~ (dibangun, F-CONN-14..17), ~~chat room multi-agent~~ (dibangun, 6.22), ~~mode ACP~~ (dibangun), ~~auto-update~~ (dibangun), ~~membaca `.obsidian/graph.json`~~ (dibangun, F-BRAIN-10), ~~auxiliary model~~ dan ~~katalog model~~ (dibangun, F-CFG-19), ~~aksi tulis di Kanban~~ (dibangun, F-R12-10), ~~interaksi lintas mesin~~ (dibangun, F-AGRAPH-7) | Room multi-agent di layar Chat |
 
 ## 11. Risiko & Mitigasi
 
@@ -830,7 +831,7 @@ Tidak ada yang memblokir. Q10 dan Q11 memakai default di atas; koreksi bila tida
 
 | # | Topik | Pertanyaan |
 |---|---|---|
-| Q20 | Layar **Kanban** | Mockup lama menaut ke `Kanban.dc.html` dan menyebut serah-terima tugas antar agent (6.6b, F-SHELL-4), tetapi berkas sumbernya tidak ada di `mockup/src/`. Kanban tidak dimasukkan ke rail v1.1. **Diputuskan v1.2:** layar Kanban dibangun read-only (6.20, F-R12-10); aksi tulis menunggu v2. |
+| Q20 | Layar **Kanban** | Mockup lama menaut ke `Kanban.dc.html` dan menyebut serah-terima tugas antar agent (6.6b, F-SHELL-4), tetapi berkas sumbernya tidak ada di `mockup/src/`. Kanban tidak dimasukkan ke rail v1.1. **Diputuskan v1.2:** layar Kanban dibangun read-only (6.20, F-R12-10); aksi tulis menunggu v2. **v2:** aksi tulis inti dibangun (create, assign, comment, complete, block, unblock, promote, archive). |
 | Q21 | Nama toolset | Daftar toolset di mockup adalah contoh. Nama sebenarnya dibaca dari `hermes tools --summary` saat berjalan; perlu diverifikasi di Hermes asli. |
 
 

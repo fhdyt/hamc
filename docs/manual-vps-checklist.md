@@ -275,6 +275,15 @@ Chat sekarang memakai gateway TUI milik Hermes (`python -m tui_gateway.entry`) l
 163. **Auto-connect.** Tutup dan buka aplikasi: tersambung otomatis ke server yang terakhir dipakai. Settings → Servers menampilkan kedua server dengan waktu terakhir tersambung.
 164. **Forget dan Zero-Change.** Settings → Servers → Forget… pada server yang tidak aktif: server aktif tetap tersambung. Di kedua VPS tidak ada berkas atau proses baru selain yang dibuat langkah lain; `app.log` hanya berisi `server switch <id>` / `server forget <id>`, tanpa password atau nama server.
 
+## Tambahan sisa kandidat v2 (F-BRAIN-10, Kanban tulis, F-CFG-19, F-AGRAPH-7)
+
+165. **Graph Obsidian.** Di vault yang punya `.obsidian/graph.json` dengan grup warna: Second brain → kontrol *Obsidian* menulis "Following graph.json · N groups", warna node sama dengan di Obsidian, slider yang diikuti terkunci. Matikan sakelar: nilai aplikasi kembali. Ubah grup di Obsidian, klik Reload: berubah. `graph.json` di VPS tidak berubah.
+166. **Kanban: task baru dan komentar.** Kanban → New task, isi judul dan assignee → pratinjau `$ hermes kanban --board <board> create --json …` → Confirm: task muncul dan dialognya terbuka. Tambah komentar: tampil dengan author `user`. Bandingkan dengan `hermes kanban --board <board> show <id>` di terminal.
+167. **Kanban: status.** Block dengan alasan, Unblock, Complete dengan result, Archive: kolom berpindah sesuai dan `hermes kanban show` setuju. Promote pada task yang parent-nya belum selesai: pesan penolakan Hermes tampil. Catat bila ada kata status lain yang muncul.
+168. **Katalog model.** Settings → Agents → Model → OpenRouter: daftar *Hermes catalog* muncul ("From the server's Hermes cache" bila `~/.hermes/cache/model_catalog.json` ada, jalankan `hermes model` sekali bila belum). Bandingkan isinya dengan picker `hermes model`.
+169. **Auxiliary.** Bagian *Auxiliary models*: 18 slot, nilai sama dengan `hermes config get auxiliary --json` (abaikan api_key). Ubah Vision ke model katalog → konfirmasi perintah → Save; `hermes config get auxiliary.vision.model` menunjukkan nilai baru. Use main model / Reset all to auto mengembalikan `auto`. Pastikan tidak ada api_key yang tampil di aplikasi atau di `app.log`.
+170. **Agent remote.** Di VPS yang memakai `hermes peer` atau A2A: graph agents (filter *remote*) menampilkan node berbentuk berlian berlabel REMOTE; klik edge menampilkan pesan Bot Chat, perintah `hermes peer dm`, atau ringkasan A2A. Tanpa peer/A2A: tidak ada node remote. Tidak ada berkas yang berubah di VPS.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.
