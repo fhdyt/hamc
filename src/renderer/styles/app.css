@@ -229,6 +229,17 @@ body {
 .bc-slider input { width: 100%; accent-color: #50fa7b; }
 .bc-group { display: flex; align-items: center; gap: 6px; }
 .bc-group .fld { flex: 1; min-width: 0; }
+/* F-BRAIN-10: controls that follow .obsidian/graph.json */
+.bc-toggle.locked, .bc-slider.locked { opacity: 0.75; }
+.bc-slider input:disabled, .bc-toggle input:disabled { cursor: not-allowed; }
+.bc-from { color: #8b95bd; font-size: 10px; }
+.bc-obs { display: flex; flex-direction: column; gap: 6px; }
+.bc-obs-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #a9b2d3; font-size: 11px; }
+.bc-obs-line .err { color: #ffb86c; }
+.bc-obs-groups { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; color: #a9b2d3; font-size: 11px; }
+.bc-obs-groups li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bc-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; }
+.bc-q { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bc-group input[type='color'] { width: 26px; height: 26px; padding: 0; border: 1px solid #44475a; border-radius: 6px; background: transparent; cursor: pointer; }
 .bn-preview { flex: none; width: 340px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding: 12px; border: 1px solid #44475a; border-radius: 10px; background: #21222c; }
 .bn-preview > * { flex-shrink: 0; } /* a scrolling flex column must not squeeze the note under the link lists */

@@ -2,6 +2,7 @@ import type { FeedItem } from '@shared/events'
 import type { ConnectRequest, ConnectResult, SavedConnection } from '@shared/ipc'
 import type { BrainGraphSettings, SettingsMap } from '@shared/settings'
 import { fullRequest, oldestPerProfile } from './lib/feed'
+import { describeQueryError } from './lib/queryError'
 import { defaultPins, reorderPins, togglePin } from './lib/roster'
 import { stepZoom } from './lib/zoom'
 import { useLooks } from './stores/looks'
@@ -210,12 +211,28 @@ export function openFeedFor(profile: string): void {
 export async function refreshVault(): Promise<void> {
   const { vault } = await window.mc.brain.get()
   useBrain.getState().setVault(vault)
+  void loadObsidianGraph()
 }
 
 /** Saves a new vault path (or clears it); the main process restarts the vault stream. */
 export async function saveVault(path: string | null): Promise<void> {
   await window.mc.brain.setVault(path)
   useBrain.getState().setVault(path)
+  void loadObsidianGraph()
+}
+
+let obsidianSeq = 0
+/** F-BRAIN-10: reads `.obsidian/graph.json` of the saved vault; a newer read wins over an older answer. */
+export async function loadObsidianGraph(): Promise<void> {
+  const my = ++obsidianSeq
+  const brain = useBrain.getState()
+  if (!brain.vault) return brain.setObsidian({ state: 'idle' })
+  if (brain.obsidian.state !== 'ok') brain.setObsidian({ state: 'loading' })
+  const res = await window.mc.brain.obsidian()
+  if (my !== obsidianSeq) return
+  if (!res.ok) useBrain.getState().setObsidian({ state: 'error', error: res.error === 'unreadable' ? 'graph.json could not be read.' : describeQueryError(res.error, res.detail) })
+  else if (!res.data.found) useBrain.getState().setObsidian({ state: 'none' })
+  else useBrain.getState().setObsidian({ state: 'ok', graph: res.data.graph, mtime: res.data.mtime })
 }
 
 let graphSaveTimer: number | undefined

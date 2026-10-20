@@ -42,6 +42,8 @@ export interface BrainGraphSettings {
   linkDistance: number
   controlsOpen: boolean
   previewOpen: boolean
+  /** F-BRAIN-10: follow the vault's `.obsidian/graph.json` (colour groups, filters, forces) when it has one. */
+  useObsidian: boolean
 }
 
 export const BRAIN_GRAPH_DEFAULTS: BrainGraphSettings = {
@@ -59,7 +61,8 @@ export const BRAIN_GRAPH_DEFAULTS: BrainGraphSettings = {
   linkForce: 0.5,
   linkDistance: 0.25,
   controlsOpen: true,
-  previewOpen: true
+  previewOpen: true,
+  useObsidian: true
 }
 
 export interface SettingsMap {
@@ -212,7 +215,8 @@ export const SETTINGS_SCHEMA = {
     linkForce: z.number().min(0).max(1),
     linkDistance: z.number().min(0).max(1),
     controlsOpen: z.boolean(),
-    previewOpen: z.boolean()
+    previewOpen: z.boolean(),
+    useObsidian: z.boolean().default(true)
   }),
   'filters.agent': z.string().min(1).max(64),
   'filters.range': z.enum(['today', '7d', '14d', '30d', 'all']),

@@ -1,7 +1,12 @@
 import { create } from 'zustand'
-import type { BrainData, BrainNote } from '@shared/events'
+import type { BrainData, BrainNote, ObsidianGraph } from '@shared/events'
 
 export type BrainPhase = 'unset' | 'loading' | 'live' | 'error'
+
+export type ObsidianState =
+  | { state: 'idle' | 'loading' | 'none' }
+  | { state: 'ok'; graph: ObsidianGraph; mtime: number }
+  | { state: 'error'; error: string }
 
 interface BrainState {
   /** Whether the saved vault path was already read from the main process. */
@@ -21,6 +26,9 @@ interface BrainState {
   local: { id: string; depth: number } | null
   search: string
   noteModal: string | null
+  /** F-BRAIN-10: the vault's `.obsidian/graph.json`, read on demand. */
+  obsidian: ObsidianState
+  setObsidian(o: ObsidianState): void
   setVault(vault: string | null): void
   applyBrain(data: BrainData): void
   setError(message: string): void
@@ -46,7 +54,8 @@ const EMPTY = {
   hovered: null as string | null,
   local: null as { id: string; depth: number } | null,
   search: '',
-  noteModal: null as string | null
+  noteModal: null as string | null,
+  obsidian: { state: 'idle' } as ObsidianState
 }
 
 export const useBrain = create<BrainState>()((set) => ({
@@ -89,5 +98,6 @@ export const useBrain = create<BrainState>()((set) => ({
   setLocal: (local) => set({ local }),
   setSearch: (search) => set({ search }),
   openNote: (noteModal) => set({ noteModal }),
+  setObsidian: (obsidian) => set({ obsidian }),
   reset: () => set({ ...EMPTY, notes: new Map() })
 }))

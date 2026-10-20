@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { saveGraphSettings } from '../actions'
+import { useEffect, useRef, useState } from 'react'
+import { loadObsidianGraph, saveGraphSettings } from '../actions'
 import { Icon } from '../components/Icon'
 import { Modal } from '../components/Modal'
 import { EmptyState, ErrorState, Skeleton } from '../components/States'
@@ -18,6 +18,10 @@ import { useMemoryTimeline, type BrainTab } from '../stores/memoryTimeline'
 export function Brain() {
   const loaded = useBrain((s) => s.loaded)
   const vault = useBrain((s) => s.vault)
+  // F-BRAIN-10: graph.json may have changed in Obsidian since the last read
+  useEffect(() => {
+    if (vault) void loadObsidianGraph()
+  }, [vault])
   const phase = useBrain((s) => s.phase)
   const error = useBrain((s) => s.error)
   const noteCount = useBrain((s) => s.notes.size)
