@@ -164,14 +164,16 @@ export function AgentGraphSvg({ graph, selected, animate, onSelect, handle }: Pr
           })}
         {graph.nodes.map((n) => {
           const pick = (): void => onSelect({ type: 'node', id: n.id })
-          const color = n.kind === 'agent' ? agentColor(n.id) : n.kind === 'room' ? KIND_COLOR.room : KIND_COLOR.delegate
+          const color = n.kind === 'agent' ? agentColor(n.id) : n.kind === 'room' ? KIND_COLOR.room : n.kind === 'peer' ? KIND_COLOR.peer : KIND_COLOR.delegate
           const on = selected?.type === 'node' && selected.id === n.id
           const op = n.dim ? 0.45 : hotNode(n) ? 1 : 0.4
           return (
-            <g key={n.id} className="ag-node" role="button" tabIndex={0} aria-label={`${n.kind === 'agent' ? 'agent' : n.kind === 'room' ? 'room' : 'subagent'} ${n.label}`} aria-pressed={on} opacity={op} onClick={pick} onKeyDown={press(pick)}>
+            <g key={n.id} className="ag-node" role="button" tabIndex={0} aria-label={`${n.kind === 'agent' ? 'agent' : n.kind === 'room' ? 'room' : n.kind === 'peer' ? 'remote agent' : 'subagent'} ${n.label}`} aria-pressed={on} opacity={op} onClick={pick} onKeyDown={press(pick)}>
               {on && <circle cx={n.x} cy={n.y} r={n.r + 5} fill="none" stroke="#f8f8f2" strokeWidth={2} />}
               {n.kind === 'room' ? (
                 <rect x={n.x - n.r} y={n.y - n.r} width={n.r * 2} height={n.r * 2} rx={8} fill="#21222c" stroke={color} strokeWidth={2} />
+              ) : n.kind === 'peer' ? (
+                <polygon points={`${n.x},${n.y - n.r} ${n.x + n.r},${n.y} ${n.x},${n.y + n.r} ${n.x - n.r},${n.y}`} fill="#21222c" stroke={color} strokeWidth={1.5} strokeDasharray="4 2" />
               ) : n.kind === 'sub' ? (
                 <circle cx={n.x} cy={n.y} r={n.r} fill={n.running ? `${color}55` : '#21222c'} stroke={color} strokeWidth={1.5} strokeDasharray="3 2" />
               ) : (
@@ -190,6 +192,11 @@ export function AgentGraphSvg({ graph, selected, animate, onSelect, handle }: Pr
               <text x={n.x} y={n.y + n.r + 13} textAnchor="middle" fill="#a9b2d3" fontSize={10}>
                 {n.label.length > 18 ? `${n.label.slice(0, 17)}…` : n.label}
               </text>
+              {n.kind === 'peer' && (
+                <text x={n.x} y={n.y + n.r + 24} textAnchor="middle" fill="#8b95bd" fontSize={8} letterSpacing="0.08em">
+                  REMOTE
+                </text>
+              )}
               {n.kind === 'agent' && n.status && (
                 <text x={n.x} y={n.y + n.r + 25} textAnchor="middle" fill={n.status === 'working' ? '#50fa7b' : '#8b95bd'} fontSize={9} letterSpacing="0.06em">
                   {n.status.toUpperCase()}

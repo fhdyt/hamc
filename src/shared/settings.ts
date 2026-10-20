@@ -16,7 +16,7 @@ export interface AgentGraphSettings {
   range: '1h' | '24h' | '7d'
 }
 
-export const AGENT_GRAPH_DEFAULTS: AgentGraphSettings = { kinds: ['kanban', 'message', 'room', 'delegate'], range: '24h' }
+export const AGENT_GRAPH_DEFAULTS: AgentGraphSettings = { kinds: ['kanban', 'message', 'room', 'delegate', 'peer'], range: '24h' }
 
 export interface BrainGroup {
   id: string
@@ -199,7 +199,10 @@ export const SETTINGS_SCHEMA = {
   'dashboard.rosterH': z.number().min(60).max(480),
   'dashboard.activityTab': z.enum(['activity', 'alerts']),
   'dashboard.graphTab': z.enum(['brain', 'agents']),
-  'dashboard.agentGraph': z.object({ kinds: z.array(InteractionKind).max(4), range: z.enum(['1h', '24h', '7d']) }),
+  // a filter saved with all four kinds before F-AGRAPH-7 shows remote peers too
+  'dashboard.agentGraph': z
+    .object({ kinds: z.array(InteractionKind).max(5), range: z.enum(['1h', '24h', '7d']) })
+    .transform((v) => (v.kinds.length === 4 && !v.kinds.includes('peer') ? { ...v, kinds: [...v.kinds, 'peer' as const] } : v)),
   'brain.graph': z.object({
     showTags: z.boolean(),
     showAttachments: z.boolean(),

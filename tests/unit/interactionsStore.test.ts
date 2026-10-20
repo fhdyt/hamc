@@ -8,7 +8,7 @@ const mk = (ids: string[], rooms: string[] = []): InteractionsData => ({
   edges: ids.map((id) => ({ id, kind: 'message' as const, from: 'a', to: 'b', count: 1, firstTs: 1, lastTs: 2, label: 'msg', status: null })),
   rooms: rooms.map((id) => ({ id, name: id, members: ['a'], lastTs: 1 })),
   subagents: [],
-  sources: { kanban: ok, message: ok, room: ok, delegate: ok }
+  sources: { kanban: ok, message: ok, room: ok, delegate: ok, peer: ok }
 })
 beforeEach(() => useInteractions.getState().reset())
 

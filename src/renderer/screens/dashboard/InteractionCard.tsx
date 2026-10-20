@@ -18,7 +18,7 @@ type Load = { key: string; state: 'loading' } | { key: string; state: 'error'; e
 /** What to ask the server for an edge or a node; null when the thing has nothing to read (an agent, a task without a number). */
 export function detailArgs(edge: GEdge | null, node: GNode | null): InteractionDetailArgs | null {
   if (edge) {
-    if (edge.kind === 'message') return { kind: 'message', from: edge.from, to: edge.to }
+    if (edge.kind === 'message' || edge.kind === 'peer') return { kind: edge.kind, from: edge.from, to: edge.to }
     if (edge.kind === 'kanban') {
       const id = (edge.label ?? '').replace(/^#/, '')
       return /^[A-Za-z0-9._:-]{1,128}$/.test(id) ? { kind: 'kanban', id } : null
@@ -71,11 +71,13 @@ export function InteractionCard({ edge, node, counts, labelOf, onClose }: Props)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const kind = edge?.kind ?? (node?.kind === 'room' ? 'room' : node?.kind === 'sub' ? 'delegate' : null)
+  const kind = edge?.kind ?? (node?.kind === 'room' ? 'room' : node?.kind === 'sub' ? 'delegate' : node?.kind === 'peer' ? 'peer' : null)
   const color = kind ? KIND_COLOR[kind] : '#A9B2D3'
   const title = edge
-    ? `${edge.kind === 'kanban' ? `kanban ${edge.label ?? ''}` : edge.kind === 'message' ? 'message_agent' : edge.kind === 'room' ? 'group room' : 'delegate_task'}${edge.status ? ` · ${edge.status}` : ''}`
-    : node?.kind === 'room'
+    ? `${edge.kind === 'kanban' ? `kanban ${edge.label ?? ''}` : edge.kind === 'message' ? 'message_agent' : edge.kind === 'room' ? 'group room' : edge.kind === 'peer' ? `remote · ${edge.label ?? ''}` : 'delegate_task'}${edge.status ? ` · ${edge.status}` : ''}`
+    : node?.kind === 'peer'
+      ? `remote agent ${node.label}`
+      : node?.kind === 'room'
       ? `group room ${node.label}`
       : node?.kind === 'sub'
         ? `delegate_task · ${node.running ? 'running' : 'done'}`

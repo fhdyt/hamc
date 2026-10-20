@@ -3,9 +3,9 @@ import type { InteractionEdge, InteractionKind, InteractionsData } from '@shared
 export type Range = '1h' | '24h' | '7d'
 
 /** Colours of the Dracula tokens, one per kind of interaction (PRD 6.6b, F-AGRAPH-3). */
-export const KIND_COLOR: Record<InteractionKind, string> = { kanban: '#FFB86C', message: '#FF79C6', room: '#BD93F9', delegate: '#8BE9FD' }
-export const KIND_LABEL: Record<InteractionKind, string> = { kanban: 'kanban', message: 'messages', room: 'rooms', delegate: 'subagents' }
-export const KINDS: InteractionKind[] = ['kanban', 'message', 'room', 'delegate']
+export const KIND_COLOR: Record<InteractionKind, string> = { kanban: '#FFB86C', message: '#FF79C6', room: '#BD93F9', delegate: '#8BE9FD', peer: '#F1FA8C' }
+export const KIND_LABEL: Record<InteractionKind, string> = { kanban: 'kanban', message: 'messages', room: 'rooms', delegate: 'subagents', peer: 'remote' }
+export const KINDS: InteractionKind[] = ['kanban', 'message', 'room', 'delegate', 'peer']
 export const RANGE_S: Record<Range, number> = { '1h': 3600, '24h': 86400, '7d': 7 * 86400 }
 export const RANGE_LABEL: Record<Range, string> = { '1h': '1 hour', '24h': '24 hours', '7d': '7 days' }
 /** An interaction with an event in the last minute is shown as active (F-AGRAPH-4). */
@@ -28,7 +28,7 @@ export interface RosterAgent {
 
 export interface GNode {
   id: string
-  kind: 'agent' | 'room' | 'sub'
+  kind: 'agent' | 'room' | 'sub' | 'peer'
   label: string
   status?: string
   x: number
@@ -49,6 +49,7 @@ export interface Graph {
 
 const ROOM_R = 20
 const SUB_R = 11
+const PEER_R = 13
 const INNER = 90
 
 /**
@@ -90,6 +91,27 @@ export function buildGraph(agents: readonly RosterAgent[], data: InteractionsDat
     nodes.push({ id: sub.id, kind: 'sub', label: sub.title ?? 'subagent', x: parent.x + Math.cos(ang) * dist, y: parent.y + Math.sin(ang) * dist, r: SUB_R, dim: false, parent: sub.parent, running: sub.status === 'running' })
   }
 
+  // F-AGRAPH-7: an agent on another machine sits outside the agent it talks to most; several fan out
+  const peerLinks = new Map<string, Map<string, number>>()
+  for (const e of data.edges) {
+    if (e.kind !== 'peer') continue
+    const [remote, local] = e.from.startsWith('peer:') ? [e.from, e.to] : [e.to, e.from]
+    if (!remote.startsWith('peer:')) continue
+    const m = peerLinks.get(remote) ?? new Map<string, number>()
+    m.set(local, (m.get(local) ?? 0) + e.count)
+    peerLinks.set(remote, m)
+  }
+  const perAgent = new Map<string, number>()
+  for (const [remote, links] of [...peerLinks].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const anchor = [...links].sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1))[0]![0]
+    const k = perAgent.get(anchor) ?? 0
+    perAgent.set(anchor, k + 1)
+    const base = angleOf.get(anchor) ?? -Math.PI / 2
+    const ang = base + ((k % 5) - 2) * 0.32
+    const rad = R + ar + 64 + 30 * Math.floor(k / 5)
+    nodes.push({ id: remote, kind: 'peer', label: remote.slice(5), x: Math.cos(ang) * rad, y: Math.sin(ang) * rad, r: PEER_R, dim: false })
+  }
+
   const have = new Set(nodes.map((nd) => nd.id))
   const edges: GEdge[] = data.edges.filter((e) => have.has(e.from) && have.has(e.to)).map((e) => ({ ...e, active: isActive(e.lastTs, now) }))
   const touched = new Set(edges.flatMap((e) => [e.from, e.to]))
@@ -104,7 +126,7 @@ export function buildGraph(agents: readonly RosterAgent[], data: InteractionsDat
 
 /** How many edges of each kind touch a node. */
 export function describeNode(id: string, edges: readonly InteractionEdge[]): Record<InteractionKind, number> {
-  const out: Record<InteractionKind, number> = { kanban: 0, message: 0, room: 0, delegate: 0 }
+  const out: Record<InteractionKind, number> = { kanban: 0, message: 0, room: 0, delegate: 0, peer: 0 }
   for (const e of edges) if (e.from === id || e.to === id) out[e.kind]++
   return out
 }

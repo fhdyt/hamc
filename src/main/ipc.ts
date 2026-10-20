@@ -50,8 +50,14 @@ const InteractionArgs = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('message'), from: ProfileName, to: ProfileName }),
   z.object({ kind: z.literal('kanban'), id: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/) }),
   z.object({ kind: z.literal('room'), id: z.string().regex(/^room:[^\u0000]{1,80}$/) }),
-  z.object({ kind: z.literal('delegate'), id: z.string().regex(/^sub:[A-Za-z0-9._-]{1,64}:[A-Za-z0-9._:-]{1,128}$/) })
+  z.object({ kind: z.literal('delegate'), id: z.string().regex(/^sub:[A-Za-z0-9._-]{1,64}:[A-Za-z0-9._:-]{1,128}$/) }),
+  // F-AGRAPH-7: one end is a profile, the other `peer:<name>`
+  z
+    .object({ kind: z.literal('peer'), from: z.string().max(80), to: z.string().max(80) })
+    .refine((a) => (PeerEnd.test(a.from) && ProfileEnd.test(a.to)) || (ProfileEnd.test(a.from) && PeerEnd.test(a.to)))
 ])
+const PeerEnd = /^peer:[A-Za-z0-9._/@:-]{1,64}$/
+const ProfileEnd = /^[A-Za-z0-9._-]{1,64}$/
 
 const KanbanBoardArg = z.string().regex(BOARD_RE)
 const KanbanTasksSchema = z.object({ board: KanbanBoardArg })

@@ -178,8 +178,8 @@ export interface AppInfo {
 
 /** What the renderer may ask about one edge or node of the agent graph; the main process checks it again. */
 export type InteractionDetailArgs =
-  | { kind: 'message'; from: string; to: string }
-  | { kind: Exclude<InteractionKind, 'message'>; id: string }
+  | { kind: 'message' | 'peer'; from: string; to: string }
+  | { kind: Exclude<InteractionKind, 'message' | 'peer'>; id: string }
 
 export type QueryError =
   | 'bad_args'

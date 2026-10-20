@@ -609,7 +609,8 @@ export const UploadsList = z.object({
 })
 export type UploadsList = z.infer<typeof UploadsList>
 
-export const InteractionKind = z.enum(['kanban', 'message', 'room', 'delegate'])
+/** `peer` (F-AGRAPH-7): an agent on another machine, reached through hermes peer, a Bot Mode DM or A2A. */
+export const InteractionKind = z.enum(['kanban', 'message', 'room', 'delegate', 'peer'])
 export type InteractionKind = z.infer<typeof InteractionKind>
 
 export const InteractionEdge = z.object({
@@ -640,7 +641,13 @@ export const InteractionsData = z.object({
   edges: z.array(InteractionEdge),
   rooms: z.array(InteractionRoom),
   subagents: z.array(InteractionSub),
-  sources: z.object({ kanban: InteractionSource, message: InteractionSource, room: InteractionSource, delegate: InteractionSource })
+  sources: z.object({
+    kanban: InteractionSource,
+    message: InteractionSource,
+    room: InteractionSource,
+    delegate: InteractionSource,
+    peer: InteractionSource.default({ state: 'absent', unresolved: 0 })
+  })
 })
 export type InteractionsData = z.infer<typeof InteractionsData>
 

@@ -74,7 +74,11 @@ describe('agent interactions over the session', () => {
     expect(first.rooms.map((r) => r.name)).toEqual(['ops-room'])
     expect(first.subagents.map((s) => s.id)).toContain('sub:atlas:s-atlas-sub')
     expect(first.edges.find((e) => e.id === 'message:atlas>scout:')).toMatchObject({ count: 2, label: 'msg' })
-    expect(first.sources.message).toEqual({ state: 'ok', unresolved: 1 })
+    expect(first.sources.message).toEqual({ state: 'ok', unresolved: 0 })
+    // F-AGRAPH-7: @ghost is no profile of this server, so it is a remote peer
+    expect(ids).toContain('peer:peer:ghost>scout:chat')
+    const remote = await session.interactionDetail({ kind: 'peer', from: 'peer:ghost', to: 'scout' })
+    expect(remote).toMatchObject({ ok: true, data: { profile: 'scout', sessionId: 's-bot' } })
 
     const task = await session.interactionDetail({ kind: 'kanban', id: '42' })
     expect(task).toMatchObject({ ok: true, data: { title: 'Draft the weekly digest' } })

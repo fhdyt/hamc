@@ -3,7 +3,7 @@ import type { InteractionsData } from '../../src/shared/events'
 import { ACTIVE_S, buildGraph, describeNode, filterData, isActive, trimEnds } from '../../src/renderer/lib/agentGraph'
 
 const ok = { state: 'ok', unresolved: 0 } as const
-const sources = { kanban: ok, message: ok, room: ok, delegate: ok }
+const sources = { kanban: ok, message: ok, room: ok, delegate: ok, peer: ok }
 const NOW = 1_000_000
 const ALL = ['kanban', 'message', 'room', 'delegate'] as const
 const data: InteractionsData = {
@@ -73,8 +73,8 @@ describe('agentGraph', () => {
   })
 
   it('counts the edges of a node by kind', () => {
-    expect(describeNode('a', data.edges)).toEqual({ kanban: 0, message: 1, room: 1, delegate: 1 })
-    expect(describeNode('nobody', data.edges)).toEqual({ kanban: 0, message: 0, room: 0, delegate: 0 })
+    expect(describeNode('a', data.edges)).toEqual({ kanban: 0, message: 1, room: 1, delegate: 1, peer: 0 })
+    expect(describeNode('nobody', data.edges)).toEqual({ kanban: 0, message: 0, room: 0, delegate: 0, peer: 0 })
   })
 
   it('trims a line so it starts and ends at the rim of the nodes', () => {
@@ -82,5 +82,37 @@ describe('agentGraph', () => {
     expect(t.x1).toBeCloseTo(12)
     expect(t.x2).toBeCloseTo(78)
     expect(t.y1).toBeCloseTo(0)
+  })
+})
+
+describe('remote peers (F-AGRAPH-7)', () => {
+  const peers: InteractionsData = {
+    ...data,
+    edges: [
+      { id: 'p1', kind: 'peer', from: 'peer:dixie', to: 'a', count: 1, firstTs: NOW - 50, lastTs: NOW - 50, label: 'bot chat', status: null },
+      { id: 'p2', kind: 'peer', from: 'a', to: 'peer:spark/researcher', count: 3, firstTs: NOW - 900, lastTs: NOW - 40, label: 'peer dm', status: null },
+      { id: 'p3', kind: 'peer', from: 'peer:labbot', to: 'b', count: 1, firstTs: NOW - 80, lastTs: NOW - 80, label: 'a2a', status: null }
+    ],
+    rooms: [],
+    subagents: []
+  }
+
+  it('adds an outer node for every remote end, outside the agent it talks to', () => {
+    const g = buildGraph(roster(['a', 'b']), peers, NOW)
+    const node = (id: string) => g.nodes.find((n) => n.id === id)!
+    expect(g.nodes.filter((n) => n.kind === 'peer').map((n) => [n.id, n.label]).sort()).toEqual([
+      ['peer:dixie', 'dixie'],
+      ['peer:labbot', 'labbot'],
+      ['peer:spark/researcher', 'spark/researcher']
+    ])
+    const a = node('a')
+    for (const id of ['peer:dixie', 'peer:spark/researcher']) expect(Math.hypot(node(id).x, node(id).y)).toBeGreaterThan(Math.hypot(a.x, a.y))
+    expect(g.edges).toHaveLength(3)
+    expect(describeNode('a', peers.edges).peer).toBe(2)
+  })
+
+  it('is filtered like any other kind', () => {
+    expect(filterData(peers, ['message'], '7d', NOW).edges).toEqual([])
+    expect(filterData(peers, ['peer'], '7d', NOW).edges).toHaveLength(3)
   })
 })
