@@ -109,7 +109,8 @@ const api: MissionApi = {
   kanban: {
     boards: () => ipcRenderer.invoke(IPC.kanbanBoards),
     tasks: (args) => ipcRenderer.invoke(IPC.kanbanTasks, args),
-    task: (args) => ipcRenderer.invoke(IPC.kanbanTask, args)
+    task: (args) => ipcRenderer.invoke(IPC.kanbanTask, args),
+    action: (req) => ipcRenderer.invoke(IPC.kanbanAction, req)
   },
   gateway: {
     action: (req) => ipcRenderer.invoke(IPC.gatewayAction, req)

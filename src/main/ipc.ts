@@ -5,7 +5,7 @@ import { ConnectRequestSchema, HostKeyChallengeSchema, LABEL_MAX, type AppInfo }
 import { CUSTOM_NAME_RE, CUSTOM_SLUG, EFFORT_RE, FILE_KINDS, MAX_FILE_BYTES, PRESETS, type AgentFileKind } from '@shared/agentCfg'
 import { SETTINGS_SCHEMA, isSettingKey } from '@shared/settings'
 import { LOG_FILES } from '@shared/logs'
-import { BOARD_RE, TASK_ID_RE } from '@shared/kanban'
+import { BOARD_RE, KANBAN_LIMITS, TASK_ID_RE, WRITE_BOARD_RE } from '@shared/kanban'
 import { CRON_ACTIONS, INCIDENT_ID_RE, JOB_ID_RE, SCHEDULE_MAX } from '@shared/cron'
 import { DESCRIPTION_MAX, MCP_NAME_RE, NEW_PROFILE_RE, PLATFORM_RE, TOOLSET_RE } from '@shared/agentOps'
 import { TERM_COLS, TERM_ID_RE, TERM_ROWS, TERM_WRITE_MAX } from '@shared/terminal'
@@ -46,6 +46,25 @@ const InteractionArgs = z.discriminatedUnion('kind', [
 const KanbanBoardArg = z.string().regex(BOARD_RE)
 const KanbanTasksSchema = z.object({ board: KanbanBoardArg })
 const KanbanTaskSchema = z.object({ board: KanbanBoardArg, id: z.string().regex(TASK_ID_RE) })
+// v2 Kanban writes: the shape here, the limits again in kanbanActionArgs
+const WriteBoard = z.string().regex(WRITE_BOARD_RE)
+const WriteTask = { board: WriteBoard, id: z.string().regex(TASK_ID_RE) }
+const KanbanActionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('create'),
+    board: WriteBoard,
+    title: z.string().max(KANBAN_LIMITS.title),
+    body: z.string().max(KANBAN_LIMITS.body).optional(),
+    assignee: z.string().max(64).optional(),
+    priority: z.number().int().min(-KANBAN_LIMITS.priority).max(KANBAN_LIMITS.priority).optional(),
+    triage: z.boolean().optional()
+  }),
+  z.object({ action: z.literal('assign'), ...WriteTask, assignee: z.string().max(64) }),
+  z.object({ action: z.literal('comment'), ...WriteTask, text: z.string().max(KANBAN_LIMITS.comment) }),
+  z.object({ action: z.literal('complete'), ...WriteTask, result: z.string().max(KANBAN_LIMITS.result).optional() }),
+  z.object({ action: z.literal('block'), ...WriteTask, reason: z.string().max(KANBAN_LIMITS.reason).optional() }),
+  z.object({ action: z.enum(['unblock', 'promote', 'archive']), ...WriteTask })
+])
 
 const SessionIdArg = z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/)
 const SessionFilter = {
@@ -320,6 +339,7 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.kanbanBoards, () => d.session.kanbanBoards())
   handle(IPC.kanbanTasks, (a) => d.session.kanbanTasks(KanbanTasksSchema.parse(a)))
   handle(IPC.kanbanTask, (a) => d.session.kanbanTask(KanbanTaskSchema.parse(a)))
+  handle(IPC.kanbanAction, (a) => d.session.kanbanAction(KanbanActionSchema.parse(a)))
   handle(IPC.gatewayAction, (a) => d.session.gatewayAction(GatewayActionSchema.parse(a)))
   handle(IPC.approvalsRead, (a) => d.session.approvalsRead(ProfileName.parse(a)))
   handle(IPC.alertsRecheck, () => d.session.alertsRecheck())

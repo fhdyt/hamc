@@ -65,6 +65,7 @@ export const IPC = {
   kanbanBoards: 'mc:kanban:boards',
   kanbanTasks: 'mc:kanban:tasks',
   kanbanTask: 'mc:kanban:task',
+  kanbanAction: 'mc:kanban:action',
   gatewayAction: 'mc:gateway:action',
   approvalsRead: 'mc:approvals:read',
   brainGet: 'mc:brain:get',

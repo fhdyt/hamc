@@ -2,7 +2,8 @@ import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
 import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, ObsidianGraphResult, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, LogsList, LogsRead, KanbanBoards, KanbanTasks, KanbanTaskDetail, VaultCheck, CronData, CronRuns, CronOutputFiles, SkillsList, SkillText, SkillsLedger, SkillBlobs } from '@shared/events'
 import type { CostAlertState } from '@shared/events'
-import type { KanbanTaskArgs, KanbanTasksArgs } from '@shared/kanban'
+import type { KanbanActionRequest, KanbanActionResult, KanbanTaskArgs, KanbanTasksArgs } from '@shared/kanban'
+import { KanbanActionService } from './kanban/actions'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from '@shared/logs'
 import type { UsageSummaryArgs, UsageToolsArgs } from '@shared/usage'
 import type { ExportExt, ExportResult, SessionAction, SessionActionResult, SessionsListArgs, SessionsSearchArgs, TranscriptArgs } from '@shared/sessions'
@@ -159,6 +160,7 @@ export class MissionSession {
   private readonly gateways: GatewayService
   private readonly approvals: ApprovalsService
   private readonly cronActions: CronActionService
+  private readonly kanbanActions: KanbanActionService
   private readonly skillActions: SkillActionService
   private readonly memory: MemorySnapshots
   private readonly agentOps: AgentOpsService
@@ -207,6 +209,13 @@ export class MissionSession {
       hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
       isConnected: () => d.manager.isConnected(),
       store: this.cronStore,
+      log: (m) => d.log?.(m)
+    })
+    this.kanbanActions = new KanbanActionService({
+      conn: d.manager,
+      hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath } : null),
+      isConnected: () => d.manager.isConnected(),
+      profiles: () => (this.agentNames ? Object.keys(this.agentNames) : null),
       log: (m) => d.log?.(m)
     })
     this.agentOps = new AgentOpsService({
@@ -796,6 +805,11 @@ export class MissionSession {
 
   kanbanTask(args: KanbanTaskArgs): Promise<QueryResult<KanbanTaskDetail>> {
     return this.queries.run('kanban_task', args, KanbanTaskDetail)
+  }
+
+  /** v2 Kanban writes through `hermes kanban --board <slug> ...`, after the user confirmed the command. */
+  kanbanAction(req: KanbanActionRequest): Promise<KanbanActionResult> {
+    return this.kanbanActions.run(req)
   }
 
   gatewayAction(req: { action: GatewayAction; profile: string }): Promise<GatewayActionResult> {

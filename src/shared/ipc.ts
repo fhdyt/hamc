@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult, ModelReadResult, ModelSaveRequest, RestartResult, SaveModelResult, TestModelResult } from './agentCfg'
 import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, ObsidianGraphResult, SessionDetail, SessionsList, SessionTranscript, UploadsList, VaultCheck } from './events'
-import type { KanbanTaskArgs, KanbanTasksArgs } from './kanban'
+import type { KanbanActionRequest, KanbanActionResult, KanbanTaskArgs, KanbanTasksArgs } from './kanban'
 import type { CronActionRequest, CronActionResult } from './cron'
 import type { SkillActionRequest, SkillActionResult, SkillTextResult } from './skills'
 import type { MemoryVersion, MemoryVersionText } from './memory'
@@ -363,6 +363,8 @@ export interface MissionApi {
     boards(): Promise<QueryResult<KanbanBoards>>
     tasks(args: KanbanTasksArgs): Promise<QueryResult<KanbanTasks>>
     task(args: KanbanTaskArgs): Promise<QueryResult<KanbanTaskDetail>>
+    /** v2: one write through `hermes kanban`, after the confirm. */
+    action(req: KanbanActionRequest): Promise<KanbanActionResult>
   }
   gateway: {
     action(req: { action: GatewayAction; profile: string }): Promise<GatewayActionResult>
