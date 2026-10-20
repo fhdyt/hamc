@@ -7,6 +7,7 @@ import { pythonExe, type FixtureDirs } from './fixture'
 import { attachSftp, type SftpOp } from './fakeSftp'
 import { newHermesState, runConfigCommands, runFetchScript, type FakeHermesState } from './fakeHermes'
 import { shSplit } from './shellSplit'
+import { AUX_KEYS } from '../../src/shared/auxModels'
 import { newShellLog, runFakeShell, type FakeShellLog } from './fakeShell'
 
 export interface HostKeyPair {
@@ -390,10 +391,23 @@ function handle(argv: string[], stream: ServerChannel, o: Resolved): void {
   if (cmd === o.pythonPath || cmd === 'python3') {
     if (rest[0] === '--version') return reply(stream, 'Python 3.11.9\n')
     if (rest[0] === '-c' && (rest[1] ?? '').includes('urlopen')) return runFetchScript(rest, stream)
+    if (rest[0] === '-c' && (rest[1] ?? '').includes('MC_AUX_READ')) return reply(stream, auxReadAnswer(rest[2] ?? '', o.st) + '\n')
     if (rest[0] === '-c') return reply(stream, 'ok 31\n')
     if (rest[0] === '-u' && rest[1] === '-') return runCollector(argv, stream, o)
   }
   reply(stream, '', 127, `${cmd}: command not found\n`)
+}
+
+/** What AUX_READ_PY would print for this config path, built from the values `hermes config set` stored. */
+function auxReadAnswer(path: string, st: FakeHermesState): string {
+  const m = /\/profiles\/([^/]+)\/config\.yaml$/.exec(path)
+  const cfg = st.config.get(m ? m[1]! : 'default') ?? {}
+  const slots: Record<string, { provider: string; model: string; baseUrl: string; hasKey: boolean }> = {}
+  for (const t of AUX_KEYS) {
+    const v = (f: string): string => cfg[`auxiliary.${t}.${f}`] ?? ''
+    slots[t] = { provider: v('provider') || 'auto', model: v('model'), baseUrl: v('base_url'), hasKey: false }
+  }
+  return JSON.stringify({ ok: true, slots })
 }
 
 export function startFakeSsh(opts: FakeSshOptions): Promise<FakeSsh> {

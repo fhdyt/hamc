@@ -2942,6 +2942,53 @@ def q_note(home, a):
     }
 
 
+# v2 model catalog: the manifest Hermes caches for `hermes model` (profile home first, then the Hermes home)
+CATALOG_MAX = 2 * 1024 * 1024
+CATALOG_PROVIDERS_MAX = 50
+CATALOG_MODELS_MAX = 2000
+
+
+def _catalog_models(block):
+    out = []
+    models = block.get("models") if isinstance(block, dict) else None
+    for m in models if isinstance(models, list) else []:
+        if not isinstance(m, dict) or not isinstance(m.get("id"), str) or not m["id"] or len(m["id"]) > 200:
+            continue
+        desc = m.get("description")
+        out.append({"id": m["id"], "description": desc[:40] if isinstance(desc, str) else "", "default": m.get("default") is True})
+        if len(out) >= CATALOG_MODELS_MAX:
+            break
+    return out
+
+
+def q_model_catalog(home, a):
+    name = a.get("profile")
+    if not valid_profile(name):
+        raise QueryError("bad_args")
+    pdir = profile_dir(home, name)
+    for base in [p for p in (pdir, home) if p]:
+        path = os.path.join(base, "cache", "model_catalog.json")
+        if not os.path.isfile(path) or os.path.getsize(path) > CATALOG_MAX:
+            continue
+        try:
+            with open(path, "rb") as f:
+                data = json.loads(f.read(CATALOG_MAX + 1).decode("utf-8", "replace"))
+        except ValueError:
+            continue
+        if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("providers"), dict):
+            continue
+        providers = {}
+        for slug, block in data["providers"].items():
+            if not isinstance(slug, str) or not isinstance(block, dict) or len(slug) > 64:
+                continue
+            providers[slug] = {"models": _catalog_models(block)}
+            if len(providers) >= CATALOG_PROVIDERS_MAX:
+                break
+        updated = data.get("updated_at")
+        return {"found": True, "mtime": int(os.path.getmtime(path)), "updatedAt": updated if isinstance(updated, str) else None, "providers": providers}
+    return {"found": False}
+
+
 # F-BRAIN-10: the vault's own Obsidian graph settings, read-only; only these keys leave the VPS
 GRAPH_JSON_MAX = 262144
 GRAPH_GROUPS_MAX = 64
@@ -3586,7 +3633,7 @@ def run_query(home, cmd, raw):
         return {"ok": False, "error": "bad_args"}
     handler = {
         "message": q_message, "history": q_history, "session": q_session,
-        "vault_check": q_vault_check, "browse": q_browse, "note": q_note, "vault_graph": q_vault_graph,
+        "vault_check": q_vault_check, "browse": q_browse, "note": q_note, "vault_graph": q_vault_graph, "model_catalog": q_model_catalog,
         "chat_sessions": q_chat_sessions, "uploads_list": q_uploads_list, "interaction": q_interaction,
         "sessions_list": q_sessions_list, "sessions_search": q_sessions_search,
         "session_transcript": q_session_transcript,

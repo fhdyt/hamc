@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeImage, Notification, safeStorage, Tray, type MenuItemConstructorOptions, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, Menu, nativeImage, net, Notification, safeStorage, Tray, type MenuItemConstructorOptions, type OpenDialogOptions } from 'electron'
 import { statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -27,6 +27,16 @@ const indexPath = join(__dirname, '../renderer/index.html')
 const target: AppTarget = devUrl ? { devUrl } : { indexFileUrl: pathToFileURL(indexPath).href }
 
 let win: BrowserWindow | null = null
+
+/** One https GET with a time and size cap (the model catalog). */
+async function fetchCapped(url: string, opts: { timeoutMs: number; maxBytes: number }): Promise<string> {
+  if (!url.startsWith('https://')) throw new Error('only https')
+  const res = await net.fetch(url, { signal: AbortSignal.timeout(opts.timeoutMs) })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const buf = await res.arrayBuffer()
+  if (buf.byteLength > opts.maxBytes) throw new Error('too big')
+  return new TextDecoder().decode(buf)
+}
 
 // Unpackaged, __dirname is <project>/out/main whether started by electron-vite or `electron out/main/index.js`.
 const projectRoot = join(__dirname, '..', '..')
@@ -223,6 +233,8 @@ if (!app.requestSingleInstanceLock()) {
         const r = await (win ? dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] }) : dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] }))
         return r.canceled ? [] : r.filePaths
       },
+      // v2 model catalog: the public manifest, fetched from this computer only (https, size and time capped); off in tests
+      ...(process.env['MC_NO_UPDATE'] ? {} : { fetchUrl: fetchCapped }),
       // F-CONN-7: the key file is picked here; the E2E names its throwaway key instead of driving a native dialog
       openKeyDialog: async () => {
         const forced = process.env['MC_E2E_KEY_FILE']

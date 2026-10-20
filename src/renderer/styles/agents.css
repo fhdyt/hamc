@@ -89,3 +89,18 @@ input.vh:focus-visible + .lk-pick { outline: 2px solid #8be9fd; outline-offset: 
 .lk-row { display: flex; gap: 6px; }
 .lk-row .fld { flex: 1; min-width: 0; }
 .lk-note { margin: 0; color: #8b95bd; font-size: 11px; }
+
+/* v2: the catalog list and the auxiliary models of the Model tab */
+.ag-cat { display: flex; flex-direction: column; gap: 6px; }
+.ax { border: 1px solid #44475a; border-radius: 8px; background: #21222c; }
+.ax > summary { padding: 10px 12px; color: #f8f8f2; font-weight: 600; cursor: pointer; }
+.ax-body { display: flex; flex-direction: column; gap: 10px; padding: 0 12px 12px; }
+.ax-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.ax-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid #343746; }
+.ax-main { display: flex; flex: 1 1 260px; flex-direction: column; gap: 2px; min-width: 0; }
+.ax-name { color: #f8f8f2; }
+.ax-val { overflow: hidden; color: #50fa7b; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.ax-val.auto { color: #8b95bd; }
+.ax-key { color: #ffb86c; }
+.ax-acts { display: flex; gap: 6px; }
+.ax-edit { display: flex; flex: 1 1 100%; flex-direction: column; gap: 8px; padding: 8px 10px; border-radius: 6px; background: #191a21; }

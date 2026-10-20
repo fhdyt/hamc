@@ -2,6 +2,7 @@ import { app, ipcMain, nativeImage, type BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/channels'
 import { ConnectRequestSchema, HostKeyChallengeSchema, LABEL_MAX, type AppInfo } from '@shared/ipc'
+import { AUX_KEYS, type AuxTask } from '@shared/auxModels'
 import { CUSTOM_NAME_RE, CUSTOM_SLUG, EFFORT_RE, FILE_KINDS, MAX_FILE_BYTES, PRESETS, type AgentFileKind } from '@shared/agentCfg'
 import { SETTINGS_SCHEMA, isSettingKey } from '@shared/settings'
 import { LOG_FILES } from '@shared/logs'
@@ -24,6 +25,15 @@ import { GROUP_ID_RE, GROUP_MAX_MEMBERS, GROUP_MESSAGE_MAX, GROUP_MIN_MEMBERS } 
 const ProfileName = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
 const GroupId = z.string().regex(GROUP_ID_RE)
 const ServerId = z.number().int().positive()
+// v2 auxiliary models: the shape here, the rules again in buildAuxSave
+const AuxChoiceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('auto') }),
+  z.object({ kind: z.literal('model'), provider: z.string().max(41), model: z.string().max(200), baseUrl: z.string().max(500).optional() })
+])
+const AuxSaveArgs = z.object({
+  profile: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
+  changes: z.array(z.object({ task: z.enum(AUX_KEYS as [AuxTask, ...AuxTask[]]), choice: AuxChoiceSchema })).min(1).max(18)
+})
 const FeedMessageArgs = z.object({
   profile: ProfileName,
   messageId: z.number().int().min(0),
@@ -391,5 +401,8 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.agentModelTest, (a) => d.session.agentTestModel(ProfileName.parse(a)))
   handle(IPC.agentKeyMode, () => d.session.agentKeyAsArgument())
   handle(IPC.agentGatewayRestart, (a) => d.session.agentRestartGateway(ProfileName.parse(a)))
+  handle(IPC.agentCatalog, (a) => d.session.agentCatalog(ProfileName.parse(a)))
+  handle(IPC.agentAuxRead, (a) => d.session.agentAuxRead(ProfileName.parse(a)))
+  handle(IPC.agentAuxSave, (a) => d.session.agentAuxSave(AuxSaveArgs.parse(a)))
   handle(IPC.appInfo, (): AppInfo => ({ version: app.getVersion(), electron: process.versions.electron ?? '', platform: process.platform }))
 }

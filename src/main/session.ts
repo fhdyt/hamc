@@ -52,6 +52,10 @@ import { GroupService } from './groups/service'
 import type { GroupEntry, GroupList, GroupRoom, GroupSendResult } from '@shared/groups'
 import type { SecretStore } from './store/secretStore'
 import { TargetTakenError, type SettingsStore } from './store/settingsStore'
+import { CatalogService, type FetchUrl } from './agentcfg/catalog'
+import { AuxService } from './agentcfg/auxService'
+import type { AuxReadResult, AuxSaveRequest, AuxSaveResult } from '@shared/auxModels'
+import { CatalogQueryResult, type CatalogResult } from '@shared/modelCatalog'
 
 export type Send = (channel: string, payload: unknown) => void
 
@@ -85,6 +89,8 @@ export interface SessionDeps {
   saveDialog?: SaveDialog
   /** The open dialog for a private key file (F-CONN-7); null when cancelled. Tests and the E2E answer it themselves. */
   openKeyDialog?: () => Promise<string | null>
+  /** Fetches the public model catalog from this computer (v2); without it only the server's cache is used. */
+  fetchUrl?: FetchUrl
   latencyIntervalMs?: number
 }
 
@@ -154,6 +160,8 @@ export class MissionSession {
   private readonly uploads: UploadService
   private readonly agentFiles: AgentFileService
   private readonly agentModel: ModelService
+  private readonly catalog: CatalogService
+  private readonly aux: AuxService
   private readonly sessionActions: SessionActionService
   private readonly costAlert: CostAlertService
   private readonly gatewayWatcher = new GatewayWatcher()
@@ -186,6 +194,17 @@ export class MissionSession {
       ...(d.makeThumb ? { makeThumb: d.makeThumb } : {})
     })
     this.agentFiles = new AgentFileService({ conn: d.manager, home: () => this.hermes?.home ?? null, log: (m) => d.log?.(m) })
+    this.catalog = new CatalogService({
+      query: (profile) => this.queries.run('model_catalog', { profile }, CatalogQueryResult),
+      fetchUrl: d.fetchUrl ?? (() => Promise.reject(new Error('no network access in this run'))),
+      log: (m) => d.log?.(m)
+    })
+    this.aux = new AuxService({
+      conn: d.manager,
+      hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath, python: this.hermes.python, home: this.hermes.home } : null),
+      isConnected: () => d.manager.isConnected(),
+      log: (m) => d.log?.(m)
+    })
     this.agentModel = new ModelService({
       conn: d.manager,
       hermes: () => (this.hermes?.hermesPath ? { path: this.hermes.hermesPath, python: this.hermes.python } : null),
@@ -1026,6 +1045,20 @@ export class MissionSession {
 
   agentRestartGateway(profile: string): ReturnType<ModelService['restartGateway']> {
     return this.agentModel.restartGateway(profile)
+  }
+
+  /** v2: the Hermes model catalog (server cache, else the public manifest from this computer). */
+  agentCatalog(profile: string): Promise<CatalogResult> {
+    return this.catalog.get(profile)
+  }
+
+  /** v2 auxiliary model slots of an agent. */
+  agentAuxRead(profile: string): Promise<AuxReadResult> {
+    return this.aux.read(profile)
+  }
+
+  agentAuxSave(req: AuxSaveRequest): Promise<AuxSaveResult> {
+    return this.aux.save(req)
   }
 
   brainGet(): { vault: string | null } {

@@ -6,6 +6,9 @@ import { ErrorState, Skeleton } from '../../components/States'
 import { credLabel, fetchErrorText, formDirty, formFromState, presetOf, previewOf, requestOf, summaryLines, withProvider, type ModelForm } from '../../lib/modelForm'
 import { useAgentCfg } from '../../stores/agentCfg'
 import { useConn } from '../../stores/conn'
+import type { CatalogResult } from '@shared/modelCatalog'
+import { catalogModels, sourceLine } from '../../lib/modelCatalog'
+import { AuxModels } from './AuxModels'
 import { DiffView } from './DiffView'
 import { RestartDialog } from './Dialogs'
 
@@ -28,6 +31,7 @@ export function ModelTab({ profile }: { profile: string }) {
   const [note, setNote] = useState<Note>(null)
   const [restart, setRestart] = useState(false)
   const [keyArg, setKeyArg] = useState(false)
+  const [catalog, setCatalog] = useState<CatalogResult | null>(null)
   const gen = useRef(0)
 
   const reload = useCallback(async () => {
@@ -54,6 +58,15 @@ export function ModelTab({ profile }: { profile: string }) {
   }, [profile, connected, reload])
   useEffect(() => {
     void window.mc.agentCfg.keyAsArgument().then(setKeyArg)
+  }, [profile, connected])
+  // v2: the Hermes model catalog (the server's cache, else the public manifest)
+  useEffect(() => {
+    let live = true
+    setCatalog(null)
+    if (connected) void window.mc.agentCfg.catalog(profile).then((c) => live && setCatalog(c))
+    return () => {
+      live = false
+    }
   }, [profile, connected])
 
   const dirty = !!form && !!initial && formDirty(form, initial)
@@ -169,6 +182,22 @@ export function ModelTab({ profile }: { profile: string }) {
         </div>
       )}
 
+      {catalog?.ok && catalogModels(catalog, form.provider).length > 0 && (
+        <div className="ag-cat">
+          <span className="ag-lbl" id="ag-cat-label">
+            Hermes catalog <span className="ag-note">· {sourceLine(catalog)}</span>
+          </span>
+          <div className="ag-models" role="radiogroup" aria-labelledby="ag-cat-label">
+            {catalogModels(catalog, form.provider).map((m) => (
+              <button key={m.id} type="button" role="radio" aria-checked={form.model === m.id} className="ag-model" onClick={() => set({ model: m.id })}>
+                <span>{m.id}</span>
+                {(m.default || m.description) && <span className="ctx">{m.default ? 'default' : m.description}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="ag-bar">
         <button type="button" className="cb" onClick={() => void doFetch()} disabled={!connected || fetched.s === 'busy' || preset?.auth === 'oauth'}>
           <Icon name="refresh" size={12} /> {fetched.s === 'busy' ? 'Fetching…' : 'Fetch models'}
@@ -248,6 +277,8 @@ export function ModelTab({ profile }: { profile: string }) {
         </div>
       ))}
       <span className="ag-note">Changes apply to new sessions. The key is sent to Hermes once and never read back.</span>
+
+      <AuxModels profile={profile} catalog={catalog} />
 
       {confirm && preview?.plan.ok && (
         <Modal title="Save model settings" onClose={() => setConfirm(false)} width={640}>

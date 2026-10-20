@@ -2,6 +2,8 @@ import { z } from 'zod'
 import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult, ModelReadResult, ModelSaveRequest, RestartResult, SaveModelResult, TestModelResult } from './agentCfg'
 import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, ObsidianGraphResult, SessionDetail, SessionsList, SessionTranscript, UploadsList, VaultCheck } from './events'
 import type { KanbanActionRequest, KanbanActionResult, KanbanTaskArgs, KanbanTasksArgs } from './kanban'
+import type { CatalogResult } from './modelCatalog'
+import type { AuxReadResult, AuxSaveRequest, AuxSaveResult } from './auxModels'
 import type { CronActionRequest, CronActionResult } from './cron'
 import type { SkillActionRequest, SkillActionResult, SkillTextResult } from './skills'
 import type { MemoryVersion, MemoryVersionText } from './memory'
@@ -431,6 +433,11 @@ export interface MissionApi {
     /** True when an API key would have to travel as a command argument. */
     keyAsArgument(): Promise<boolean>
     restartGateway(profile: string): Promise<RestartResult>
+    /** v2: the Hermes model catalog for this agent. */
+    catalog(profile: string): Promise<CatalogResult>
+    /** v2: the 18 auxiliary model slots of an agent (no key is ever read). */
+    auxRead(profile: string): Promise<AuxReadResult>
+    auxSave(req: AuxSaveRequest): Promise<AuxSaveResult>
   }
   onEvent(cb: (e: CollectorEvent) => void): Unsub
   onChat(cb: (e: ChatEvent) => void): Unsub

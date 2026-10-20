@@ -8,7 +8,7 @@ export const QUERY_MAX_OUTPUT = 1024 * 1024
 
 const KNOWN_ERRORS: ReadonlySet<string> = new Set<QueryError>(['bad_args', 'not_found', 'unsupported_schema', 'db_unreadable', 'unreadable', 'unknown_command'])
 
-export type QueryCommand = 'message' | 'history' | 'session' | 'vault_check' | 'browse' | 'note' | 'vault_graph' | 'chat_sessions' | 'uploads_list' | 'interaction' | 'sessions_list' | 'sessions_search' | 'session_transcript' | 'usage_summary' | 'usage_tools' | 'logs_list' | 'logs_read' | 'kanban_boards' | 'kanban_tasks' | 'kanban_task' | 'cron_jobs' | 'cron_runs' | 'cron_output' | 'skills_list' | 'skill_read' | 'skills_ledger' | 'skills_blobs'
+export type QueryCommand = 'message' | 'history' | 'session' | 'vault_check' | 'browse' | 'note' | 'vault_graph' | 'model_catalog' | 'chat_sessions' | 'uploads_list' | 'interaction' | 'sessions_list' | 'sessions_search' | 'session_transcript' | 'usage_summary' | 'usage_tools' | 'logs_list' | 'logs_read' | 'kanban_boards' | 'kanban_tasks' | 'kanban_task' | 'cron_jobs' | 'cron_runs' | 'cron_output' | 'skills_list' | 'skill_read' | 'skills_ledger' | 'skills_blobs'
 
 const short = (s: string, n = 160): string => s.replace(/\s+/g, ' ').trim().slice(-n)
 
