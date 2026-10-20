@@ -1,6 +1,6 @@
 import { IPC } from '@shared/channels'
 import type { CollectorEvent } from '@shared/events'
-import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, LogsList, LogsRead, KanbanBoards, KanbanTasks, KanbanTaskDetail, VaultCheck, CronData, CronRuns, CronOutputFiles, SkillsList, SkillText, SkillsLedger, SkillBlobs } from '@shared/events'
+import { UploadsList, BrowseResult, ChatSessions, FeedHistory, FeedMessageText, InteractionDetail, NoteText, ObsidianGraphResult, SessionDetail, SessionsList, SessionTranscript, UsageSummary, UsageTools, LogsList, LogsRead, KanbanBoards, KanbanTasks, KanbanTaskDetail, VaultCheck, CronData, CronRuns, CronOutputFiles, SkillsList, SkillText, SkillsLedger, SkillBlobs } from '@shared/events'
 import type { CostAlertState } from '@shared/events'
 import type { KanbanTaskArgs, KanbanTasksArgs } from '@shared/kanban'
 import type { ApprovalsResult, GatewayAction, GatewayActionResult, LogsListArgs, LogsReadArgs } from '@shared/logs'
@@ -1039,6 +1039,13 @@ export class MissionSession {
     const root = this.brainGet().vault
     if (!root) return Promise.resolve({ ok: false, error: 'not_found' })
     return this.queries.run('note', { root, id }, NoteText)
+  }
+
+  /** F-BRAIN-10: the Obsidian graph settings of the saved vault (root from the setting, never from the renderer). */
+  brainObsidian(): Promise<QueryResult<ObsidianGraphResult>> {
+    const root = this.brainGet().vault
+    if (!root) return Promise.resolve({ ok: false, error: 'not_found' })
+    return this.queries.run('vault_graph', { root }, ObsidianGraphResult)
   }
 
   private applyCron(data: CronData): void {

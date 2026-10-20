@@ -331,6 +331,7 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.brainValidate, (a) => d.session.brainValidate(VaultPath.parse(a)))
   handle(IPC.brainBrowse, (a) => d.session.brainBrowse(BrowsePath.parse(a)))
   handle(IPC.brainNote, (a) => d.session.brainNote(NoteId.parse(a)))
+  handle(IPC.brainObsidian, () => d.session.brainObsidian())
   handle(IPC.groupsList, () => d.session.groupsList())
   handle(IPC.groupsCreate, (a) => d.session.groupsCreate(z.object({ name: z.string().min(1).max(200), members: z.array(ProfileName).min(GROUP_MIN_MEMBERS).max(GROUP_MAX_MEMBERS) }).parse(a)))
   handle(IPC.groupsUpdate, (a) => d.session.groupsUpdate(z.object({ id: GroupId, name: z.string().min(1).max(200).optional(), members: z.array(ProfileName).min(GROUP_MIN_MEMBERS).max(GROUP_MAX_MEMBERS).optional() }).parse(a)))

@@ -72,6 +72,7 @@ export const IPC = {
   brainValidate: 'mc:brain:validate',
   brainBrowse: 'mc:brain:browse',
   brainNote: 'mc:brain:note',
+  brainObsidian: 'mc:brain:obsidian',
   groupsList: 'mc:groups:list',
   groupsCreate: 'mc:groups:create',
   groupsUpdate: 'mc:groups:update',

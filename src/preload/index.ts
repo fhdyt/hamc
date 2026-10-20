@@ -125,7 +125,8 @@ const api: MissionApi = {
     setVault: (path) => ipcRenderer.invoke(IPC.brainSetVault, path),
     validate: (path) => ipcRenderer.invoke(IPC.brainValidate, path),
     browse: (path) => ipcRenderer.invoke(IPC.brainBrowse, path),
-    note: (id) => ipcRenderer.invoke(IPC.brainNote, id)
+    note: (id) => ipcRenderer.invoke(IPC.brainNote, id),
+    obsidian: () => ipcRenderer.invoke(IPC.brainObsidian)
   },
   groups: {
     list: () => ipcRenderer.invoke(IPC.groupsList),

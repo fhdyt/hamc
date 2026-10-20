@@ -159,6 +159,19 @@ describe('vault queries over the session', () => {
     expect(await session.brainNote('Missing.md')).toEqual({ ok: false, error: 'not_found' })
   })
 
+  it("reads the vault's Obsidian graph settings from the saved vault only (F-BRAIN-10)", async () => {
+    const { session, req } = await setup()
+    await session.connect(req)
+    expect(await session.brainObsidian()).toEqual({ ok: false, error: 'not_found' })
+    session.brainSetVault(vaultDir())
+    const r = await session.brainObsidian()
+    expect(r.ok && r.data).toMatchObject({
+      found: true,
+      graph: { colorGroups: [{ query: 'path:folder', color: { a: 1, rgb: 16733525 } }], showTags: true, repelStrength: 15, linkDistance: 265 }
+    })
+    expect(r.ok && r.data.found && 'collapse-forces' in r.data.graph).toBe(false)
+  })
+
   it('reports not-connected before connecting', async () => {
     const { session } = await setup()
     expect(await session.brainValidate('/x')).toEqual({ ok: false, error: 'not-connected' })

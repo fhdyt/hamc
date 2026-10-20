@@ -440,6 +440,7 @@ VAULT_NOTES = {
     "folder/Alpha.md": "A second Alpha in a folder, links [[Index]].\n",
     "Orphan.md": "Nobody links here.\n",
     ".obsidian/app.json": "{}\n",
+    ".obsidian/graph.json": '{"colorGroups": [{"query": "path:folder", "color": {"a": 1, "rgb": 16733525}}], "showTags": true, "repelStrength": 15, "linkDistance": 265, "collapse-forces": false}\n',
     ".git/ignored.md": "[[Index]]\n",
     ".trash/old.md": "[[Index]]\n",
 }

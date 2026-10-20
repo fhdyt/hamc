@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { AgentFileKind, FetchModelsResult, FileReadResult, FileWriteResult, ModelReadResult, ModelSaveRequest, RestartResult, SaveModelResult, TestModelResult } from './agentCfg'
-import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, SessionDetail, SessionsList, SessionTranscript, UploadsList, VaultCheck } from './events'
+import type { BrowseResult, ChatSessions, CollectorEvent, FeedHistory, FeedMessageText, InteractionDetail, InteractionKind, NoteText, ObsidianGraphResult, SessionDetail, SessionsList, SessionTranscript, UploadsList, VaultCheck } from './events'
 import type { KanbanTaskArgs, KanbanTasksArgs } from './kanban'
 import type { CronActionRequest, CronActionResult } from './cron'
 import type { SkillActionRequest, SkillActionResult, SkillTextResult } from './skills'
@@ -380,6 +380,8 @@ export interface MissionApi {
     validate(path: string): Promise<QueryResult<VaultCheck>>
     browse(path: string): Promise<QueryResult<BrowseResult>>
     note(id: string): Promise<QueryResult<NoteText>>
+    /** F-BRAIN-10: `.obsidian/graph.json` of the saved vault. */
+    obsidian(): Promise<QueryResult<ObsidianGraphResult>>
   }
   chat: {
     send(req: { profile: string; text: string; attachmentIds: string[] }): Promise<ChatSendResult>

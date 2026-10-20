@@ -565,6 +565,29 @@ export type BrowseResult = z.infer<typeof BrowseResult>
 export const NoteText = z.object({ id: z.string(), text: z.string(), truncated: z.boolean(), mtime: z.number() })
 export type NoteText = z.infer<typeof NoteText>
 
+/** F-BRAIN-10: the keys of `<vault>/.obsidian/graph.json` the collector lets through. */
+export const ObsidianGraph = z.object({
+  colorGroups: z.array(z.object({ query: z.string().max(500), color: z.object({ a: z.number(), rgb: z.number().int().min(0).max(0xffffff) }) })).max(64).optional(),
+  showTags: z.boolean().optional(),
+  showAttachments: z.boolean().optional(),
+  hideUnresolved: z.boolean().optional(),
+  showOrphans: z.boolean().optional(),
+  centerStrength: z.number().optional(),
+  repelStrength: z.number().optional(),
+  linkStrength: z.number().optional(),
+  linkDistance: z.number().optional(),
+  nodeSizeMultiplier: z.number().optional(),
+  lineSizeMultiplier: z.number().optional(),
+  textFadeMultiplier: z.number().optional(),
+  search: z.string().max(500).optional()
+})
+export type ObsidianGraph = z.infer<typeof ObsidianGraph>
+export const ObsidianGraphResult = z.union([
+  z.object({ found: z.literal(false) }),
+  z.object({ found: z.literal(true), mtime: z.number(), graph: ObsidianGraph })
+])
+export type ObsidianGraphResult = z.infer<typeof ObsidianGraphResult>
+
 export const ChatSessions = z.object({
   sessions: z.array(
     z.object({
