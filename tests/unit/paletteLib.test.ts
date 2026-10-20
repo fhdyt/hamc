@@ -61,7 +61,7 @@ describe('buildItems', () => {
   it('has note items and the five actions, with unique ids', () => {
     const all = items()
     expect(all.find((i) => i.target.kind === 'note')).toMatchObject({ label: 'Daily note', hint: 'daily/2026-10-13.md' })
-    expect(all.filter((i) => i.group === 'action').map((i) => i.target.kind === 'action' && i.target.action).sort()).toEqual(['connection', 'cost-today', 'cron', 'errors-hour', 'settings', 'terminal'])
+    expect(all.filter((i) => i.group === 'action').map((i) => i.target.kind === 'action' && i.target.action).sort()).toEqual(['add-server', 'connection', 'cost-today', 'cron', 'errors-hour', 'settings', 'terminal'])
     expect(new Set(all.map((i) => i.id)).size).toBe(all.length)
   })
 })
@@ -94,5 +94,27 @@ describe('searchItems', () => {
   it('respects the limit and returns nothing when nothing matches', () => {
     expect(searchItems(items(), 'e', 5)).toHaveLength(5)
     expect(searchItems(items(), 'zzzzqq')).toEqual([])
+  })
+})
+
+describe('servers (F-CONN-14)', () => {
+  const servers = [
+    { id: 1, name: 'prod', address: 'root@a:22', active: true },
+    { id: 2, name: 'lab', address: 'root@b:22', active: false }
+  ]
+
+  it('offers a switch item for each other server and Add server', () => {
+    const items = buildItems({ agents: [], sessions: [], notes: [], now: 0, servers })
+    const sw = items.filter((i) => i.target.kind === 'server')
+    expect(sw.map((i) => i.label)).toEqual(['Switch to lab'])
+    expect(sw[0]).toMatchObject({ hint: 'root@b:22', target: { kind: 'server', id: 2 } })
+    expect(items.find((i) => i.id === 'action:add-server')?.label).toBe('Add server')
+    expect(items.find((i) => i.id === 'action:connection')?.label).toBe('Manage servers')
+  })
+
+  it('finds a server by its name or address', () => {
+    const items = buildItems({ agents: [], sessions: [], notes: [], now: 0, servers })
+    expect(searchItems(items, 'lab')[0]!.id).toBe('server:2')
+    expect(searchItems(items, 'switch')[0]!.id).toBe('server:2')
   })
 })

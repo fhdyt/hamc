@@ -15,7 +15,10 @@ export type PaletteTarget =
   | { kind: 'agent-settings'; profile: string; tab: AgentTab }
   | { kind: 'session'; profile: string; id: string }
   | { kind: 'note'; id: string }
-  | { kind: 'action'; action: 'settings' | 'connection' | 'cron' | 'cost-today' | 'errors-hour' | 'terminal' }
+  | { kind: 'server'; id: number }
+  | { kind: 'action'; action: PaletteAction }
+
+export type PaletteAction = 'settings' | 'connection' | 'add-server' | 'cron' | 'cost-today' | 'errors-hour' | 'terminal'
 
 export interface PaletteItem {
   id: string
@@ -34,9 +37,10 @@ const AGENT_TABS: { tab: AgentTab; label: string }[] = [
   { tab: 'memory', label: 'Memory' },
   { tab: 'user', label: 'User profile' }
 ]
-const ACTIONS: { action: 'settings' | 'connection' | 'cron' | 'cost-today' | 'errors-hour' | 'terminal'; label: string; keywords: string }[] = [
+const ACTIONS: { action: PaletteAction; label: string; keywords: string }[] = [
   { action: 'settings', label: 'Open Settings', keywords: 'preferences options general' },
-  { action: 'connection', label: 'Open connection settings', keywords: 'server host ssh vps' },
+  { action: 'connection', label: 'Manage servers', keywords: 'server host ssh vps connection' },
+  { action: 'add-server', label: 'Add server', keywords: 'vps ssh host new connection' },
   { action: 'cron', label: 'Open Cron jobs', keywords: 'schedule scheduler jobs' },
   { action: 'cost-today', label: "Show today's cost", keywords: 'usage spend money budget price' },
   { action: 'errors-hour', label: 'Show errors from the last hour', keywords: 'logs failures problems errors' },
@@ -66,11 +70,13 @@ export interface PaletteInput {
   notes: readonly { id: string; title: string }[]
   /** Group chat rooms. */
   rooms?: readonly { id: string; name: string }[]
+  /** Saved servers (F-CONN-14); the active one gets no switch item. */
+  servers?: readonly { id: number; name: string; address: string; active: boolean }[]
   /** Epoch seconds, for the age of a session. */
   now: number
 }
 
-export function buildItems({ agents, sessions, notes, rooms = [], now }: PaletteInput): PaletteItem[] {
+export function buildItems({ agents, sessions, notes, rooms = [], servers = [], now }: PaletteInput): PaletteItem[] {
   const names = new Map(agents.map((a) => [a.profile, a.displayName]))
   const items: PaletteItem[] = []
   for (const n of NAV) {
@@ -84,6 +90,10 @@ export function buildItems({ agents, sessions, notes, rooms = [], now }: Palette
     })
   }
   for (const a of ACTIONS) items.push({ id: `action:${a.action}`, group: 'action', label: a.label, keywords: a.keywords, target: { kind: 'action', action: a.action } })
+  for (const s of servers) {
+    if (s.active) continue
+    items.push({ id: `server:${s.id}`, group: 'action', label: `Switch to ${s.name}`, hint: s.address, keywords: 'server vps switch connect host', target: { kind: 'server', id: s.id } })
+  }
   for (const a of agents) {
     items.push({ id: `chat:${a.profile}`, group: 'agent', label: `Chat with ${a.displayName}`, keywords: `${a.profile} message talk`, target: { kind: 'chat', profile: a.profile } })
     for (const t of AGENT_TABS) {
