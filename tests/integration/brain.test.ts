@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -161,6 +161,10 @@ describe('vault queries over the session', () => {
 
   it("reads the vault's Obsidian graph settings from the saved vault only (F-BRAIN-10)", async () => {
     const { session, req } = await setup()
+    const dir = join(vaultDir(), '.obsidian')
+    mkdirSync(dir, { recursive: true })
+    const graph = { colorGroups: [{ query: 'path:folder', color: { a: 1, rgb: 16733525 } }], showTags: true, repelStrength: 15, linkDistance: 265, 'collapse-forces': false }
+    writeFileSync(join(dir, 'graph.json'), JSON.stringify(graph))
     await session.connect(req)
     expect(await session.brainObsidian()).toEqual({ ok: false, error: 'not_found' })
     session.brainSetVault(vaultDir())
@@ -170,6 +174,8 @@ describe('vault queries over the session', () => {
       graph: { colorGroups: [{ query: 'path:folder', color: { a: 1, rgb: 16733525 } }], showTags: true, repelStrength: 15, linkDistance: 265 }
     })
     expect(r.ok && r.data.found && 'collapse-forces' in r.data.graph).toBe(false)
+    rmSync(join(dir, 'graph.json'))
+    expect(await session.brainObsidian()).toEqual({ ok: true, data: { found: false } })
   })
 
   it('reports not-connected before connecting', async () => {

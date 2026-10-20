@@ -1,4 +1,5 @@
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
 import { addNote, buildFixture, type FixtureDirs } from '../helpers/fixture'
@@ -138,6 +139,32 @@ test('neurons fire: a click and the Fire signal button light neurons and send si
   await page.mouse.click(p.x, p.y)
   await expect.poll(async () => (await activity()).signals + (await activity()).lit).toBeGreaterThan(0)
   await page.getByRole('button', { name: 'Index', exact: true }).first().click().catch(() => {})
+})
+
+test("the graph follows the vault's .obsidian/graph.json until the switch is off (F-BRAIN-10)", async () => {
+  const file = join(vault(), '.obsidian', 'graph.json')
+  mkdirSync(join(vault(), '.obsidian'), { recursive: true })
+  writeFileSync(file, JSON.stringify({ colorGroups: [{ query: 'path:folder', color: { a: 1, rgb: 0xff5555 } }], repelStrength: 15, showTags: true }))
+  const controls = page.getByRole('complementary', { name: 'Graph controls' })
+  await controls.getByRole('button', { name: 'Reload' }).click()
+  await expect(controls.getByRole('status').filter({ hasText: 'Following graph.json · 1 group' })).toBeVisible({ timeout: 15_000 })
+  await expect(controls.getByRole('slider', { name: 'Repel force' })).toBeDisabled()
+  await expect(controls.getByRole('slider', { name: 'Repel force' })).toHaveValue('0.75')
+  await expect(controls.getByRole('switch', { name: /^Tags/ })).toBeChecked()
+  await expect(controls.getByRole('list', { name: 'Groups from graph.json' })).toContainText('path:folder')
+  await expect(page.getByRole('list', { name: 'Colours' })).toContainText('path:folder')
+  await page.screenshot({ path: 'tests/e2e/shots/brain-obsidian.png' })
+
+  await controls.getByRole('switch', { name: 'Use .obsidian/graph.json' }).uncheck()
+  await expect(controls.getByRole('slider', { name: 'Repel force' })).toBeEnabled()
+  await expect(controls.getByRole('switch', { name: /^Tags/ })).not.toBeChecked()
+  await expect(controls.getByRole('status').filter({ hasText: 'graph.json found, not followed' })).toBeVisible()
+  await controls.getByRole('switch', { name: 'Use .obsidian/graph.json' }).check()
+
+  rmSync(file)
+  await controls.getByRole('button', { name: 'Reload' }).click()
+  await expect(controls.getByRole('status').filter({ hasText: 'No graph.json in this vault' })).toBeVisible({ timeout: 15_000 })
+  await expect(controls.getByRole('slider', { name: 'Repel force' })).toBeEnabled()
 })
 
 test('folders get their own colour, shown in a legend that follows the Color by folder switch', async () => {
