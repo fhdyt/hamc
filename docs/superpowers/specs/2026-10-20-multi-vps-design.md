@@ -37,9 +37,13 @@ chosen one. Background connections, several windows and cross-server views are o
 
 ### `SettingsStore`
 
+- `setActive(id: number | null)`: the server the session works with. `undefined` (nothing chosen yet, at start) means
+  the newest row; `null` means a new server whose row does not exist yet.
 - `listConnections(): SavedConnection[]`: newest `last_connected_at` first, never-connected rows last by id.
-- `getConnection(id?: number)`: that row, or without an id the newest one (keeps old callers working).
-- `getSecretEnc(id: number)`.
+- `getConnection(id?: number)`: that row, or without an id the **active** row (newest when none was chosen). So every
+  existing caller (session services, pins, looks and rooms in `ipc.ts`, `GroupStore`) follows the active server
+  without changes.
+- `getSecretEnc(id?: number)`: same rule.
 - `upsertConnection({ id?, name?, … })`:
   - with `id`: updates that row. If another row already has the new `(host, port, username)` it throws
     `TargetTakenError`, and the session answers *"Another saved server already uses this address."*
@@ -57,23 +61,23 @@ chosen one. Background connections, several windows and cross-server views are o
 
 ## Main process
 
-- `MissionSession.activeId: number | null`.
+- `MissionSession` keeps the active id in the store (`store.setActive`).
   - `connect(req)` resolves the row: `req.connectionId`, else the row with the same target, else none (a new server).
-    When a row is found, `activeId` is set to it **before** the attempt, so `saved()` and the renderer agree on which
+    The active id is set to it (or `null`) **before** the attempt, so `saved()` and the renderer agree on which
     server is being connected, even if the attempt fails.
-  - On success the upsert returns the id (new rows too), and `activeId` takes it.
-  - When `activeId` changes, the session resets what belongs to one server: `cronWatcher.reset()`,
+  - On success the upsert returns the id (new rows too), and it becomes the active id.
+  - When the active id changes, the session resets what belongs to one server: `cronWatcher.reset()`,
     `cronStore.clear()`, `feedCursors.clear()`, `costAlert.reset()`, `gatewayWatcher.reset()`,
     `cronActions.clear()`, and `agentNames = null`. This replaces the `lastTarget` string check, which also covered an
     edited host.
-  - Every `d.store.getConnection()?.id` in `session.ts` (chat sessions, vault, room store id, looks, memory snapshots,
-    `connectionId` of the services) reads `this.activeId`.
+  - Every `d.store.getConnection()?.id` in `session.ts` and `ipc.ts` (chat sessions, vault, room store id, looks,
+    pins, memory snapshots) now reads the active row through the store rule above.
   - `credentials(req)` reads method, key path and secret from the resolved row only.
   - `BrainService` restarts with the vault path of the new server (it already restarts on every connect).
 - `ConnectRequestSchema` gains `connectionId: z.number().int().positive().optional()` and
   `name: z.string().max(40).optional()` (control characters refused).
-- `forget(id)`: when `id` is the active server it does what `forget()` did (disconnect, reset, delete) and sets
-  `activeId = null`; otherwise it only deletes the row's data.
+- `forget(id)`: when `id` is the active server it does what `forget()` did (disconnect, reset, delete) and
+  clears the active choice (the newest remaining row becomes the default); otherwise it only deletes the row's data.
 - `saved()` returns the active row, else the newest one.
 
 ### IPC
