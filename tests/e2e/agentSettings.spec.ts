@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { startFakeSsh, type FakeSsh } from '../helpers/fakeSshServer'
@@ -157,4 +157,47 @@ test('Test model reports the result, and Restart gateway asks first', async () =
   await dlg.getByRole('button', { name: 'Restart', exact: true }).click()
   await expect(dlg.getByText(/restarted/)).toBeVisible()
   expect(srv.hermes.restarts).toHaveLength(1)
+})
+
+test('v2: the Hermes catalog sets the model; an auxiliary slot is changed and set back to auto', async () => {
+  mkdirSync(join(fx.home, 'cache'), { recursive: true })
+  writeFileSync(
+    join(fx.home, 'cache', 'model_catalog.json'),
+    JSON.stringify({ version: 1, updated_at: '2026-10-01T10:00:00Z', providers: { openrouter: { models: [{ id: 'moonshotai/kimi-k3', description: 'recommended' }, { id: 'z-ai/glm-5.2', description: 'default', default: true }] } } })
+  )
+  // the Restart gateway dialog of the last test is still open; the catalog is read when the tab mounts again
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'Restart gateway' })).toHaveCount(0)
+  await tab('Memory').click()
+  await tab('Model').click()
+  await settings().getByRole('radio', { name: /^OpenRouter/ }).click()
+  const cat = settings().getByRole('radiogroup', { name: /Hermes catalog/ })
+  await expect(cat).toBeVisible({ timeout: 15_000 })
+  await expect(settings().getByText("From the server's Hermes cache · updated 2026-10-01")).toBeVisible()
+  await expect(cat.getByRole('radio').first()).toContainText('z-ai/glm-5.2')
+  await cat.getByRole('radio', { name: /kimi-k3/ }).click()
+  await expect(settings().getByLabel('Model ID').first()).toHaveValue('moonshotai/kimi-k3')
+
+  await settings().locator('summary', { hasText: 'Auxiliary models' }).click()
+  const list = settings().getByRole('list', { name: 'Auxiliary models' })
+  await expect(list.getByRole('listitem')).toHaveCount(18, { timeout: 15_000 })
+  await settings().getByRole('button', { name: 'Change Vision' }).click()
+  const editor = settings().getByRole('group', { name: 'Vision model' })
+  await editor.getByLabel('Model ID').fill('google/gemini-2.5-flash')
+  await editor.getByRole('button', { name: 'Save…' }).click()
+  const dlg = page.getByRole('dialog', { name: 'Save auxiliary models' })
+  await expect(dlg).toContainText(/config set auxiliary\.vision\.provider openrouter/)
+  await expect(dlg).toContainText(/config set auxiliary\.vision\.base_url ''/)
+  await page.screenshot({ path: 'tests/e2e/shots/agents-aux-save.png' })
+  await dlg.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(settings().getByText('Saved. New sessions use these models.')).toBeVisible({ timeout: 15_000 })
+  await expect(list.getByRole('listitem').filter({ hasText: 'Vision' })).toContainText('openrouter · google/gemini-2.5-flash')
+
+  await settings().getByRole('button', { name: 'Use the main model for Vision' }).click()
+  await page.getByRole('dialog', { name: 'Save auxiliary models' }).getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(list.getByRole('listitem').filter({ hasText: 'Vision' })).toContainText('auto (main model)', { timeout: 15_000 })
+  // the catalog pick is an unsaved main-model change: closing Settings asks, and Discard drops it
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Discard changes' }).click()
+  await expect(settings()).toHaveCount(0)
 })
