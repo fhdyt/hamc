@@ -268,6 +268,13 @@ Chat sekarang memakai gateway TUI milik Hermes (`python -m tui_gateway.entry`) l
 159. **Badge dan notifikasi.** Buka layar lain selama room berjalan: setelah selesai, Chat mendapat badge dan notifikasi "<room>: N new replies"; klik membuka room.
 160. **Zero-Change.** Hapus room: sesinya tetap ada di server. Tidak ada port baru (`ss -ltnp`) dan tidak ada `hermes serve`/dashboard yang berjalan. `app.log` hanya berisi `room <id> run …`/`turn …`, tanpa isi pesan.
 
+## Tambahan multi-VPS (F-CONN-14..17, v2)
+
+161. **Tambah server kedua.** Klik item koneksi di status bar → *Add server…*, isi name (mis. `lab`), host, port, user dan password VPS kedua, Test & connect, verifikasi host key. Status bar menampilkan `lab`, Dashboard menampilkan agent VPS kedua; pin, foto agent, room dan vault VPS pertama tidak terlihat di sini.
+162. **Pindah balik.** Menu status bar → pilih VPS pertama: layar Launch, lalu Dashboard dengan agent, pin, foto, room dan sesi chat VPS pertama seperti semula. Ulangi lewat Ctrl+K → "Switch to lab". Saat sebuah balasan chat sedang ditulis, pindah server menanyakan "This stops: 1 chat reply in progress" dulu.
+163. **Auto-connect.** Tutup dan buka aplikasi: tersambung otomatis ke server yang terakhir dipakai. Settings → Servers menampilkan kedua server dengan waktu terakhir tersambung.
+164. **Forget dan Zero-Change.** Settings → Servers → Forget… pada server yang tidak aktif: server aktif tetap tersambung. Di kedua VPS tidak ada berkas atau proses baru selain yang dibuat langkah lain; `app.log` hanya berisi `server switch <id>` / `server forget <id>`, tanpa password atau nama server.
+
 ## Melaporkan hasil
 
 Catat tiap langkah sebagai lolos atau tidak, beserta teks error dan versi Hermes (`hermes --version`). Hasilnya menjadi masukan untuk memperbaiki tebakan format yang belum terdokumentasi di Hermes: `gateway_state.json`, `schema_version` di `state.db`, dan keluaran `hermes config get model --json`.
