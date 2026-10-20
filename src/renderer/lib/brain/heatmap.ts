@@ -105,9 +105,23 @@ export function buildHeatmap(notes: Iterable<BrainNote>, today: Date, weeks: num
   return { weeks: cols.map((c) => c.map((x) => ({ ...x, level: levelOf(x.count, max) }))), months, total, max, activeDays, byDay, sources }
 }
 
-/** Weeks that fit a width: 10 px cells with a 3 px gap, after the day labels. */
-export function weeksThatFit(width: number, labelW = 28): number {
-  return Math.max(8, Math.min(53, Math.floor((width - labelW + 3) / 13)))
+/** Day labels column (25 px) and the 3 px gap of the grid; the month row is 12 px. */
+const LABEL_W = 25
+const GAP = 3
+const MONTH_H = 12
+
+/**
+ * Weeks for a grid that fills a box: the height sets the cell size (7 rows under the month row), and as many
+ * roughly square weeks as fit the width are shown (8 to 156); the columns then stretch to the last pixel.
+ */
+export function weeksThatFit(width: number, height = MONTH_H + 7 * (10 + GAP)): number {
+  const cell = Math.max(6, (height - MONTH_H - 7 * GAP) / 7)
+  return Math.max(8, Math.min(156, Math.floor((width - LABEL_W) / (cell + GAP))))
+}
+
+/** Square cells for a fixed number of weeks across a width (the year view), 8 to 20 px. */
+export function cellForWeeks(width: number, weeks: number): number {
+  return Math.max(8, Math.min(20, Math.floor((width - LABEL_W) / weeks - GAP)))
 }
 
 /** "12 Oct 2026" for a `YYYY-MM-DD`. */

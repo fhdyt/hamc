@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BrainNote } from '@shared/events'
-import { buildHeatmap, dayKey, dayLabel, levelOf, noteDay, weeksThatFit } from '../../src/renderer/lib/brain/heatmap'
+import { buildHeatmap, cellForWeeks, dayKey, dayLabel, levelOf, noteDay, weeksThatFit } from '../../src/renderer/lib/brain/heatmap'
 
 const ts = (y: number, m: number, d: number, h = 12): number => new Date(y, m - 1, d, h).getTime() / 1000
 
@@ -61,7 +61,11 @@ describe('helpers', () => {
   it('fits weeks to a width and formats days', () => {
     expect(weeksThatFit(220)).toBe(15)
     expect(weeksThatFit(50)).toBe(8)
-    expect(weeksThatFit(5000)).toBe(53)
+    expect(weeksThatFit(5000)).toBe(156)
+    expect(weeksThatFit(700, 152)).toBe(33) // 17 px cells: (700 - 25) / 20
+    expect(weeksThatFit(700, 96)).toBe(56) // 9 px cells
+    expect(cellForWeeks(740, 53)).toBe(10)
+    expect(cellForWeeks(2000, 53)).toBe(20)
     expect(dayLabel('2026-10-03')).toBe('3 Oct 2026')
     expect(dayKey(new Date(2026, 0, 5))).toBe('2026-01-05')
   })

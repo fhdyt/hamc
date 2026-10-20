@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { saveSetting } from '../../actions'
 import { Icon } from '../../components/Icon'
 import { Modal } from '../../components/Modal'
 import { Panel } from '../../components/Panel'
 import { EmptyState, ErrorState, Skeleton } from '../../components/States'
-import { buildHeatmap, dayKey, dayLabel, noteCount, weeksThatFit, type DaySource, type Heatmap } from '../../lib/brain/heatmap'
+import { buildHeatmap, cellForWeeks, dayKey, dayLabel, noteCount, weeksThatFit, type DaySource, type Heatmap } from '../../lib/brain/heatmap'
 import { useBrain } from '../../stores/brain'
 import { useConn } from '../../stores/conn'
 import { useUi } from '../../stores/ui'
@@ -27,20 +27,12 @@ export function NotesPanel({ style }: { style?: CSSProperties }) {
   const notes = useBrain((s) => s.notes)
   const connState = useConn((s) => s.status.state)
   const [full, setFull] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState(220)
-
-  useEffect(() => {
-    const el = box.current
-    if (!el) return
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth))
-    ro.observe(el)
-    setWidth(el.clientWidth)
-    return () => ro.disconnect()
-  }, [open, notes.size > 0])
+  // the grid fills the column and a share of the window height (CSS); its size picks the weeks
+  const [size, setSize] = useState({ w: 220, h: 103 })
+  const onSize = useCallback((w: number, h: number) => setSize((s) => (s.w === w && s.h === h ? s : { w, h })), [])
 
   const today = dayKey(new Date())
-  const weeks = weeksThatFit(width)
+  const weeks = weeksThatFit(size.w, size.h)
   const map = useMemo(() => buildHeatmap(notes.values(), new Date(), weeks), [notes, weeks, today])
 
   let body
@@ -70,7 +62,7 @@ export function NotesPanel({ style }: { style?: CSSProperties }) {
 
   return (
     <Panel variant="card" title="notes" label="Notes calendar" meta={meta} actions={actions} style={style} className="d-panel">
-      {open && (body ?? <div ref={box} className="hm-box"><NoteCalendar map={map} /></div>)}
+      {open && (body ?? <div className="hm-box"><NoteCalendar map={map} fill onSize={onSize} /></div>)}
       {full && (
         <Modal title="Notes written per day" onClose={() => setFull(false)} width={780}>
           <YearCalendar onOpenNote={() => setFull(false)} />
@@ -83,13 +75,15 @@ export function NotesPanel({ style }: { style?: CSSProperties }) {
 function YearCalendar({ onOpenNote }: { onOpenNote(): void }) {
   const notes = useBrain((s) => s.notes)
   const map = useMemo(() => buildHeatmap(notes.values(), new Date(), 53), [notes])
+  const [cell, setCell] = useState(10)
+  const onSize = useCallback((w: number) => setCell(cellForWeeks(w, 53)), [])
   const sources = (Object.keys(map.sources) as DaySource[]).filter((k) => map.sources[k] > 0)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <p className="hm-sum">
         {noteCount(map.total)} in the last year · {map.activeDays} day{map.activeDays === 1 ? '' : 's'} with new notes · busiest day {noteCount(map.max)}
       </p>
-      <NoteCalendar map={map} onOpenNote={onOpenNote} />
+      <NoteCalendar map={map} cell={cell} onSize={onSize} onOpenNote={onOpenNote} />
       <p className="hm-src">
         Days come from {sources.map((k) => `${SOURCE_TEXT[k]} (${map.sources[k]})`).join(', ')}.
       </p>
@@ -97,8 +91,18 @@ function YearCalendar({ onOpenNote }: { onOpenNote(): void }) {
   )
 }
 
-/** The grid (weeks as columns, Sunday on top), the legend and the notes of the picked day. */
-function NoteCalendar({ map, onOpenNote }: { map: Heatmap; onOpenNote?(): void }) {
+interface CalendarProps {
+  map: Heatmap
+  /** Rows stretch to the grid's height (set by CSS) instead of `cell` px. */
+  fill?: boolean
+  cell?: number
+  /** Called with the grid's size, so the caller can pick the weeks or the cell size. */
+  onSize?(width: number, height: number): void
+  onOpenNote?(): void
+}
+
+/** The grid (weeks as columns, Sunday on top), the legend and the notes of the picked day. Columns always stretch to the full width. */
+function NoteCalendar({ map, fill, cell = 10, onSize, onOpenNote }: CalendarProps) {
   const openNote = useBrain((s) => s.openNote)
   const days = useMemo(() => map.weeks.flat().filter((c) => !c.future), [map])
   const [picked, setPicked] = useState<string | null>(null)
@@ -107,6 +111,16 @@ function NoteCalendar({ map, onOpenNote }: { map: Heatmap; onOpenNote?(): void }
   const current = days.some((d) => d.day === focus) ? focus : (days[days.length - 1]?.day ?? '')
   const list = picked ? (map.byDay.get(picked) ?? []) : []
   const twins = new Set(list.filter((n, i) => list.findIndex((m) => m.title === n.title) !== i).map((n) => n.title))
+
+  useEffect(() => {
+    const el = grid.current
+    if (!el || !onSize) return
+    const report = (): void => onSize(el.clientWidth, el.clientHeight)
+    const ro = new ResizeObserver(report)
+    ro.observe(el)
+    report()
+    return () => ro.disconnect()
+  }, [onSize])
 
   const move = (e: KeyboardEvent<HTMLDivElement>): void => {
     const step = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7, Home: -days.length, End: days.length }[e.key]
@@ -120,8 +134,15 @@ function NoteCalendar({ map, onOpenNote }: { map: Heatmap; onOpenNote?(): void }
   }
 
   return (
-    <div className="hm">
-      <div className="hm-grid" role="group" aria-label="Notes written per day" ref={grid} onKeyDown={move}>
+    <div className={fill ? 'hm fill' : 'hm'}>
+      <div
+        className="hm-grid"
+        role="group"
+        aria-label="Notes written per day"
+        ref={grid}
+        onKeyDown={move}
+        style={{ '--hm-weeks': map.weeks.length, '--hm-cell': `${cell}px` } as CSSProperties}
+      >
         <div className="hm-labels" aria-hidden="true">
           <span />
           <span />

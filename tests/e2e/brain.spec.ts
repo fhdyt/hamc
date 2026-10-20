@@ -265,3 +265,37 @@ test('the notes calendar between Server and the graph counts the notes per day a
   await expect(cal.getByRole('group', { name: 'Notes written per day' })).toBeHidden()
   await cal.getByRole('button', { name: 'Show notes calendar' }).click()
 })
+
+test('the notes calendar fills its panel and follows the window size', async () => {
+  const cal = page.getByRole('region', { name: 'Notes calendar' })
+  const grid = cal.getByRole('group', { name: 'Notes written per day' })
+  const fit = () =>
+    grid.evaluate((g) => {
+      const box = g.getBoundingClientRect()
+      const cols = g.querySelectorAll('.hm-col')
+      const last = cols[cols.length - 1]!.getBoundingClientRect()
+      const cell = g.querySelector('.hm-col .hm-cell')!.getBoundingClientRect()
+      const widths = [...g.querySelectorAll('.hm-col > .hm-cell:first-of-type')].map((c) => c.getBoundingClientRect().width)
+      return { right: box.right - last.right, weeks: cols.length, cellW: cell.width, cellH: cell.height, h: box.height, spread: Math.max(...widths) - Math.min(...widths) }
+    })
+  const size = (w: number, h: number) => app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows()[0]!.setSize(w!, h!), [w, h])
+  await size(1280, 720)
+  await page.waitForTimeout(300)
+  const small = await fit()
+  await page.screenshot({ path: 'tests/e2e/shots/notes-calendar-1280.png' })
+  await size(1700, 1000)
+  await page.waitForTimeout(300)
+  const big = await fit()
+  await page.screenshot({ path: 'tests/e2e/shots/notes-calendar-1700.png' })
+  for (const f of [small, big]) {
+    expect(Math.abs(f.right)).toBeLessThan(1) // the last week reaches the right edge
+    expect(Math.abs(f.cellW - f.cellH)).toBeLessThan(f.cellH / 2) // cells stay close to square
+    expect(f.spread).toBeLessThan(1.5) // a month label never widens its week
+  }
+  expect(big.h).toBeGreaterThan(small.h)
+  expect(big.weeks).not.toBe(small.weeks)
+  await cal.getByRole('button', { name: 'Open the notes calendar for the year' }).click()
+  await page.waitForTimeout(200)
+  await page.screenshot({ path: 'tests/e2e/shots/notes-calendar-year.png' })
+  await page.keyboard.press('Escape')
+})
