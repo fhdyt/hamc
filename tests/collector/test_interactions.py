@@ -34,7 +34,9 @@ def test_messages_become_one_edge_per_pair(fx):
     _, data = poll(fx)
     e = edge(data, "message", "atlas", "scout")
     assert e["count"] == 2 and e["label"] == "msg" and e["lastTs"] == fx.now - 100
-    assert data["sources"]["message"] == {"state": "ok", "unresolved": 1}  # @ghost matches no profile
+    assert data["sources"]["message"] == {"state": "ok", "unresolved": 0}
+    # F-AGRAPH-7: @ghost matches no profile here, so it is a remote peer
+    assert edge(data, "peer", "peer:ghost", "scout")["label"] == "bot chat"
 
 
 def test_room_members_and_edges(fx):
@@ -161,6 +163,9 @@ def test_query_interaction_errors(fx):
     assert run(fx, {"kind": "delegate", "id": "sub:atlas:" + "x" * 300})["error"] == "bad_args"
     assert run(fx, {"kind": "room", "id": "ops-room"})["error"] == "bad_args"
     assert run(fx, {"kind": "message", "from": "atlas", "to": "ghost"})["error"] == "not_found"
+    assert run(fx, {"kind": "peer", "from": "peer:x", "to": "peer:y"})["error"] == "bad_args"
+    assert run(fx, {"kind": "peer", "from": "peer:bad name!", "to": "scout"})["error"] == "bad_args"
+    assert run(fx, {"kind": "peer", "from": "peer:nobody", "to": "scout"})["error"] == "not_found"
 
 
 def test_stream_emits_interactions_once_until_changed(tmp_path):
@@ -194,3 +199,40 @@ def test_query_interaction_kanban_with_a_text_id_returns_the_latest_comment(fx):
     assert r["ok"] and r["data"]["title"] == "Publish the digest"
     assert run(fx, {"kind": "kanban", "id": "t_nope"})["error"] == "not_found"
     assert run(fx, {"kind": "kanban", "id": "a b"})["error"] == "bad_args"
+
+
+# ---- F-AGRAPH-7: agents on other machines -----------------------------------
+
+def test_remote_peers_from_bot_chat_peer_dm_and_a2a(fx):
+    mf.add_remote_peers(fx)
+    _, data = poll(fx)
+    dm_in = edge(data, "peer", "peer:dixie", "default")
+    assert dm_in["label"] == "bot chat" and dm_in["lastTs"] == fx.now - 200
+    out = edge(data, "peer", "default", "peer:spark/researcher")
+    assert out["label"] == "peer dm" and out["count"] == 1
+    assert edge(data, "peer", "peer:labbot", "default")["label"] == "a2a"
+    assert edge(data, "peer", "default", "peer:crewai-x")["label"] == "a2a"
+    # the reply to labbot's task is not a call of our own, and push lines are not edges
+    assert not [e for e in data["edges"] if e["kind"] == "peer" and e["from"] == "default" and e["to"] == "peer:labbot"]
+    assert data["sources"]["peer"]["state"] == "ok"
+    assert "Build is green" not in json.dumps(data) and "Find three papers" not in json.dumps(data)
+
+
+def test_remote_peer_edges_survive_the_next_poll(fx):
+    mf.add_remote_peers(fx)
+    st, first = poll(fx)
+    _, second = poll(fx, st)
+    ids = lambda d: sorted(e["id"] for e in d["edges"] if e["kind"] == "peer")
+    assert ids(first) == ids(second) and len(ids(first)) == 4
+
+
+def test_query_interaction_peer(fx):
+    mf.add_remote_peers(fx)
+    r = run(fx, {"kind": "peer", "from": "peer:dixie", "to": "default"})
+    assert r["ok"] and "disk status on spark" in r["data"]["text"] and r["data"]["sessionId"] == "s-bot-d"
+    r = run(fx, {"kind": "peer", "from": "default", "to": "peer:spark/researcher"})
+    assert r["ok"] and "hermes peer dm spark/researcher" in r["data"]["text"] and r["data"]["sessionId"] == "s-peer-out"
+    r = run(fx, {"kind": "peer", "from": "peer:labbot", "to": "default"})
+    assert r["ok"] and r["data"]["text"] == "Check the nightly build" and "a2a_audit.jsonl" in r["data"]["source"]
+    r = run(fx, {"kind": "peer", "from": "default", "to": "peer:crewai-x"})
+    assert r["ok"] and r["data"]["text"] == "Find three papers on RAG"

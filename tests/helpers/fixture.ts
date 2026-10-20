@@ -51,6 +51,11 @@ export function addInteractions(root: string): void {
   execFileSync(pythonExe, [script, 'add-interactions', root])
 }
 
+/** F-AGRAPH-7: a remote Bot Chat DM, a `hermes peer dm` tool call and an A2A audit (pass the fixture root). */
+export function addRemotePeers(root: string): void {
+  execFileSync(pythonExe, [script, 'add-remote-peers', root])
+}
+
 /** Adds the home kanban.db (empty) and the board `sim-kanban` with tasks in every column, in the schema of a real Hermes (pass the fixture root). */
 export function addRealKanban(root: string): void {
   execFileSync(pythonExe, [script, 'add-real-kanban', root])

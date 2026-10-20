@@ -416,6 +416,27 @@ def add_interactions(fx: Fixture) -> None:
     )
 
 
+def add_remote_peers(fx: Fixture) -> None:
+    """F-AGRAPH-7: talk with agents on other machines (on top of make_fixture; never part of its defaults)."""
+    now, home = fx.now, fx.home
+    dd = home / "state.db"
+    # a remote bot DMs the default agent through `hermes peer dm` on its machine
+    add_session(dd, "s-bot-d", "bot", now - 900, title="Bot Chat")
+    add_message(dd, "s-bot-d", "user", "Message from \U0001F916 Dixie (@dixie): disk status on spark?", now - 200)
+    # the default agent DMs a named profile on the peer gateway `spark` with its terminal tool
+    add_session(dd, "s-peer-out", "cli", now - 800)
+    cmd = {"command": "hermes peer dm spark/researcher 'Summarise the backup report'"}
+    add_message(dd, "s-peer-out", "assistant", None, now - 150, tool_calls=[{"id": "c1", "type": "function", "function": {"name": "terminal", "arguments": json.dumps(cmd)}}])
+    # A2A: labbot sends a task (and gets the reply); the agent itself calls crewai-x
+    lines = [
+        {"ts": now - 300, "direction": "inbound", "peer": "labbot", "task_id": "a1", "summary": "Check the nightly build"},
+        {"ts": now - 290, "direction": "outbound", "peer": "labbot", "task_id": "a1", "summary": "Build is green"},
+        {"ts": now - 280, "direction": "outbound", "peer": "crewai-x", "task_id": "a2", "summary": "Find three papers on RAG"},
+        {"ts": now - 270, "direction": "push", "peer": "labbot", "task_id": "a1", "summary": "pushed"},
+    ]
+    (home / "a2a_audit.jsonl").write_text("".join(json.dumps(r) + "\n" for r in lines) + "not json\n", encoding="utf-8")
+
+
 def add_profile(home: Path, name: str, display_name: str | None = None, markers=("SOUL.md",)) -> Path:
     pdir = home / "profiles" / name
     pdir.mkdir(parents=True, exist_ok=True)
@@ -734,6 +755,8 @@ if __name__ == "__main__":
         print(make_synthetic_vault(Path(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]) if len(sys.argv) > 4 else 4))
     elif cmd == "add-interactions":
         add_interactions(load(Path(sys.argv[2])))
+    elif cmd == "add-remote-peers":
+        add_remote_peers(load(Path(sys.argv[2])))
     elif cmd == "add-real-kanban":
         add_real_kanban(load(Path(sys.argv[2])))
     elif cmd == "add-usage-data":

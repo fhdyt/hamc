@@ -1125,7 +1125,53 @@ INTER_SCAN_ROWS = 2000
 BOT_RE = re.compile(r"^\s*Message from (.{1,80}?) \(@([A-Za-z0-9._-]{1,64})\):")
 GROUP_RE = re.compile(r"^Group:\s*(.{1,80}?)(?:\s+[\u00b7|-]\s+(.{0,80}))?\s*$")
 ROOM_ID_RE = re.compile(r"^room:[^\x00]{1,80}$")
-INTER_KINDS = ("kanban", "message", "room", "delegate")
+INTER_KINDS = ("kanban", "message", "room", "delegate", "peer")
+# F-AGRAPH-7: agents on other machines (hermes peer, Bot Mode DMs, the A2A audit)
+INTER_MAX_PEERS = 40
+A2A_TAIL = 262144
+PEER_DM_RE = re.compile(r"hermes(?:\s+-p\s+\S+)?\s+peer\s+(?:dm|run)\s+([a-z0-9][a-z0-9_-]{0,63}(?:/[A-Za-z0-9][A-Za-z0-9_-]{0,63})?)")
+PEER_ID_RE = re.compile(r"^[A-Za-z0-9._/@:-]{1,64}$")
+
+
+def peer_name(raw, lower=False):
+    """A remote agent's name as a node id part: safe characters only, at most 64."""
+    s = re.sub(r"[^A-Za-z0-9._/@:-]+", "-", str(raw or "")).strip("-")[:64]
+    return (s.lower() if lower else s) or "unknown"
+
+
+def read_a2a(pdir, since):
+    """(ts, direction, peer, task_id, summary) of the A2A audit tail of one profile, newest last; malformed lines skipped."""
+    path = os.path.join(pdir, "a2a_audit.jsonl")
+    if not os.path.isfile(path):
+        return None
+    with open(path, "rb") as f:
+        size = os.fstat(f.fileno()).st_size
+        f.seek(max(0, size - A2A_TAIL))
+        raw = f.read(A2A_TAIL)
+    out = []
+    for line in raw.decode("utf-8", "replace").splitlines():
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(r, dict):
+            continue
+        ts = r.get("ts")
+        if not isinstance(ts, (int, float)) or isinstance(ts, bool) or ts < since:
+            continue
+        d = r.get("direction")
+        if d not in ("inbound", "outbound") or not isinstance(r.get("peer"), str):
+            continue
+        tid = r.get("task_id") if isinstance(r.get("task_id"), str) else ""
+        out.append((float(ts), d, peer_name(r["peer"]), tid, r.get("summary") if isinstance(r.get("summary"), str) else ""))
+    return out
+
+
+def a2a_links(records):
+    """Inbound tasks (peer -> agent) and the agent's own calls (outbound without an inbound of the same task)."""
+    asked = {tid for _, d, _, tid, _ in records if d == "inbound" and tid}
+    return [(ts, "in" if d == "inbound" else "out", peer, summary) for ts, d, peer, tid, summary in records
+            if d == "inbound" or not tid or tid not in asked]
 TASK_COLS = {
     "id": ("id",),
     "title": ("title", "name", "summary"),
@@ -1174,8 +1220,8 @@ class InteractionState:
         self.subs = {}
         self.sources = {}
 
-    def _edge_add(self, kind, frm, to, ts, label):
-        eid = "%s:%s>%s:" % (kind, frm, to)
+    def _edge_add(self, kind, frm, to, ts, label, suffix=""):
+        eid = "%s:%s>%s:%s" % (kind, frm, to, suffix)
         e = self.edges.get(eid)
         if e is None:
             e = self.edges[eid] = {"id": eid, "kind": kind, "from": frm, "to": to, "count": 0, "firstTs": ts, "lastTs": ts, "label": label, "status": None}
@@ -1183,9 +1229,9 @@ class InteractionState:
         e["firstTs"] = min(e["firstTs"], ts)
         e["lastTs"] = max(e["lastTs"], ts)
 
-    def _edge_set(self, kind, frm, to, first, last, label=None, status=None, suffix=""):
+    def _edge_set(self, kind, frm, to, first, last, label=None, status=None, suffix="", count=1):
         eid = "%s:%s>%s:%s" % (kind, frm, to, suffix)
-        self.edges[eid] = {"id": eid, "kind": kind, "from": frm, "to": to, "count": 1, "firstTs": first, "lastTs": last, "label": label, "status": status}
+        self.edges[eid] = {"id": eid, "kind": kind, "from": frm, "to": to, "count": count, "firstTs": first, "lastTs": last, "label": label, "status": status}
 
     def _src(self, kind, state):
         rank = {"absent": 0, "ok": 1, "unreadable": 2}
@@ -1200,13 +1246,19 @@ class InteractionState:
         for name, pdir in profiles:
             for key in (name.lower(), display_name(pdir, name).lower()):
                 names.setdefault(key, name)
-        self.edges = {k: v for k, v in self.edges.items() if v["kind"] == "message"}
+        # message edges and inbound Bot Chat peers accumulate with the cursors; the rest is rebuilt each poll
+        self.edges = {k: v for k, v in self.edges.items() if v["kind"] == "message" or (v["kind"] == "peer" and k.endswith(":chat"))}
         self.sources = {k: {"state": "absent", "unresolved": 0} for k in INTER_KINDS}
         room_members, room_last, subs = {}, {}, {}
+        peer_out = {}
         for name, pdir in profiles:
             db = os.path.join(pdir, "state.db")
             if os.path.isfile(db):
-                self._scan_profile(db, name, names, since, now, room_members, room_last, subs)
+                self._scan_profile(db, name, names, since, now, room_members, room_last, subs, peer_out)
+            self._a2a(pdir, name, since, peer_out)
+        for (name, target, label, suffix), (count, first, last) in peer_out.items():
+            frm, to = (name, "peer:" + target) if suffix != "a2a-in" else ("peer:" + target, name)
+            self._edge_set("peer", frm, to, first, last, label=label, suffix=suffix, count=count)
         self.rooms = {}
         for rid, info in room_members.items():
             last = room_last.get(rid, 0.0)
@@ -1222,15 +1274,31 @@ class InteractionState:
         self.sources["message"]["unresolved"] = self.msg_unresolved
         return self._payload(since)
 
-    def _scan_profile(self, db, name, names, since, now, room_members, room_last, subs):
+    def _a2a(self, pdir, name, since, peer_out):
+        try:
+            records = read_a2a(pdir, since)
+        except OSError:
+            self._src("peer", "unreadable")
+            return
+        if records is None:
+            return
+        self._src("peer", "ok")
+        for ts, way, peer, _summary in a2a_links(records):
+            key = (name, peer, "a2a", "a2a-in" if way == "in" else "a2a-out")
+            c = peer_out.get(key)
+            peer_out[key] = (c[0] + 1, min(c[1], ts), max(c[2], ts)) if c else (1, ts, ts)
+
+    def _scan_profile(self, db, name, names, since, now, room_members, room_last, subs, peer_out=None):
         con = None
         try:
             con = open_ro(db)
             scols = table_columns(con, "sessions")
             if "id" not in scols:
                 return
-            for k in ("message", "room", "delegate"):
+            for k in ("message", "room", "delegate", "peer"):
                 self._src(k, "ok")
+            if peer_out is not None:
+                self._peer_dms(con, name, since, peer_out)
             kinds = []
             if "title" in scols:
                 kinds += ["title = 'Bot Chat'", "title LIKE 'Group:%'"]
@@ -1296,16 +1364,33 @@ class InteractionState:
                         if hit is None:
                             continue
                         sender = names.get(hit[1].lower()) or names.get(hit[0].lower())
-                        if sender is None or sender == name:
+                        if sender is None:
+                            # F-AGRAPH-7: no agent of this server, so a remote one (hermes peer, Bot Mode)
+                            self._edge_add("peer", "peer:" + peer_name(hit[1], lower=True), name, to_epoch(ts) or 0.0, "bot chat", suffix="chat")
+                            continue
+                        if sender == name:
                             self.msg_unresolved += 1
                             continue
                         self._edge_add("message", sender, name, to_epoch(ts) or 0.0, "msg")
         except sqlite3.Error:
-            for k in ("message", "room", "delegate"):
+            for k in ("message", "room", "delegate", "peer"):
                 self._src(k, "unreadable")
         finally:
             if con is not None:
                 con.close()
+
+    def _peer_dms(self, con, name, since, peer_out):
+        """`hermes peer dm|run <target>` run by this agent's terminal tool, from its own state.db."""
+        mcols = table_columns(con, "messages")
+        if not {"id", "tool_calls", "timestamp"} <= mcols:
+            return
+        rows = con.execute("SELECT tool_calls, timestamp FROM messages WHERE tool_calls LIKE '%peer %' AND timestamp >= ? ORDER BY id DESC LIMIT 500", (since,)).fetchall()
+        for calls, ts in rows:
+            t = to_epoch(ts) or 0.0
+            for target in set(PEER_DM_RE.findall(as_text(calls))):
+                key = (name, target, "peer dm", "dm")
+                c = peer_out.get(key)
+                peer_out[key] = (c[0] + 1, min(c[1], t), max(c[2], t)) if c else (1, t, t)
 
     def _kanban(self, home, names, since):
         for path in _kanban_paths(home):
@@ -1345,7 +1430,14 @@ class InteractionState:
                     con.close()
 
     def _payload(self, since):
-        edges = sorted(self.edges.values(), key=lambda e: (-e["lastTs"], e["id"]))[:INTER_MAX_EDGES]
+        edges = sorted(self.edges.values(), key=lambda e: (-e["lastTs"], e["id"]))
+        peers = []
+        for e in edges:
+            for end in (e["from"], e["to"]):
+                if e["kind"] == "peer" and end.startswith("peer:") and end not in peers:
+                    peers.append(end)
+        keep = set(peers[:INTER_MAX_PEERS])
+        edges = [e for e in edges if e["kind"] != "peer" or e["from"] in keep or e["to"] in keep][:INTER_MAX_EDGES]
         self.edges = {e["id"]: e for e in edges}
         return {
             "since": since,
@@ -2311,6 +2403,57 @@ def _inter_out(text, **meta):
     return out
 
 
+def _peer_detail(home, a):
+    """The newest text of one link with a remote agent: the Bot Chat line, the hermes peer command, or the A2A summary."""
+    frm, to = a.get("from"), a.get("to")
+    if not isinstance(frm, str) or not isinstance(to, str):
+        raise QueryError("bad_args")
+    if frm.startswith("peer:") and valid_profile(to):
+        remote, local, inbound = frm[5:], to, True
+    elif to.startswith("peer:") and valid_profile(frm):
+        remote, local, inbound = to[5:], frm, False
+    else:
+        raise QueryError("bad_args")
+    if not PEER_ID_RE.match(remote):
+        raise QueryError("bad_args")
+    pdir = profile_dir(home, local)
+    if not pdir:
+        raise QueryError("not_found")
+    best = None
+    db = os.path.join(pdir, "state.db")
+    if os.path.isfile(db):
+        con = open_ro(db)
+        try:
+            if inbound:
+                for (sid,) in con.execute("SELECT id FROM sessions WHERE title = 'Bot Chat' ORDER BY id").fetchall():
+                    for content, ts in con.execute("SELECT content, timestamp FROM messages WHERE session_id = ? AND role = 'user' ORDER BY id DESC LIMIT 200", (sid,)):
+                        hit = match_bot_message(as_text(content))
+                        if hit and peer_name(hit[1], lower=True) == remote:
+                            t = to_epoch(ts) or 0.0
+                            if best is None or t > best[0]:
+                                best = (t, as_text(content), "%s/state.db - session \"Bot Chat\"" % local, sid)
+                            break
+            elif {"id", "tool_calls", "timestamp", "session_id"} <= table_columns(con, "messages"):
+                for calls, ts, sid in con.execute("SELECT tool_calls, timestamp, session_id FROM messages WHERE tool_calls LIKE '%peer %' ORDER BY id DESC LIMIT 500"):
+                    text = as_text(calls)
+                    if remote in PEER_DM_RE.findall(text):
+                        m = re.search(r"hermes[^\"]*peer\s+(?:dm|run)\s+" + re.escape(remote) + r"[^\"]*", text)
+                        best = (to_epoch(ts) or 0.0, m.group(0) if m else text, "%s/state.db - tool call" % local, sid)
+                        break
+        finally:
+            con.close()
+    try:
+        records = read_a2a(pdir, 0) or []
+    except OSError:
+        records = []
+    for ts, way, peer, summary in a2a_links(records):
+        if peer == remote and (way == "in") == inbound and (best is None or ts > best[0]):
+            best = (ts, summary, "%s/a2a_audit.jsonl" % local, None)
+    if best is None:
+        raise QueryError("not_found")
+    return _inter_out(best[1], ts=best[0], source=best[2], sessionId=best[3], profile=local)
+
+
 def q_interaction(home, a):
     """The latest text behind one edge or node of the agent graph (a message, a task, a room line, a subagent's last turn)."""
     kind = a.get("kind")
@@ -2337,6 +2480,8 @@ def q_interaction(home, a):
         if best is None:
             raise QueryError("not_found")
         return _inter_out(best[0], ts=best[2], source="%s/state.db - session \"Bot Chat\"" % to, sessionId=best[1], profile=to)
+    if kind == "peer":
+        return _peer_detail(home, a)
     ident = a.get("id")
     if kind == "kanban":
         if not (valid_int(ident) or (isinstance(ident, str) and ID_RE.match(ident))):
