@@ -4,13 +4,13 @@ import { resetSettings, saveSetting, setZoomLevel, stepZoomLevel } from '../acti
 import { Icon } from '../components/Icon'
 import { Modal } from '../components/Modal'
 import { zoomPercent } from '../lib/zoom'
-import { EditConnectionDialogBody } from '../screens/EditConnectionDialog'
 import { AgentsSettings } from '../screens/agents/AgentsSettings'
 import { UnsavedDialog } from '../screens/agents/Dialogs'
 import { useAgentCfg } from '../stores/agentCfg'
 import { updateLine, useUpdate } from '../stores/update'
 import { useUi, type SettingsTab } from '../stores/ui'
 import { AlertsTab } from './AlertsTab'
+import { ServersTab } from './ServersTab'
 import { DataTab } from './DataTab'
 import { UploadsTab } from './UploadsTab'
 import { NotificationsTab } from './NotificationsTab'
@@ -20,7 +20,7 @@ import { Row, Switch } from './parts'
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: 'general', label: 'General' },
-  { id: 'connection', label: 'Connection' },
+  { id: 'connection', label: 'Servers' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'alerts', label: 'Alerts' },
   { id: 'agents', label: 'Agents' },
@@ -194,7 +194,7 @@ export function SettingsModal() {
         </div>
         <div role="tabpanel" id="settings-panel" aria-labelledby={`tab-${tab}`} style={{ flex: 1, minWidth: 0 }}>
           {tab === 'general' && <General />}
-          {tab === 'connection' && <EditConnectionDialogBody onDone={close} />}
+          {tab === 'connection' && <ServersTab onDone={closeNow} />}
           {tab === 'about' && <About />}
           {tab === 'chat' && <ChatSettings />}
           {tab === 'uploads' && <UploadsTab />}

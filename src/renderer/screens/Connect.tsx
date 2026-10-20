@@ -32,7 +32,7 @@ export function Connect() {
       <div style={{ width: '100%', maxWidth: 1120, display: 'flex', flexWrap: 'wrap', gap: 20 }}>
         <section className="pnl hi" aria-label="Connect to VPS" style={{ flex: '1 1 380px', padding: '26px 20px 20px' }}>
           <h1 className="pt" style={{ fontSize: 12 }}>┤ {isEdit ? 'edit connection' : 'first-time setup'} ├</h1>
-          <ConnectionForm mode={isEdit ? 'edit' : 'first'} onConnected={open} />
+          <ConnectionForm mode={isEdit ? 'edit' : 'first'} server={saved} onConnected={open} />
         </section>
         <div style={{ flex: '1 1 420px', display: 'flex', flexDirection: 'column', gap: 24 }}>
           {hostKey && <HostKeyPanel onTrust={() => void trust()} onCancel={() => useConn.setState({ hostKey: null })} />}

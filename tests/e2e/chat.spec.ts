@@ -139,7 +139,7 @@ test('the Dashboard agents panel holds the same chat, with details one click awa
 })
 
 test('Settings → Uploads lists the sent file and deletes it after confirmation', async () => {
-  await page.getByRole('contentinfo').getByRole('status').filter({ hasText: 'tester@' }).click()
+  await page.getByRole('contentinfo').getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('tab', { name: 'Uploads' }).click()
   const list = page.getByRole('list', { name: 'Uploaded files' })
   await expect(list.getByText('report.txt')).toBeVisible({ timeout: 15_000 })

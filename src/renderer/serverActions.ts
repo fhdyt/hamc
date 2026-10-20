@@ -4,7 +4,6 @@ import { unsavedFor, useAgentCfg } from './stores/agentCfg'
 import { useChat } from './stores/chat'
 import { useConn } from './stores/conn'
 import { useGroups } from './stores/groups'
-import { useTerminal } from './stores/terminal'
 import { useUi } from './stores/ui'
 
 /** F-CONN-14: the saved servers, newest connected first. */
@@ -24,9 +23,9 @@ export function currentBusyWork(): string[] {
 }
 
 /**
- * Connects another saved server: what it would stop is asked first (unless `force`), the server tabs of the terminal
- * close (so none reconnects to the other server), every store of the old server is emptied and the Launch screen
- * connects. The server on screen while connected only opens Settings → Servers.
+ * Connects another saved server: what it would stop is asked first (unless `force`), every store of the old server is
+ * emptied (the terminal's server tabs close with them) and the Launch screen connects. The server on screen, while
+ * connected, only opens Settings → Servers.
  */
 export function switchServer(id: number, force = false): void {
   const { servers, saved, status } = useConn.getState()
@@ -39,7 +38,6 @@ export function switchServer(id: number, force = false): void {
     if (lines.length > 0) return useConn.setState({ switchAsk: { id, name: serverName(target), lines } })
   }
   useConn.setState({ switchAsk: null })
-  if (useTerminal.getState().tabs.some((t) => t.kind === 'server')) void import('./terminalActions').then((m) => m.closeServerTabs())
   resetServerStores()
   useConn.setState((s) => ({ saved: target, startup: null, preflight: null, hostKey: null, connectError: null, launchSeq: s.launchSeq + 1 }))
   ui.closeSettings()

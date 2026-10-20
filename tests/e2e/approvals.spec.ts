@@ -79,7 +79,7 @@ test('the same room works in the Dashboard panel, and Settings → Chat can turn
   await page.getByRole('button', { name: /^Scout, / }).click()
   const panel = page.locator('section[aria-label="Agents"]')
   await expect(panel.getByRole('textbox', { name: /^Message / })).toBeVisible()
-  await page.getByRole('contentinfo').getByRole('status').filter({ hasText: 'tester@' }).click()
+  await page.getByRole('contentinfo').getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('tab', { name: 'Chat' }).click()
   const sw = page.getByRole('switch', { name: 'Ask before risky actions' })
   await expect(sw).toBeChecked()

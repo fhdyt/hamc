@@ -2,12 +2,14 @@ import { setZoomLevel, stepZoomLevel } from '../actions'
 import { Icon } from '../components/Icon'
 import { NoticeBell } from '../components/Notices'
 import { activeCount } from '../lib/roster'
+import { serverAddress, serverName } from '../lib/servers'
 import { zoomPercent } from '../lib/zoom'
 import { useAgents } from '../stores/agents'
 import { useConn } from '../stores/conn'
 import { useMetrics } from '../stores/metrics'
 import { useUi } from '../stores/ui'
 import { useUpdate } from '../stores/update'
+import { ServerMenu } from './ServerMenu'
 
 const TONE: Record<string, { bg: string; text: string }> = {
   connected: { bg: '#2E6B40', text: '' },
@@ -28,7 +30,7 @@ export function StatusBar() {
   const update = useUpdate((s) => s.state)
 
   const tone = TONE[status.state] ?? TONE['idle']!
-  const who = saved ? `${saved.username}@${saved.host}` : 'No connection'
+  const who = saved ? serverName(saved) : 'No connection'
   const online = activeCount(agents)
   const detail =
     status.state === 'connected'
@@ -41,17 +43,24 @@ export function StatusBar() {
 
   return (
     <footer className="statusbar" aria-label="Status bar">
-      <button
-        type="button"
-        className="sb-item"
-        role="status"
-        onClick={() => openSettings('connection')}
-        title={[who, status.hermesVersion ? `hermes v${status.hermesVersion}` : '', `${online} agents online`, supported].filter(Boolean).join('\n')}
-        style={{ background: tone.bg, color: '#F8F8F2' }}
-      >
-        <Icon name="server" size={12} />
-        {who}
-      </button>
+      <ServerMenu
+        button={({ open, toggle, ref }) => (
+          <button
+            ref={ref}
+            type="button"
+            className="sb-item"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-label={`Server: ${who}, ${status.state === 'connected' ? 'connected' : tone.text.toLowerCase()}`}
+            onClick={toggle}
+            title={[who, saved ? serverAddress(saved) : '', status.hermesVersion ? `hermes v${status.hermesVersion}` : '', `${online} agents online`, supported].filter(Boolean).join('\n')}
+            style={{ background: tone.bg, color: '#F8F8F2' }}
+          >
+            <Icon name="server" size={12} />
+            {who}
+          </button>
+        )}
+      />
       <span className="sb-item" style={{ cursor: 'default' }}>{detail}</span>
       {status.hermesVersion && <span className="sb-item" style={{ cursor: 'default' }}>hermes v{status.hermesVersion}</span>}
       <span className="sb-item" style={{ cursor: 'default' }}>{online} agent{online === 1 ? '' : 's'} online</span>

@@ -1,11 +1,14 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { AuthMethod, KeyInfo } from '@shared/ipc'
+import { LABEL_MAX, type AuthMethod, type KeyInfo, type SavedConnection } from '@shared/ipc'
 import { runConnect } from '../../actions'
 import { validateConnectForm } from '../../lib/connectForm'
 import { useConn } from '../../stores/conn'
 
 interface Props {
-  mode: 'first' | 'edit'
+  /** first: first-time setup; edit: a saved server; add: another server (F-CONN-14). */
+  mode: 'first' | 'edit' | 'add'
+  /** The saved server the form edits; null for a new one. */
+  server: SavedConnection | null
   onConnected?: () => void
 }
 
@@ -14,13 +17,16 @@ const METHODS: { id: AuthMethod; label: string }[] = [
   { id: 'key', label: 'Private key' }
 ]
 
-export function ConnectionForm({ mode, onConnected }: Props) {
-  const saved = useConn((s) => s.saved)
+export function ConnectionForm({ mode, server, onConnected }: Props) {
+  const saved = server
+  const activeId = useConn((s) => s.saved?.id ?? null)
+  const otherServer = mode === 'add' || (mode === 'edit' && !!saved && saved.id !== activeId)
   const secret = useConn((s) => s.secret)
   const connecting = useConn((s) => s.connecting)
   const connectError = useConn((s) => s.connectError)
   // The host key panel already explains this case.
   const error = connectError && !connectError.kind.startsWith('hostkey') ? connectError : null
+  const [name, setName] = useState(saved?.label ?? '')
   const [host, setHost] = useState(saved?.host ?? '')
   const [port, setPort] = useState(String(saved?.port ?? 22))
   const [username, setUsername] = useState(saved?.username ?? '')
@@ -36,6 +42,7 @@ export function ConnectionForm({ mode, onConnected }: Props) {
     host: useRef<HTMLInputElement>(null),
     port: useRef<HTMLInputElement>(null),
     username: useRef<HTMLInputElement>(null),
+    name: useRef<HTMLInputElement>(null),
     password: useRef<HTMLInputElement>(null),
     key: useRef<HTMLButtonElement>(null),
     passphrase: useRef<HTMLInputElement>(null)
@@ -87,6 +94,12 @@ export function ConnectionForm({ mode, onConnected }: Props) {
       refs[check.field].current?.focus()
       return
     }
+    // eslint-disable-next-line no-control-regex
+    if (name.trim().length > LABEL_MAX || /[\u0000-\u001f\u007f]/.test(name)) {
+      setFieldError({ field: 'name', message: `Use at most ${LABEL_MAX} characters for the name.` })
+      refs.name.current?.focus()
+      return
+    }
     setFieldError(null)
     const res = await runConnect({
       host: host.trim(),
@@ -96,6 +109,8 @@ export function ConnectionForm({ mode, onConnected }: Props) {
       ...(auth === 'password' && password ? { password } : {}),
       ...(auth === 'key' && keyPath ? { keyPath } : {}),
       ...(auth === 'key' && passphrase ? { passphrase } : {}),
+      ...(saved ? { connectionId: saved.id } : {}),
+      name: name.trim(),
       remember: remember && canRemember
     })
     setPassword('')
@@ -110,6 +125,24 @@ export function ConnectionForm({ mode, onConnected }: Props) {
 
   return (
     <form onSubmit={(e) => void submit(e)} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="field">
+        <label htmlFor="cf-name">
+          name <span className="hint">(optional, shown in the server menu)</span>
+        </label>
+        <input
+          id="cf-name"
+          ref={refs.name}
+          className="inp"
+          value={name}
+          maxLength={LABEL_MAX}
+          placeholder={`${username.trim() || 'user'}@${host.trim() || 'host'}`}
+          onChange={(e) => setName(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          aria-invalid={!!err('name')}
+          aria-describedby={describedBy('name')}
+        />
+      </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
         <div className="field" style={{ flex: '3 1 220px' }}>
           <label htmlFor="cf-host">host / public ip</label>
@@ -213,10 +246,18 @@ export function ConnectionForm({ mode, onConnected }: Props) {
       <button type="submit" className="btn-main" disabled={connecting}>
         {connecting ? '[ CONNECTING… ]' : mode === 'edit' ? '[ TEST & SAVE ]' : '[ TEST & CONNECT ]'}
       </button>
-      <p style={{ margin: 0, color: '#8B95BD', fontSize: 11 }}>
-        Asked only once. Next time the app opens it connects automatically; change it anytime with{' '}
-        <span style={{ color: '#50FA7B' }}>edit connection</span>. Nothing is installed or changed on your VPS.
-      </p>
+      {mode === 'first' ? (
+        <p style={{ margin: 0, color: '#8B95BD', fontSize: 11 }}>
+          Asked only once. Next time the app opens it connects automatically; change it anytime with{' '}
+          <span style={{ color: '#50FA7B' }}>edit connection</span>. Nothing is installed or changed on your VPS.
+        </p>
+      ) : (
+        otherServer && (
+          <p style={{ margin: 0, color: '#8B95BD', fontSize: 11 }}>
+            Saving connects to this server and disconnects the current one. Nothing is installed or changed on your VPS.
+          </p>
+        )
+      )}
     </form>
   )
 }

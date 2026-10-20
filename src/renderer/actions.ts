@@ -26,6 +26,7 @@ import { useAgentOps } from './stores/agentOps'
 import { useAgentCfg } from './stores/agentCfg'
 import { useUi } from './stores/ui'
 import { useGroups } from './stores/groups'
+import { useTerminal } from './stores/terminal'
 
 /** Empties every store that holds data of one server (F-CONN-14), so nothing of the last server shows on the next. */
 export function resetServerStores(): void {
@@ -49,12 +50,14 @@ export function resetServerStores(): void {
   useBrain.getState().reset()
   useChat.getState().reset()
   useGroups.getState().reset()
+  // server tabs of the terminal close, so none reconnects to another server (xterm loads only when tabs exist)
+  if (useTerminal.getState().tabs.some((t) => t.kind === 'server')) void import('./terminalActions').then((m) => m.closeServerTabs())
 }
 
 /** The request is for another server than the one on screen: another saved one, or another address. */
 function otherServer(prev: SavedConnection | null, req: ConnectRequest): boolean {
   if (!prev) return false
-  if (req.connectionId !== undefined) return req.connectionId !== prev.id
+  if (req.connectionId !== undefined && req.connectionId !== prev.id) return true
   return prev.host !== req.host || prev.port !== req.port || prev.username !== req.username
 }
 

@@ -3,6 +3,7 @@ import { TitleBar } from './shell/TitleBar'
 import { Chat } from './screens/Chat'
 import { ComingSoon } from './screens/ComingSoon'
 import { CommandPalette } from './components/CommandPalette'
+import { SwitchConfirm } from './components/SwitchConfirm'
 import { CronModal } from './screens/cron/CronModal'
 import { Brain } from './screens/Brain'
 import { Connect } from './screens/Connect'
@@ -47,6 +48,7 @@ export function App() {
       <SessionModal />
       <NoteModal />
       <SettingsModal />
+      <SwitchConfirm />
       <CommandPalette />
     </Framed>
   )

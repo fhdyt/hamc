@@ -1,0 +1,64 @@
+/* F-CONN-14..17: saved servers (status bar menu, Settings → Servers) */
+.sv-menu-wrap { position: relative; display: inline-flex; align-items: stretch; }
+.sv-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  min-width: 240px;
+  max-width: 360px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid #44475a;
+  border-radius: 8px;
+  background: #21222c;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.sv-mi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #f8f8f2;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.sv-mi:hover, .sv-mi:focus-visible { background: #343746; outline: none; }
+.sv-mi:focus-visible { box-shadow: inset 0 0 0 1px #50fa7b; }
+.sv-check { flex: none; width: 14px; color: #50fa7b; text-align: center; }
+.sv-mi-text { display: flex; flex-direction: column; min-width: 0; }
+.sv-mi-name, .sv-mi-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sv-mi-sub { color: #8b95bd; font-size: 11px; }
+.sv-sep { height: 1px; margin: 4px 2px; background: #44475a; }
+
+.sv { display: flex; flex-direction: column; gap: 12px; }
+.sv-help { margin: 0; color: #a9b2d3; font-size: 12px; }
+.sv-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.sv-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #44475a;
+  border-radius: 8px;
+  background: #21222c;
+}
+.sv-row.on { border-color: #50fa7b; }
+.sv-main { display: flex; flex: 1 1 240px; flex-direction: column; gap: 3px; min-width: 0; }
+.sv-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sv-name { overflow: hidden; color: #f8f8f2; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.sv-tag { flex: none; padding: 0 6px; border-radius: 4px; background: #2e6b40; color: #f8f8f2; font-size: 11px; }
+.sv-sub { overflow-wrap: anywhere; color: #a9b2d3; font-size: 11px; }
+.sv-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.sv-forget { display: flex; flex: 1 1 100%; flex-direction: column; gap: 8px; color: #ffb86c; font-size: 12px; }
+.sv-edit { display: flex; flex-direction: column; gap: 14px; }
+.sv-edit-head { display: flex; align-items: center; gap: 10px; }
+.sv-title { margin: 0; overflow: hidden; color: #f8f8f2; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
