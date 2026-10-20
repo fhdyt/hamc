@@ -229,6 +229,11 @@ export function closeTab(key: string): void {
   if (active) selectTab(active)
 }
 
+/** F-CONN-14: a switch to another server closes the server tabs, so none reconnects to the other server. */
+export function closeServerTabs(): void {
+  for (const t of st().tabs) if (t.kind === 'server') closeTab(t.key)
+}
+
 /** A tab whose shell ended starts a new one. */
 export function restartTab(key: string): void {
   views.get(key)?.term.reset()

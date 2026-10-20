@@ -1,5 +1,5 @@
 import type { FeedItem } from '@shared/events'
-import type { ConnectRequest, ConnectResult } from '@shared/ipc'
+import type { ConnectRequest, ConnectResult, SavedConnection } from '@shared/ipc'
 import type { BrainGraphSettings, SettingsMap } from '@shared/settings'
 import { fullRequest, oldestPerProfile } from './lib/feed'
 import { defaultPins, reorderPins, togglePin } from './lib/roster'
@@ -23,36 +23,54 @@ import { useUsage } from './stores/usage'
 import { useSkills } from './stores/skills'
 import { useMemoryTimeline } from './stores/memoryTimeline'
 import { useAgentOps } from './stores/agentOps'
+import { useAgentCfg } from './stores/agentCfg'
 import { useUi } from './stores/ui'
 import { useGroups } from './stores/groups'
+
+/** Empties every store that holds data of one server (F-CONN-14), so nothing of the last server shows on the next. */
+export function resetServerStores(): void {
+  useAgents.getState().reset()
+  useLooks.getState().reset()
+  useMetrics.getState().reset()
+  useCron.getState().reset()
+  useFeed.getState().reset()
+  useInteractions.getState().reset()
+  useSessions.getState().reset()
+  useUsage.getState().reset()
+  usePalette.getState().reset()
+  useLogs.getState().reset()
+  useKanban.getState().reset()
+  useSkills.getState().reset()
+  useMemoryTimeline.getState().reset()
+  useAgentOps.getState().reset()
+  useAgentCfg.setState({ profile: null, drafts: {}, modelDirty: {}, leave: null })
+  useUnread.getState().reset()
+  useCostAlert.getState().reset()
+  useBrain.getState().reset()
+  useChat.getState().reset()
+  useGroups.getState().reset()
+}
+
+/** The request is for another server than the one on screen: another saved one, or another address. */
+function otherServer(prev: SavedConnection | null, req: ConnectRequest): boolean {
+  if (!prev) return false
+  if (req.connectionId !== undefined) return req.connectionId !== prev.id
+  return prev.host !== req.host || prev.port !== req.port || prev.username !== req.username
+}
 
 export async function runConnect(req: ConnectRequest): Promise<ConnectResult> {
   // secrets stay out of the store; a retry after a host key prompt gets them from the main process
   const { password: _password, passphrase: _passphrase, ...withoutSecrets } = req
   useConn.setState({ connecting: true, connectError: null, hostKey: null, lastRequest: withoutSecrets })
   // Feed ids only mean something on one server; drop what a different server left behind before new events arrive.
-  const prev = useConn.getState().saved
-  if (prev && (prev.host !== req.host || prev.port !== req.port || prev.username !== req.username)) {
-    useFeed.getState().reset()
-    useInteractions.getState().reset()
-    useChat.getState().reset()
-    useGroups.getState().reset()
-    useSessions.getState().reset()
-    useUsage.getState().reset()
-    usePalette.getState().reset()
-    useLogs.getState().reset()
-    useKanban.getState().reset()
-    useSkills.getState().reset()
-    useMemoryTimeline.getState().reset()
-    useAgentOps.getState().reset()
-    useUnread.getState().reset()
-    useCostAlert.getState().reset()
-  }
+  if (otherServer(useConn.getState().saved, req)) resetServerStores()
   const res = await window.mc.connection.connect(req)
+  const servers = await window.mc.connection.list()
   if (res.ok) {
-    useConn.setState({ connecting: false, saved: await window.mc.connection.saved(), connectError: null, hostKey: null })
+    useConn.setState({ connecting: false, saved: await window.mc.connection.saved(), servers, connectError: null, hostKey: null })
     return res
   }
+  useConn.setState({ servers })
   useConn.setState({
     connecting: false,
     connectError: { kind: res.kind, message: res.message },
@@ -71,29 +89,24 @@ export async function trustAndRetry(): Promise<ConnectResult | null> {
   return runConnect(lastRequest)
 }
 
-export async function forgetConnection(): Promise<void> {
-  await window.mc.connection.forget()
-  useAgents.getState().reset()
-  useLooks.getState().reset()
-  useMetrics.getState().reset()
-  useCron.getState().reset()
-  useFeed.getState().reset()
-  useInteractions.getState().reset()
-  useSessions.getState().reset()
-  useUsage.getState().reset()
-  usePalette.getState().reset()
-  useLogs.getState().reset()
-  useKanban.getState().reset()
-  useUnread.getState().reset()
-  useCostAlert.getState().reset()
-  useBrain.getState().reset()
-  useChat.getState().reset()
-  useGroups.getState().reset()
+/** Forgets a saved server (the one on screen without an id). Forgetting the one on screen connects the newest one left, else opens first-time setup. */
+export async function forgetConnection(id?: number): Promise<void> {
+  const current = useConn.getState().saved
+  await window.mc.connection.forget(id)
+  const servers = await window.mc.connection.list()
+  if (id !== undefined && current && id !== current.id) {
+    useConn.setState({ servers })
+    return
+  }
+  resetServerStores()
   useConn.setState({
-    saved: null, status: IDLE_STATUS, startup: null, preflight: null, capabilities: null, hostKey: null, connectError: null, lastRequest: null
+    saved: null, servers, status: IDLE_STATUS, startup: null, preflight: null, capabilities: null, hostKey: null, connectError: null, lastRequest: null
   })
   useUi.getState().closeSettings()
-  useUi.getState().navigate('connect')
+  const next = servers[0]
+  if (!next) return useUi.getState().navigate('connect')
+  useConn.setState((s) => ({ saved: next, launchSeq: s.launchSeq + 1 }))
+  useUi.getState().navigate(next.remember ? 'launch' : 'connect')
 }
 
 export async function saveSetting<K extends keyof SettingsMap>(key: K, value: SettingsMap[K]): Promise<void> {

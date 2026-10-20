@@ -14,6 +14,7 @@ import { usePalette } from './stores/palette'
 import { useUi } from './stores/ui'
 import { useUnread } from './stores/unread'
 import { useUsage } from './stores/usage'
+import { switchServer } from './serverActions'
 import { toggleTerminal } from './terminalToggle'
 
 const FRESH_MS = 60_000
@@ -76,9 +77,13 @@ export function runItem(item: PaletteItem): void {
     case 'note':
       useBrain.getState().openNote(t.id)
       return
+    case 'server':
+      switchServer(t.id)
+      return
     case 'action':
       if (t.action === 'settings') ui.openSettings('general')
       else if (t.action === 'connection') ui.openSettings('connection')
+      else if (t.action === 'add-server') ui.openAddServer()
       else if (t.action === 'errors-hour') openLogsOnErrors()
       else if (t.action === 'terminal') toggleTerminal()
       else if (t.action === 'cron') {

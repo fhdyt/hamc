@@ -84,8 +84,8 @@ export async function bootstrap(): Promise<void> {
   mc.onUpdate((u) => useUpdate.getState().set(u))
   void mc.update.get().then((u) => useUpdate.getState().set(u))
 
-  const [settings, saved, secret] = await Promise.all([mc.settings.all(), mc.connection.saved(), mc.connection.secretStatus()])
-  useConn.setState({ saved, savedLoaded: true, secret })
+  const [settings, saved, secret, servers] = await Promise.all([mc.settings.all(), mc.connection.saved(), mc.connection.secretStatus(), mc.connection.list()])
+  useConn.setState({ saved, savedLoaded: true, secret, servers })
   useUi.getState().hydrate(settings)
   useUi.getState().navigate(saved && saved.remember ? 'launch' : 'connect')
 }

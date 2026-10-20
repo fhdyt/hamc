@@ -3,7 +3,9 @@ import type { SessionRow } from '@shared/events'
 import { buildItems, searchItems, type PaletteGroup, type PaletteItem } from '../lib/palette'
 import { closePalette, runItem } from '../paletteActions'
 import { useAgents } from '../stores/agents'
+import { serverAddress, serverName } from '../lib/servers'
 import { useBrain } from '../stores/brain'
+import { useConn } from '../stores/conn'
 import { useGroups } from '../stores/groups'
 import { usePalette } from '../stores/palette'
 import { useSessions } from '../stores/sessions'
@@ -43,11 +45,21 @@ function PaletteBody() {
   const own = useSessions((s) => s.rows)
   const notes = useBrain((s) => s.notes)
   const rooms = useGroups((s) => s.rooms)
+  const servers = useConn((s) => s.servers)
+  const activeId = useConn((s) => s.saved?.id ?? null)
   const listRef = useRef<HTMLDivElement>(null)
 
   const items = useMemo(
-    () => buildItems({ agents, sessions: mergeSessions(loaded, own), notes: Array.from(notes.values(), (n) => ({ id: n.id, title: n.title })), rooms, now: Date.now() / 1000 }),
-    [agents, loaded, own, notes, rooms]
+    () =>
+      buildItems({
+        agents,
+        sessions: mergeSessions(loaded, own),
+        notes: Array.from(notes.values(), (n) => ({ id: n.id, title: n.title })),
+        rooms,
+        servers: servers.map((v) => ({ id: v.id, name: serverName(v), address: serverAddress(v), active: v.id === activeId })),
+        now: Date.now() / 1000
+      }),
+    [agents, loaded, own, notes, rooms, servers, activeId]
   )
   const results = useMemo(() => searchItems(items, query), [items, query])
   const active = Math.min(index, Math.max(results.length - 1, 0))

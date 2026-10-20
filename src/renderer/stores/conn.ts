@@ -16,6 +16,12 @@ interface ConnState {
   connecting: boolean
   /** Last connect request without the password, so a host key can be trusted and the attempt repeated. */
   lastRequest: Omit<ConnectRequest, 'password'> | null
+  /** F-CONN-14: every saved server, the newest connected first. */
+  servers: SavedConnection[]
+  /** Bumped to make the Launch screen connect again (a switch to another server). */
+  launchSeq: number
+  /** A switch that waits for "This stops: ..." to be answered. */
+  switchAsk: { id: number; name: string; lines: string[] } | null
 }
 
 export const IDLE_STATUS: ConnStatus = { state: 'idle', latencyMs: null, hermesVersion: null, attempt: 0, nextRetryInS: null, error: null }
@@ -31,5 +37,8 @@ export const useConn = create<ConnState>()(() => ({
   hostKey: null,
   connectError: null,
   connecting: false,
-  lastRequest: null
+  lastRequest: null,
+  servers: [],
+  launchSeq: 0,
+  switchAsk: null
 }))
