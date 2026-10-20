@@ -57,3 +57,22 @@
 .kt-dim { color: #8b95bd; }
 .kt-err { color: #ff5555; overflow-wrap: anywhere; }
 @media (max-width: 900px) { .kb { padding: 12px; } }
+
+/* v2 writes: actions, confirm, comment box, New task */
+.kw-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.kw-assign { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: #a9b2d3; font-size: 11px; }
+.kw-assign .fld { min-width: 140px; }
+.kw-confirm { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid #ffb86c; border-radius: 8px; background: #21222c; }
+.kw-q { margin: 0; color: #f8f8f2; }
+.kw-cmd { display: block; padding: 6px 8px; border-radius: 6px; background: #191a21; color: #50fa7b; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.kw-btns { display: flex; justify-content: flex-end; gap: 8px; }
+.kw-field { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; color: #a9b2d3; font-size: 11px; }
+.kw-field .fld { width: 100%; box-sizing: border-box; }
+.kw-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.kw-new { display: flex; flex-direction: column; gap: 12px; }
+.kw-bad { margin: 0; color: #ff5555; font-size: 12px; }
+.kw-note { margin: 0; font-size: 12px; }
+.kw-note.ok { color: #50fa7b; }
+.kw-note.bad { color: #ffb86c; overflow-wrap: anywhere; }
+.kw-comment { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; margin-top: 6px; }
+.kw-comment textarea { width: 100%; box-sizing: border-box; resize: vertical; }

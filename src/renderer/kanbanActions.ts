@@ -1,7 +1,8 @@
+import type { KanbanActionRequest, KanbanActionResult } from '@shared/kanban'
 import { saveSetting } from './actions'
 import { pickBoard } from './lib/kanban'
 import { describeQueryError } from './lib/queryError'
-import { useKanban } from './stores/kanban'
+import { useKanban, type KanbanAsk } from './stores/kanban'
 import { useUi } from './stores/ui'
 
 let seq = 0
@@ -95,4 +96,66 @@ export function refreshTask(): Promise<void> {
 export function closeTask(): void {
   detailSeq++
   useKanban.getState().closeTask()
+}
+
+// ---- v2 writes --------------------------------------------------------------
+
+/** Shows the confirm of one write (a second ask replaces the first). */
+export function askKanbanAction(ask: KanbanAsk): void {
+  useKanban.setState({ ask, note: null })
+}
+
+export function cancelKanbanAsk(): void {
+  useKanban.setState({ ask: null })
+}
+
+export function openNewTask(): void {
+  useKanban.setState({ newOpen: true, ask: null, note: null })
+}
+
+export function closeNewTask(): void {
+  useKanban.setState({ newOpen: false, ask: null })
+}
+
+const DONE: Record<KanbanActionRequest['action'], string> = {
+  create: 'Task created.',
+  assign: 'Assignee changed.',
+  comment: 'Comment added.',
+  complete: 'Marked done.',
+  block: 'Blocked.',
+  unblock: 'Unblocked.',
+  promote: 'Moved to ready.',
+  archive: 'Archived.'
+}
+
+export function resultText(r: KanbanActionResult, action: KanbanActionRequest['action']): string {
+  if (r.ok) return DONE[action]
+  if (r.error === 'not-connected') return 'Not connected to the server.'
+  if (r.error === 'unknown-profile') return 'That agent is not on this server.'
+  if (r.error === 'bad-input') return 'The app refused this request; check the text and try again.'
+  return `Hermes refused: ${r.detail ?? 'unknown error'}`
+}
+
+/**
+ * Runs the confirmed write (with the text typed into the confirm for block and complete), then reads the board and the
+ * open task again. A created task opens in the task dialog.
+ */
+export async function confirmKanbanAction(fieldText = ''): Promise<void> {
+  const { ask, pending } = useKanban.getState()
+  if (!ask || pending) return
+  const text = fieldText.trim()
+  const req: KanbanActionRequest =
+    ask.field === 'reason' && ask.req.action === 'block' && text ? { ...ask.req, reason: text }
+    : ask.field === 'result' && ask.req.action === 'complete' && text ? { ...ask.req, result: text }
+    : ask.req
+  useKanban.setState({ pending: true })
+  const r = await window.mc.kanban.action(req)
+  useKanban.setState({ pending: false, ask: r.ok ? null : useKanban.getState().ask, note: { ok: r.ok, text: resultText(r, req.action) } })
+  if (!r.ok) return
+  await load(true)
+  if (req.action === 'create') {
+    useKanban.setState({ newOpen: false })
+    if (r.taskId) await openTask(r.taskId)
+    useKanban.setState({ note: { ok: true, text: DONE.create } })
+  } else if (useKanban.getState().selectedId) await refreshTask()
 }

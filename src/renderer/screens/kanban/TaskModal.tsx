@@ -12,6 +12,8 @@ import { COLUMN_COLOR, columnOf, payloadSummary, priorityLabel, taskTitle } from
 import { closeTask, openTask, retryTask, taskBack } from '../../kanbanActions'
 import { useAgents } from '../../stores/agents'
 import { useFeed } from '../../stores/feed'
+import { KanbanConfirm, KanbanNote } from './KanbanConfirm'
+import { CommentBox, TaskActions } from './TaskActions'
 import { useKanban } from '../../stores/kanban'
 
 const when = (ts: number | null): string => (ts === null ? 'unknown' : clockWithDay(ts))
@@ -57,6 +59,9 @@ function Detail({ d, nameOf }: { d: KanbanTaskDetail; nameOf(p: string): string 
         )}
       </div>
       <h3 style={{ margin: 0, fontSize: 15, color: '#f8f8f2', overflowWrap: 'anywhere' }}>{taskTitle(t)}</h3>
+      <TaskActions task={t} nameOf={nameOf} />
+      <KanbanNote />
+      <KanbanConfirm />
       <div className="kt-cols">
         <div className="kt-main">
           <div>{t.body && t.body.trim() ? <Markdown text={t.body} /> : <span className="kt-dim">No description</span>}</div>
@@ -83,6 +88,7 @@ function Detail({ d, nameOf }: { d: KanbanTaskDetail; nameOf(p: string): string 
                 </div>
               </div>
             ))}
+            <CommentBox task={t} />
           </Section>
         </div>
         <aside className="kt-side" aria-label="Task details">

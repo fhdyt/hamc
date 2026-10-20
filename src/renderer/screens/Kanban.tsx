@@ -2,16 +2,19 @@ import { useEffect, useMemo } from 'react'
 import { EmptyState, ErrorState, Skeleton } from '../components/States'
 import { Icon } from '../components/Icon'
 import { UNASSIGNED, assigneeOptions, boardSummary, filterTasks } from '../lib/kanban'
-import { closeTask, openKanban, refreshKanban, retryKanban, selectBoard } from '../kanbanActions'
+import { closeTask, openKanban, openNewTask, refreshKanban, retryKanban, selectBoard } from '../kanbanActions'
 import { useAgents } from '../stores/agents'
 import { useKanban } from '../stores/kanban'
 import { Board } from './kanban/Board'
 import { TaskModal } from './kanban/TaskModal'
+import { NewTask } from './kanban/NewTask'
+import { useWritable } from './kanban/TaskActions'
 
 const REFRESH_MS = 10_000
 
 export function Kanban() {
   const s = useKanban()
+  const writable = useWritable()
   const agents = useAgents((a) => a.agents)
   const names = useMemo(() => new Map(agents.map((a) => [a.profile, a.displayName])), [agents])
   const nameOf = (profile: string): string => names.get(profile) ?? profile
@@ -53,6 +56,11 @@ export function Kanban() {
               ))}
             </select>
           </>
+        )}
+        {writable && (
+          <button type="button" className="cb sm pri" onClick={openNewTask}>
+            <Icon name="plus" size={12} /> New task
+          </button>
         )}
         {s.board && s.tasks.length > 0 && (
           <span className="kb-sum">
@@ -133,6 +141,7 @@ export function Kanban() {
       ) : null}
 
       {s.selectedId && <TaskModal nameOf={nameOf} />}
+      <NewTask nameOf={nameOf} />
     </div>
   )
 }
