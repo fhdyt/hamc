@@ -6,6 +6,8 @@ export const IPC = {
   saved: 'mc:connection:saved',
   secretStatus: 'mc:connection:secret-status',
   pickKey: 'mc:connection:pick-key',
+  servers: 'mc:connection:list',
+  serverRename: 'mc:connection:rename',
   settingsAll: 'mc:settings:all',
   settingsSet: 'mc:settings:set',
   settingsReset: 'mc:settings:reset',

@@ -10,6 +10,7 @@ import type { BrowserWindow } from 'electron'
 import type {
   ConnStatus, ConnectErrorKind, ConnectRequest, ConnectResult, HostKeyChallenge, InteractionDetailArgs, PickKeyResult, QueryResult, SavedConnection
 } from '@shared/ipc'
+import { cleanLabel, LABEL_PROBLEM } from '@shared/ipc'
 import { BrainService } from './brain/service'
 import { AgentFileService } from './agentcfg/files'
 import { ModelService } from './agentcfg/model'
@@ -49,7 +50,7 @@ import { StartupTracker } from './startup'
 import { GroupService } from './groups/service'
 import type { GroupEntry, GroupList, GroupRoom, GroupSendResult } from '@shared/groups'
 import type { SecretStore } from './store/secretStore'
-import type { SettingsStore } from './store/settingsStore'
+import { TargetTakenError, type SettingsStore } from './store/settingsStore'
 
 export type Send = (channel: string, payload: unknown) => void
 
@@ -113,6 +114,14 @@ const credsOf = (p: ConnectParams): Creds =>
 
 const fail = (kind: ConnectErrorKind, message: string): ConnectResult => ({ ok: false, kind, message })
 
+/** A saved server with facts about its key file as it is now (null when the file is gone or unreadable). */
+function withKeyInfo(c: SavedConnection): SavedConnection {
+  if (c.authMethod !== 'key' || !c.keyPath) return c
+  const file = readKeyFile(c.keyPath)
+  const check = file.ok ? inspectKey(file.data) : null
+  return { ...c, keyInfo: check?.ok ? keyInfoOf(c.keyPath, check.facts) : null }
+}
+
 export class MissionSession {
   private params: ConnectParams | null = null
   private remember = true
@@ -133,7 +142,10 @@ export class MissionSession {
   private readonly keyPicks = new Set<string>()
   private readonly cronStore = new CronStore()
   private readonly cronWatcher = new CronWatcher()
+  /** The server the in-memory state (cron, feed cursors, watchers) belongs to: `<row id|new>|host:port:user`. */
   private lastTarget: string | null = null
+  /** The saved server of the current connect request and its label (F-CONN-14); a new server has no id yet. */
+  private want: { id: number | undefined; name: string | undefined } = { id: undefined, name: undefined }
   private readonly feedCursors = new FeedCursors()
   private readonly queries: QueryRunner
   private readonly brain: BrainService
@@ -298,10 +310,22 @@ export class MissionSession {
 
   getSaved(): SavedConnection | null {
     const c = this.d.store.getConnection()
-    if (!c || c.authMethod !== 'key' || !c.keyPath) return c
-    const file = readKeyFile(c.keyPath)
-    const check = file.ok ? inspectKey(file.data) : null
-    return { ...c, keyInfo: check?.ok ? keyInfoOf(c.keyPath, check.facts) : null }
+    return c ? withKeyInfo(c) : null
+  }
+
+  /** F-CONN-14: every saved server, the newest connected first. */
+  listServers(): SavedConnection[] {
+    return this.d.store.listConnections().map(withKeyInfo)
+  }
+
+  renameServer(id: number, name: string): { ok: true } | { ok: false; message: string } {
+    if (!this.d.store.getConnection(id)) return { ok: false, message: 'This server is no longer saved.' }
+    try {
+      this.d.store.renameConnection(id, name)
+      return { ok: true }
+    } catch {
+      return { ok: false, message: LABEL_PROBLEM }
+    }
   }
 
   /** F-CONN-7: the user picks a private key file; only facts about it go back to the renderer. */
@@ -331,8 +355,23 @@ export class MissionSession {
   }
 
   async connect(req: ConnectRequest): Promise<ConnectResult> {
+    // F-CONN-14: the saved server this request is for; refused before anything is torn down
+    const store = this.d.store
+    const row = req.connectionId !== undefined ? store.getConnection(req.connectionId) : store.findConnection(req.host, req.port, req.username)
+    if (req.connectionId !== undefined && !row) return fail('unknown', 'This server is no longer saved.')
+    const other = row ? store.findConnection(req.host, req.port, req.username) : null
+    if (row && other && other.id !== row.id) return fail('unknown', new TargetTakenError().message)
+    let name: string | undefined
+    try {
+      name = req.name === undefined ? undefined : cleanLabel(req.name)
+    } catch {
+      return fail('unknown', LABEL_PROBLEM)
+    }
+
     const gen = ++this.generation
     await this.teardown()
+    store.setActive(row ? row.id : null)
+    this.want = { id: row?.id, name }
     this.blocked = false
     this.everConnected = false
     this.autoRetry = req.useSaved === true
@@ -351,11 +390,17 @@ export class MissionSession {
     this.log(resolved.logLine)
 
     const params = resolved.params
-    const target = `${req.host}:${req.port}:${req.username}`
+    const target = `${row ? row.id : 'new'}|${req.host}:${req.port}:${req.username}`
     if (this.lastTarget !== null && this.lastTarget !== target) {
+      // another server (or the same row moved to another address): nothing in memory belongs to it
       this.cronWatcher.reset()
       this.cronStore.clear()
       this.feedCursors.clear()
+      this.costAlert.reset()
+      this.gatewayWatcher.reset()
+      this.cronActions.clear()
+      this.agentNames = null
+      this.log(`server switch ${row ? row.id : 'new'}`)
     }
     this.lastTarget = target
     this.params = params
@@ -489,7 +534,8 @@ export class MissionSession {
       const canKeep = this.remember && this.d.secrets.status().available
       const secret = 'password' in params ? params.password : (params.passphrase ?? null)
       const id = store.upsertConnection({
-        name: `${params.username}@${params.host}`,
+        ...(this.want.id !== undefined ? { id: this.want.id } : {}),
+        ...(this.want.name !== undefined ? { name: this.want.name } : {}),
         host: params.host,
         port: params.port,
         username: params.username,
@@ -499,6 +545,9 @@ export class MissionSession {
         secretEnc: canKeep && secret ? this.d.secrets.encrypt(secret) : null
       })
       store.touchConnected(id, Date.now())
+      store.setActive(id)
+      this.want = { id, name: undefined }
+      this.lastTarget = `${id}|${params.host}:${params.port}:${params.username}`
     }
 
     startup.begin('collector')
@@ -662,13 +711,21 @@ export class MissionSession {
     this.setStatus({ ...IDLE })
   }
 
-  async forget(): Promise<void> {
-    await this.disconnect()
-    this.cronWatcher.reset()
-    this.cronStore.clear()
-    this.feedCursors.clear()
-    this.lastTarget = null
-    this.d.store.forgetConnection()
+  /** Forgets a saved server (the active one without an id); only the active one is disconnected first. */
+  async forget(id?: number): Promise<void> {
+    const store = this.d.store
+    const active = store.activeId()
+    const target = id ?? active
+    if (target === null) return
+    if (target === active) {
+      await this.disconnect()
+      this.cronWatcher.reset()
+      this.cronStore.clear()
+      this.feedCursors.clear()
+      this.lastTarget = null
+    }
+    store.forgetConnection(target)
+    this.log(`server forget ${target}`)
   }
 
   /** The Terminal panel (F-TERM-1): an interactive shell; only the user's keys go into it. */

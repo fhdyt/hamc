@@ -239,8 +239,12 @@ export interface MissionApi {
     connect(req: ConnectRequest): Promise<ConnectResult>
     trustHostKey(c: HostKeyChallenge): Promise<void>
     disconnect(): Promise<void>
-    forget(): Promise<void>
+    /** Forgets a saved server; without an id the active one. */
+    forget(id?: number): Promise<void>
     saved(): Promise<SavedConnection | null>
+    /** F-CONN-14: every saved server, the newest connected first. */
+    list(): Promise<SavedConnection[]>
+    rename(id: number, name: string): Promise<{ ok: true } | { ok: false; message: string }>
     secretStatus(): Promise<{ canRemember: boolean; reason: string | null }>
     /** The native dialog for a private key file; only facts about the key come back. */
     pickKey(): Promise<PickKeyResult>

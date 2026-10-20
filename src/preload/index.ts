@@ -13,8 +13,10 @@ const api: MissionApi = {
     connect: (req) => ipcRenderer.invoke(IPC.connect, req),
     trustHostKey: (c) => ipcRenderer.invoke(IPC.trustHostKey, c),
     disconnect: () => ipcRenderer.invoke(IPC.disconnect),
-    forget: () => ipcRenderer.invoke(IPC.forget),
+    forget: (id) => ipcRenderer.invoke(IPC.forget, id),
     saved: () => ipcRenderer.invoke(IPC.saved),
+    list: () => ipcRenderer.invoke(IPC.servers),
+    rename: (id, name) => ipcRenderer.invoke(IPC.serverRename, { id, name }),
     secretStatus: () => ipcRenderer.invoke(IPC.secretStatus),
     pickKey: () => ipcRenderer.invoke(IPC.pickKey)
   },

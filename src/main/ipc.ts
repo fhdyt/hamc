@@ -1,7 +1,7 @@
 import { app, ipcMain, nativeImage, type BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { IPC } from '@shared/channels'
-import { ConnectRequestSchema, HostKeyChallengeSchema, type AppInfo } from '@shared/ipc'
+import { ConnectRequestSchema, HostKeyChallengeSchema, LABEL_MAX, type AppInfo } from '@shared/ipc'
 import { CUSTOM_NAME_RE, CUSTOM_SLUG, EFFORT_RE, FILE_KINDS, MAX_FILE_BYTES, PRESETS, type AgentFileKind } from '@shared/agentCfg'
 import { SETTINGS_SCHEMA, isSettingKey } from '@shared/settings'
 import { LOG_FILES } from '@shared/logs'
@@ -23,6 +23,7 @@ import { GROUP_ID_RE, GROUP_MAX_MEMBERS, GROUP_MESSAGE_MAX, GROUP_MIN_MEMBERS } 
 
 const ProfileName = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
 const GroupId = z.string().regex(GROUP_ID_RE)
+const ServerId = z.number().int().positive()
 const FeedMessageArgs = z.object({
   profile: ProfileName,
   messageId: z.number().int().min(0),
@@ -178,8 +179,14 @@ export function registerIpc(d: IpcDeps): void {
   handle(IPC.connect, (a) => d.session.connect(ConnectRequestSchema.parse(a)))
   handle(IPC.trustHostKey, (a) => d.session.trustHostKey(HostKeyChallengeSchema.parse(a)))
   handle(IPC.disconnect, () => d.session.disconnect())
-  handle(IPC.forget, () => d.session.forget())
+  handle(IPC.forget, (a) => d.session.forget(a === undefined || a === null ? undefined : ServerId.parse(a)))
   handle(IPC.saved, () => d.session.getSaved())
+  // F-CONN-14: saved servers; the label is checked again by the store
+  handle(IPC.servers, () => d.session.listServers())
+  handle(IPC.serverRename, (a) => {
+    const { id, name } = z.object({ id: ServerId, name: z.string().max(LABEL_MAX * 4) }).parse(a)
+    return d.session.renameServer(id, name)
+  })
   handle(IPC.secretStatus, () => d.session.secretStatus())
   handle(IPC.pickKey, () => d.session.pickKey())
 
