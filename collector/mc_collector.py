@@ -2942,6 +2942,61 @@ def q_note(home, a):
     }
 
 
+# F-BRAIN-10: the vault's own Obsidian graph settings, read-only; only these keys leave the VPS
+GRAPH_JSON_MAX = 262144
+GRAPH_GROUPS_MAX = 64
+GRAPH_BOOL_KEYS = ("showTags", "showAttachments", "hideUnresolved", "showOrphans")
+GRAPH_NUM_KEYS = ("centerStrength", "repelStrength", "linkStrength", "linkDistance",
+                  "nodeSizeMultiplier", "lineSizeMultiplier", "textFadeMultiplier")
+
+
+def _is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and v == v and abs(v) < 1e9
+
+
+def q_vault_graph(home, a):
+    root = expand_path(a.get("root"))
+    real_root = os.path.realpath(root)
+    path = os.path.realpath(os.path.join(real_root, ".obsidian", "graph.json"))
+    if os.path.commonpath([real_root, path]) != real_root:
+        raise QueryError("bad_args")
+    if not os.path.isfile(path):
+        return {"found": False}
+    if os.path.getsize(path) > GRAPH_JSON_MAX:
+        raise QueryError("unreadable")
+    try:
+        with open(path, "rb") as f:
+            data = json.loads(f.read(GRAPH_JSON_MAX + 1).decode("utf-8", "replace"))
+    except ValueError:
+        raise QueryError("unreadable")
+    if not isinstance(data, dict):
+        raise QueryError("unreadable")
+    graph = {}
+    groups = []
+    for g in data.get("colorGroups") or []:
+        if not isinstance(g, dict) or not isinstance(g.get("query"), str):
+            continue
+        color = g.get("color") if isinstance(g.get("color"), dict) else {}
+        rgb = color.get("rgb")
+        if not isinstance(rgb, int) or isinstance(rgb, bool) or not 0 <= rgb <= 0xFFFFFF:
+            continue
+        alpha = color.get("a")
+        groups.append({"query": g["query"][:500], "color": {"a": alpha if _is_num(alpha) else 1, "rgb": rgb}})
+        if len(groups) >= GRAPH_GROUPS_MAX:
+            break
+    if isinstance(data.get("colorGroups"), list):
+        graph["colorGroups"] = groups
+    for k in GRAPH_BOOL_KEYS:
+        if isinstance(data.get(k), bool):
+            graph[k] = data[k]
+    for k in GRAPH_NUM_KEYS:
+        if _is_num(data.get(k)):
+            graph[k] = data[k]
+    if isinstance(data.get("search"), str):
+        graph["search"] = data["search"][:500]
+    return {"found": True, "mtime": int(os.path.getmtime(path)), "graph": graph}
+
+
 # ---- memory files (M10b) ----------------------------------------------------
 
 MEMORY_FILES = (("soul", ("SOUL.md",)), ("memory", ("memories", "MEMORY.md")), ("user", ("memories", "USER.md")))
@@ -3531,7 +3586,7 @@ def run_query(home, cmd, raw):
         return {"ok": False, "error": "bad_args"}
     handler = {
         "message": q_message, "history": q_history, "session": q_session,
-        "vault_check": q_vault_check, "browse": q_browse, "note": q_note,
+        "vault_check": q_vault_check, "browse": q_browse, "note": q_note, "vault_graph": q_vault_graph,
         "chat_sessions": q_chat_sessions, "uploads_list": q_uploads_list, "interaction": q_interaction,
         "sessions_list": q_sessions_list, "sessions_search": q_sessions_search,
         "session_transcript": q_session_transcript,

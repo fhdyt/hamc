@@ -279,6 +279,66 @@ def test_note_not_found_and_bad_arguments(fx):
     assert q("note", {"root": 3, "id": "a.md"})["error"] == "bad_args"
 
 
+# ---- .obsidian/graph.json (F-BRAIN-10) --------------------------------------
+
+def graph_file(root, data):
+    p = root / ".obsidian" / "graph.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(data if isinstance(data, str) else json.dumps(data), encoding="utf-8")
+    return p
+
+
+def test_vault_graph_keeps_only_known_keys(tmp_path):
+    graph_file(tmp_path, {
+        "colorGroups": [{"query": "path:Daily", "color": {"a": 1, "rgb": 14701138}}, {"query": 3, "color": {}}, "x"],
+        "showTags": True, "showAttachments": "yes", "hideUnresolved": False, "showOrphans": True,
+        "centerStrength": 0.5, "repelStrength": 10, "linkStrength": 1, "linkDistance": 250,
+        "nodeSizeMultiplier": 1.2, "lineSizeMultiplier": 1, "textFadeMultiplier": 0,
+        "search": "s" * 900, "collapse-forces": True, "scale": 1.3,
+    })
+    r = q("vault_graph", {"root": str(tmp_path)})
+    assert r["ok"] and r["data"]["found"] is True and isinstance(r["data"]["mtime"], int)
+    g = r["data"]["graph"]
+    assert g["colorGroups"] == [{"query": "path:Daily", "color": {"a": 1, "rgb": 14701138}}]
+    assert g["showTags"] is True and "showAttachments" not in g and g["hideUnresolved"] is False
+    assert g["repelStrength"] == 10 and g["linkDistance"] == 250 and g["nodeSizeMultiplier"] == 1.2
+    assert len(g["search"]) == 500
+    assert "collapse-forces" not in g and "scale" not in g
+
+
+def test_vault_graph_caps_the_groups(tmp_path):
+    graph_file(tmp_path, {"colorGroups": [{"query": f"tag:#t{i}", "color": {"a": 1, "rgb": i}} for i in range(80)]})
+    assert len(q("vault_graph", {"root": str(tmp_path)})["data"]["graph"]["colorGroups"]) == 64
+
+
+def test_vault_graph_missing_file(tmp_path):
+    mf.w(tmp_path / "a.md", "x")
+    r = q("vault_graph", {"root": str(tmp_path)})
+    assert r["ok"] and r["data"] == {"found": False}
+
+
+@pytest.mark.parametrize("data", ["[1, 2]", "{not json", "big"])
+def test_vault_graph_unreadable(tmp_path, data):
+    graph_file(tmp_path, '{"x": "' + "y" * c.GRAPH_JSON_MAX + '"}' if data == "big" else data)
+    assert q("vault_graph", {"root": str(tmp_path)})["error"] == "unreadable"
+
+
+def test_vault_graph_bad_root():
+    assert q("vault_graph", {"root": 3})["error"] == "bad_args"
+
+
+def test_vault_graph_refuses_a_symlink_that_leaves_the_vault(tmp_path):
+    outside = tmp_path / "outside"
+    graph_file(outside, {"showTags": True})
+    v = tmp_path / "v"
+    mf.w(v / "a.md", "ok")
+    try:
+        os.symlink(outside / ".obsidian", v / ".obsidian")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks not available")
+    assert q("vault_graph", {"root": str(v)})["error"] == "bad_args"
+
+
 # ---- the stream -----------------------------------------------------------
 
 def run_stream(path, ticks=1, interval=0.1):
