@@ -123,7 +123,8 @@ test('Run now is off while the job runs and adds a manual run with its output', 
   await expect(ask).toContainText(`$ hermes cron run ${J}`)
   await ask.getByRole('button', { name: 'Run job' }).click()
   await expect(detail().getByRole('button', { name: 'Running…' })).toBeDisabled()
-  await expect(detail().getByRole('status')).toContainText('Ran now: succeeded.', { timeout: 20_000 })
+  // the run list may say "Loading output…" (also a status) at the same moment
+  await expect(detail().getByRole('status').filter({ hasText: 'Ran now: succeeded.' })).toBeVisible({ timeout: 20_000 })
   await expect(runs()).toHaveCount(4, { timeout: 15_000 })
   await expect(runs().nth(0)).toContainText('manual')
   await expect(runs().nth(0)).toContainText('OK')
